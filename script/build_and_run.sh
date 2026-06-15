@@ -1,0 +1,172 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+MODE="${1:-run}"
+SCHEME="GetOudio"
+APP_NAME="Get Oudio"
+BUNDLE_ID="com.shengjiacheng.GetOudio"
+FINDER_EXTENSION_ID="com.shengjiacheng.GetOudio.FinderExtension"
+FINDER_EXTENSION_POINT_ID="com.apple.FinderSync"
+SHARE_EXTENSION_POINT_ID="com.apple.share-services"
+APP_GROUP_ID="group.com.shengjiacheng.GetOudio"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+DERIVED_DATA="$ROOT_DIR/build/DerivedData"
+DEBUG_CONFIGURATION="Debug"
+INSTALL_CONFIGURATION="${INSTALL_CONFIGURATION:-Release}"
+DEBUG_APP_BUNDLE="$DERIVED_DATA/Build/Products/$DEBUG_CONFIGURATION/$APP_NAME.app"
+INSTALL_APP_BUNDLE="$DERIVED_DATA/Build/Products/$INSTALL_CONFIGURATION/$APP_NAME.app"
+INSTALL_DIR="${INSTALL_DIR:-/Applications}"
+INSTALLED_APP="$INSTALL_DIR/$APP_NAME.app"
+LEGACY_USER_APP="$HOME/Applications/$APP_NAME.app"
+
+cd "$ROOT_DIR"
+
+if [[ ! -d "$ROOT_DIR/GetOudio.xcodeproj" ]]; then
+  xcodegen generate
+fi
+
+pkill -x "$APP_NAME" >/dev/null 2>&1 || true
+
+build_unsigned() {
+  xcodebuild \
+    -project "$ROOT_DIR/GetOudio.xcodeproj" \
+    -scheme "$SCHEME" \
+    -configuration "$DEBUG_CONFIGURATION" \
+    -derivedDataPath "$DERIVED_DATA" \
+    CODE_SIGNING_ALLOWED=NO \
+    build
+}
+
+build_signed() {
+  if [[ -n "${DEVELOPMENT_TEAM:-}" ]]; then
+    xcodebuild \
+      -allowProvisioningUpdates \
+      -project "$ROOT_DIR/GetOudio.xcodeproj" \
+      -scheme "$SCHEME" \
+      -configuration "$INSTALL_CONFIGURATION" \
+      -derivedDataPath "$DERIVED_DATA" \
+      CODE_SIGNING_ALLOWED=YES \
+      CODE_SIGN_STYLE=Automatic \
+      DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" \
+      clean \
+      build
+    return
+  fi
+
+  xcodebuild \
+    -allowProvisioningUpdates \
+    -project "$ROOT_DIR/GetOudio.xcodeproj" \
+    -scheme "$SCHEME" \
+    -configuration "$INSTALL_CONFIGURATION" \
+    -derivedDataPath "$DERIVED_DATA" \
+    CODE_SIGNING_ALLOWED=YES \
+    CODE_SIGN_STYLE=Automatic \
+    clean \
+    build
+}
+
+open_app() {
+  /usr/bin/open -n "$DEBUG_APP_BUNDLE"
+}
+
+verify_entitlements() {
+  local bundle_path="$1"
+  local entitlements_file
+  entitlements_file="$(mktemp)"
+
+  if ! /usr/bin/codesign --verify --strict --verbose=4 "$bundle_path"; then
+    echo "invalid code signature in $bundle_path" >&2
+    rm -f "$entitlements_file"
+    exit 1
+  fi
+
+  if ! /usr/bin/codesign -d --entitlements :- "$bundle_path" >"$entitlements_file" 2>/dev/null; then
+    echo "failed to read entitlements from $bundle_path" >&2
+    rm -f "$entitlements_file"
+    exit 1
+  fi
+
+  if ! /usr/bin/grep -q "com.apple.security.app-sandbox" "$entitlements_file" ||
+     ! /usr/bin/grep -q "com.apple.security.application-groups" "$entitlements_file" ||
+     ! /usr/bin/grep -q "$APP_GROUP_ID" "$entitlements_file"; then
+    echo "missing sandbox or app group entitlements in $bundle_path" >&2
+    /bin/cat "$entitlements_file" >&2
+    rm -f "$entitlements_file"
+    exit 1
+  fi
+
+  rm -f "$entitlements_file"
+}
+
+verify_extension_point() {
+  local bundle_path="$1"
+  local expected_extension_point="$2"
+  local info_plist="$bundle_path/Contents/Info.plist"
+  local actual_extension_point
+
+  actual_extension_point="$(/usr/libexec/PlistBuddy -c "Print :NSExtension:NSExtensionPointIdentifier" "$info_plist" 2>/dev/null || true)"
+
+  if [[ "$actual_extension_point" != "$expected_extension_point" ]]; then
+    echo "missing or wrong NSExtensionPointIdentifier in $bundle_path" >&2
+    /usr/bin/plutil -p "$info_plist" >&2
+    exit 1
+  fi
+}
+
+install_app() {
+  build_signed
+
+  mkdir -p "$INSTALL_DIR"
+  pluginkit -e ignore -i "$FINDER_EXTENSION_ID" >/dev/null 2>&1 || true
+  pluginkit -r "$INSTALLED_APP" >/dev/null 2>&1 || true
+  pluginkit -r "$LEGACY_USER_APP" >/dev/null 2>&1 || true
+  pluginkit -r "$INSTALLED_APP/Contents/PlugIns/GetOudioFinderExtension.appex" >/dev/null 2>&1 || true
+  pluginkit -r "$LEGACY_USER_APP/Contents/PlugIns/GetOudioFinderExtension.appex" >/dev/null 2>&1 || true
+  pluginkit -r "$INSTALLED_APP/Contents/PlugIns/GetOudioShareExtension.appex" >/dev/null 2>&1 || true
+  pluginkit -r "$LEGACY_USER_APP/Contents/PlugIns/GetOudioShareExtension.appex" >/dev/null 2>&1 || true
+  rm -rf "$INSTALLED_APP"
+  /usr/bin/ditto "$INSTALL_APP_BUNDLE" "$INSTALLED_APP"
+  verify_extension_point "$INSTALLED_APP/Contents/PlugIns/GetOudioFinderExtension.appex" "$FINDER_EXTENSION_POINT_ID"
+  verify_extension_point "$INSTALLED_APP/Contents/PlugIns/GetOudioShareExtension.appex" "$SHARE_EXTENSION_POINT_ID"
+  verify_entitlements "$INSTALLED_APP"
+  verify_entitlements "$INSTALLED_APP/Contents/PlugIns/GetOudioFinderExtension.appex"
+  verify_entitlements "$INSTALLED_APP/Contents/PlugIns/GetOudioShareExtension.appex"
+  /usr/bin/open -n "$INSTALLED_APP"
+  /System/Library/Frameworks/CoreServices.framework/Versions/Current/Frameworks/LaunchServices.framework/Versions/Current/Support/lsregister -f -R -trusted "$INSTALLED_APP"
+  pluginkit -a "$INSTALLED_APP"
+  pluginkit -a "$INSTALLED_APP/Contents/PlugIns/GetOudioFinderExtension.appex"
+  pluginkit -a "$INSTALLED_APP/Contents/PlugIns/GetOudioShareExtension.appex"
+  pluginkit -e use -i "$FINDER_EXTENSION_ID"
+  killall Finder >/dev/null 2>&1 || true
+  pluginkit -m -v -i "$FINDER_EXTENSION_ID"
+}
+
+case "$MODE" in
+  run)
+    build_unsigned
+    open_app
+    ;;
+  --verify|verify)
+    build_unsigned
+    open_app
+    sleep 2
+    pgrep -x "$APP_NAME" >/dev/null
+    ;;
+  --logs|logs)
+    build_unsigned
+    open_app
+    /usr/bin/log stream --info --style compact --predicate "process == \"$APP_NAME\""
+    ;;
+  --telemetry|telemetry)
+    build_unsigned
+    open_app
+    /usr/bin/log stream --info --style compact --predicate "subsystem == \"$BUNDLE_ID\""
+    ;;
+  --install|install)
+    install_app
+    ;;
+  *)
+    echo "usage: $0 [run|--verify|--logs|--telemetry|--install]" >&2
+    exit 2
+    ;;
+esac

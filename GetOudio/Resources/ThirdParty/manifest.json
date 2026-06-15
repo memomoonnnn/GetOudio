@@ -1,0 +1,30 @@
+{
+  "components": [
+    {
+      "id": "ncmdump",
+      "name": "ncmdump",
+      "upstream": "https://github.com/taurusxin/ncmdump",
+      "license": "MIT",
+      "expectedPath": "ThirdParty/ncmdump/bin/ncmdump",
+      "notes": "Place the signed macOS executable here before distribution."
+    },
+    {
+      "id": "appleMusicDownloader",
+      "name": "apple-music-downloader",
+      "upstream": "https://github.com/zhaarey/apple-music-downloader",
+      "license": "Check upstream repository before redistribution.",
+      "expectedPath": "ThirdParty/apple-music-downloader/apple-music-downloader",
+      "notes": "Project-private macOS executable embedded in the app bundle. Runtime config is generated from ThirdParty/apple-music-downloader/config.yaml.template under the app-managed shared container."
+    }
+  ],
+  "managedDockerImages": [
+    {
+      "id": "appleMusicWrapper",
+      "name": "Apple Music wrapper",
+      "image": "ghcr.io/itouakirai/wrapper:x86",
+      "platform": "linux/amd64",
+      "upstream": "https://github.com/WorldObservationLog/wrapper",
+      "notes": "The wrapper is not embedded as a macOS executable. Get Oudio uses Docker CLI with the Colima context to pull and run this amd64 image with an app-managed rootfs/data directory."
+    }
+  ]
+}

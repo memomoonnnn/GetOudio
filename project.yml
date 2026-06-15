@@ -1,0 +1,175 @@
+name: GetOudio
+options:
+  minimumXcodeGenVersion: 2.42.0
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    CLANG_ANALYZER_NONNULL: YES
+    CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED: YES
+    SWIFT_VERSION: 5.0
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+    DEVELOPMENT_TEAM: ZWNUJ64F36
+    CODE_SIGN_STYLE: Automatic
+configs:
+  Debug: debug
+  Release: release
+targets:
+  GetOudioCore:
+    type: framework
+    platform: macOS
+    sources:
+      - path: GetOudioCore/Sources
+    info:
+      path: GetOudioCore/Info.plist
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.shengjiacheng.GetOudioCore
+        PRODUCT_NAME: GetOudioCore
+
+  GetOudio:
+    type: application
+    platform: macOS
+    sources:
+      - path: GetOudio/App
+      - path: GetOudio/Models
+      - path: GetOudio/Views
+      - path: GetOudio/Resources/AppIcon.icon
+        buildPhase: resources
+      - path: GetOudio/Resources/ThirdParty
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - target: GetOudioCore
+      - target: GetOudioFinderExtension
+        embed: true
+      - target: GetOudioShareExtension
+        embed: true
+    info:
+      path: GetOudio/Info.plist
+      properties:
+        CFBundleIconName: AppIcon
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: Audio File
+            CFBundleTypeRole: Editor
+            LSHandlerRank: Alternate
+            LSItemContentTypes:
+              - public.audio
+          - CFBundleTypeName: Video File
+            CFBundleTypeRole: Editor
+            LSHandlerRank: Alternate
+            LSItemContentTypes:
+              - public.movie
+              - public.audiovisual-content
+          - CFBundleTypeName: NCM File
+            CFBundleTypeRole: Editor
+            LSHandlerRank: Owner
+            LSItemContentTypes:
+              - com.shengjiacheng.getoudio.ncm
+        UTExportedTypeDeclarations:
+          - UTTypeIdentifier: com.shengjiacheng.getoudio.ncm
+            UTTypeDescription: NCM File
+            UTTypeConformsTo:
+              - public.data
+            UTTypeTagSpecification:
+              public.filename-extension:
+                - ncm
+    entitlements:
+      path: GetOudio/GetOudio.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.files.user-selected.read-write: true
+        com.apple.security.application-groups:
+          - group.com.shengjiacheng.GetOudio
+    settings:
+      base:
+        ENABLE_APP_SANDBOX: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.shengjiacheng.GetOudio
+        PRODUCT_NAME: Get Oudio
+
+  GetOudioFinderExtension:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: GetOudioFinderExtension/Sources
+      - path: GetOudioFinderExtension/Resources
+    dependencies:
+      - target: GetOudioCore
+    info:
+      path: GetOudioFinderExtension/Info.plist
+      properties:
+        CFBundleDisplayName: Get Oudio Finder Extension
+        NSExtension:
+          NSExtensionAttributes: {}
+          NSExtensionPointIdentifier: com.apple.FinderSync
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).FinderSync
+    entitlements:
+      path: GetOudioFinderExtension/GetOudioFinderExtension.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.application-groups:
+          - group.com.shengjiacheng.GetOudio
+    settings:
+      base:
+        ENABLE_APP_SANDBOX: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.shengjiacheng.GetOudio.FinderExtension
+        PRODUCT_NAME: GetOudioFinderExtension
+
+  GetOudioShareExtension:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: GetOudioShareExtension/Sources
+      - path: GetOudioShareExtension/Resources
+    dependencies:
+      - target: GetOudioCore
+    info:
+      path: GetOudioShareExtension/Info.plist
+      properties:
+        NSExtension:
+          NSExtensionAttributes:
+            NSExtensionActivationRule:
+              NSExtensionActivationSupportsText: true
+              NSExtensionActivationSupportsWebURLWithMaxCount: 1
+            NSExtensionVersion: "1.0"
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareExtension
+    entitlements:
+      path: GetOudioShareExtension/GetOudioShareExtension.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.application-groups:
+          - group.com.shengjiacheng.GetOudio
+    settings:
+      base:
+        ENABLE_APP_SANDBOX: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.shengjiacheng.GetOudio.ShareExtension
+        PRODUCT_NAME: GetOudioShareExtension
+
+  GetOudioCoreTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: GetOudioCore/Tests
+    dependencies:
+      - target: GetOudioCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.shengjiacheng.GetOudioCoreTests
+
+schemes:
+  GetOudio:
+    build:
+      targets:
+        GetOudio: all
+        GetOudioCore: all
+        GetOudioFinderExtension: all
+        GetOudioShareExtension: all
+    run:
+      config: Debug
+      executable: GetOudio
+    test:
+      config: Debug
+      targets:
+        - GetOudioCoreTests
