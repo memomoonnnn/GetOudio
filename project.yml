@@ -80,6 +80,12 @@ targets:
       properties:
         com.apple.security.app-sandbox: true
         com.apple.security.files.user-selected.read-write: true
+        com.apple.security.files.downloads.read-write: true
+        com.apple.security.files.movies.read-write: true
+        com.apple.security.files.music.read-write: true
+        com.apple.security.files.pictures.read-write: true
+        com.apple.security.network.client: true
+        com.apple.security.network.server: true
         com.apple.security.application-groups:
           - group.com.shengjiacheng.GetOudio
     settings:

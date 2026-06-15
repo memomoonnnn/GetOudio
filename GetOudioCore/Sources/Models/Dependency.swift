@@ -1,6 +1,7 @@
 import Foundation
 
 public enum RuntimeDependency: String, CaseIterable, Identifiable, Codable, Sendable {
+    case homebrew
     case ffmpeg
     case docker
     case colima
@@ -11,6 +12,7 @@ public enum RuntimeDependency: String, CaseIterable, Identifiable, Codable, Send
 
     public var displayName: String {
         switch self {
+        case .homebrew: return "Homebrew"
         case .ffmpeg: return "ffmpeg"
         case .docker: return "Docker CLI"
         case .colima: return "Colima"
@@ -21,6 +23,7 @@ public enum RuntimeDependency: String, CaseIterable, Identifiable, Codable, Send
 
     public var executableName: String {
         switch self {
+        case .homebrew: return "brew"
         case .ffmpeg: return "ffmpeg"
         case .docker: return "docker"
         case .colima: return "colima"
@@ -31,6 +34,8 @@ public enum RuntimeDependency: String, CaseIterable, Identifiable, Codable, Send
 
     public var installCommand: String {
         switch self {
+        case .homebrew:
+            return #"/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)""#
         case .ffmpeg:
             return "brew install ffmpeg"
         case .docker:
@@ -41,6 +46,33 @@ public enum RuntimeDependency: String, CaseIterable, Identifiable, Codable, Send
             return "brew install gpac"
         case .go:
             return "brew install go"
+        }
+    }
+
+    /// 内嵌在 App Bundle 中的相对路径（相对于 ThirdParty 目录），若为 nil 则仅从系统 PATH 查找
+    public var bundledRelativePath: String? {
+        switch self {
+        case .ffmpeg:
+            return "ThirdParty/ffmpeg/ffmpeg"
+        case .docker:
+            return "ThirdParty/docker/docker"
+        case .gpac:
+            return "ThirdParty/gpac/MP4Box"
+        case .colima:
+            return "ThirdParty/colima/colima"
+        default:
+            return nil
+        }
+    }
+
+    public var sortPriority: Int {
+        switch self {
+        case .homebrew: return 0
+        case .ffmpeg: return 10
+        case .docker: return 20
+        case .colima: return 30
+        case .gpac: return 40
+        case .go: return 50
         }
     }
 }

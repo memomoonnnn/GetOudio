@@ -27,7 +27,7 @@ public enum ProcessRunnerError: Error, LocalizedError {
 public final class ProcessRunner {
     public init() {}
 
-    public func run(executablePath: String, arguments: [String], currentDirectoryURL: URL? = nil) async throws -> ProcessResult {
+    public func run(executablePath: String, arguments: [String], currentDirectoryURL: URL? = nil, environment: [String: String]? = nil) async throws -> ProcessResult {
         try await Task.detached(priority: .utility) {
             guard FileManager.default.isExecutableFile(atPath: executablePath) else {
                 throw ProcessRunnerError.executableNotFound(executablePath)
@@ -40,6 +40,11 @@ public final class ProcessRunner {
             process.executableURL = executableURL
             process.arguments = arguments
             process.currentDirectoryURL = currentDirectoryURL
+            if let env = environment {
+                var merged = ProcessInfo.processInfo.environment
+                for (key, value) in env { merged[key] = value }
+                process.environment = merged
+            }
             process.standardOutput = outputPipe
             process.standardError = errorPipe
 

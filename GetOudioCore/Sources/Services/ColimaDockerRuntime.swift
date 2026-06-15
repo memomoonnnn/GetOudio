@@ -18,10 +18,29 @@ public final class ColimaDockerRuntime {
     public let dockerContext = "colima"
     private let runner: ProcessRunner
     private let dependencyManager: DependencyManager
+    private let resourceRoot: URL?
 
-    public init(runner: ProcessRunner = ProcessRunner(), dependencyManager: DependencyManager = DependencyManager()) {
+    public init(
+        runner: ProcessRunner = ProcessRunner(),
+        dependencyManager: DependencyManager = DependencyManager(),
+        resourceRoot: URL? = Bundle.main.resourceURL
+    ) {
         self.runner = runner
         self.dependencyManager = dependencyManager
+        self.resourceRoot = resourceRoot
+    }
+
+    /// 构建运行 Colima 所需的环境变量，确保能找到内嵌的 limactl
+    private func colimaEnvironment(colimaPath: String) -> [String: String] {
+        let colimaDir = (colimaPath as NSString).deletingLastPathComponent
+        var env: [String: String] = [:]
+        // 将内嵌目录加到 PATH 最前面，让 Colima 能找到同目录下的 limactl
+        if let existingPath = ProcessInfo.processInfo.environment["PATH"] {
+            env["PATH"] = "\(colimaDir):\(existingPath)"
+        } else {
+            env["PATH"] = "\(colimaDir):/usr/bin:/bin"
+        }
+        return env
     }
 
     public func check() async -> ColimaRuntimeStatus {
@@ -35,8 +54,10 @@ public final class ColimaDockerRuntime {
             return ColimaRuntimeStatus(dockerPath: dockerPath, colimaPath: nil, isRunning: false, detail: "未安装 Colima")
         }
 
+        let env = colimaEnvironment(colimaPath: colimaPath)
+
         do {
-            let status = try await runner.run(executablePath: colimaPath, arguments: ["status"])
+            let status = try await runner.run(executablePath: colimaPath, arguments: ["status"], environment: env)
             guard status.succeeded, status.standardOutput.localizedCaseInsensitiveContains("running") else {
                 return ColimaRuntimeStatus(
                     dockerPath: dockerPath,
@@ -46,7 +67,7 @@ public final class ColimaDockerRuntime {
                 )
             }
 
-            let dockerInfo = try await runner.run(executablePath: dockerPath, arguments: dockerArguments(["info"]))
+            let dockerInfo = try await runner.run(executablePath: dockerPath, arguments: dockerArguments(["info"]), environment: env)
             if dockerInfo.succeeded {
                 return ColimaRuntimeStatus(dockerPath: dockerPath, colimaPath: colimaPath, isRunning: true, detail: "Colima Docker engine 正在后台运行")
             }
@@ -73,16 +94,18 @@ public final class ColimaDockerRuntime {
             throw ProcessRunnerError.executableNotFound("colima")
         }
 
-        let currentStatus = try? await runner.run(executablePath: colimaPath, arguments: ["status"])
+        let env = colimaEnvironment(colimaPath: colimaPath)
+
+        let currentStatus = try? await runner.run(executablePath: colimaPath, arguments: ["status"], environment: env)
         if currentStatus?.succeeded != true || currentStatus?.standardOutput.localizedCaseInsensitiveContains("running") != true {
-            let start = try await runner.run(executablePath: colimaPath, arguments: ["start", "--runtime", "docker"])
+            let start = try await runner.run(executablePath: colimaPath, arguments: ["start", "--runtime", "docker"], environment: env)
             guard start.succeeded else {
                 let detail = start.standardError.isEmpty ? start.standardOutput : start.standardError
                 throw ProcessRunnerError.processFailed("Colima 启动失败：\(detail)")
             }
         }
 
-        let dockerInfo = try await runner.run(executablePath: dockerPath, arguments: dockerArguments(["info"]))
+        let dockerInfo = try await runner.run(executablePath: dockerPath, arguments: dockerArguments(["info"]), environment: env)
         guard dockerInfo.succeeded else {
             let detail = dockerInfo.standardError.isEmpty ? dockerInfo.standardOutput : dockerInfo.standardError
             throw ProcessRunnerError.processFailed("无法连接 Colima Docker engine：\(detail)")

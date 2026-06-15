@@ -1,31 +1,43 @@
 {
   "fill" : {
     "linear-gradient" : [
-      "display-p3:0.13777,0.60103,0.81957,1.00000",
-      "display-p3:0.75000,0.75000,0.71329,1.00000"
+      "display-p3:1.00000,1.00000,1.00000,1.00000",
+      "display-p3:0.92924,0.95749,0.95046,1.00000"
     ],
     "orientation" : {
       "start" : {
         "x" : 0.5,
-        "y" : 0
+        "y" : 1
       },
       "stop" : {
         "x" : 0.5,
-        "y" : 0.7
+        "y" : 0.3
       }
     }
   },
   "groups" : [
     {
-      "blur-material" : null,
       "layers" : [
         {
           "blend-mode" : "normal",
           "fill" : {
-            "solid" : "extended-gray:1.00000,1.00000"
+            "linear-gradient" : [
+              "display-p3:0.22753,0.57509,0.73616,1.00000",
+              "display-p3:0.03344,0.41962,0.59858,1.00000"
+            ],
+            "orientation" : {
+              "start" : {
+                "x" : 0.9138462370242214,
+                "y" : 1.0952862995426829
+              },
+              "stop" : {
+                "x" : 0.19436634948096887,
+                "y" : 0.27066263338414637
+              }
+            }
           },
           "glass" : true,
-          "image-name" : "2.图层 7.svg",
+          "image-name" : "layer7.svg",
           "name" : "图层 7",
           "opacity" : 0.9,
           "position" : {
@@ -41,9 +53,9 @@
       "name" : "Group",
       "shadow" : {
         "kind" : "neutral",
-        "opacity" : 0.6
+        "opacity" : 0.8
       },
-      "specular" : true,
+      "specular" : false,
       "translucency" : {
         "enabled" : true,
         "value" : 0.2

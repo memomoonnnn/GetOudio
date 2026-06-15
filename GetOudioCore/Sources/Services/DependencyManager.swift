@@ -2,9 +2,11 @@ import Foundation
 
 public final class DependencyManager {
     private let runner: ProcessRunner
+    private let resourceRoot: URL?
 
-    public init(runner: ProcessRunner = ProcessRunner()) {
+    public init(runner: ProcessRunner = ProcessRunner(), resourceRoot: URL? = Bundle.main.resourceURL) {
         self.runner = runner
+        self.resourceRoot = resourceRoot
     }
 
     public func checkAll() async -> [DependencyStatus] {
@@ -17,11 +19,31 @@ public final class DependencyManager {
             for await status in group {
                 statuses.append(status)
             }
-            return statuses.sorted { $0.dependency.displayName < $1.dependency.displayName }
+            return statuses.sorted { lhs, rhs in
+                if lhs.dependency.sortPriority == rhs.dependency.sortPriority {
+                    return lhs.dependency.displayName < rhs.dependency.displayName
+                }
+                return lhs.dependency.sortPriority < rhs.dependency.sortPriority
+            }
         }
     }
 
     public func check(_ dependency: RuntimeDependency) async -> DependencyStatus {
+        // 优先检查内嵌二进制
+        if let bundledPath = dependency.bundledRelativePath,
+           let resourceRoot = resourceRoot {
+            let bundledURL = resourceRoot.appendingPathComponent(bundledPath)
+            if FileManager.default.isExecutableFile(atPath: bundledURL.path) {
+                return DependencyStatus(
+                    dependency: dependency,
+                    isInstalled: true,
+                    resolvedPath: bundledURL.path,
+                    detail: "内嵌 (\(bundledURL.path))"
+                )
+            }
+        }
+
+        // 回退到系统 PATH
         do {
             let result = try await runner.run(executablePath: "/usr/bin/which", arguments: [dependency.executableName])
             let path = result.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines)

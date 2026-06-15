@@ -134,6 +134,30 @@ final class SettingsViewModel: ObservableObject {
         isCheckingDependencies = false
     }
 
+    func isDependencyInstallDisabled(_ status: DependencyStatus) -> Bool {
+        if isCheckingDependencies {
+            return true
+        }
+
+        if status.dependency == .homebrew {
+            return false
+        }
+
+        return !isHomebrewInstalled
+    }
+
+    func installHelp(for status: DependencyStatus) -> String {
+        if status.dependency == .homebrew {
+            return "执行 Homebrew 官方安装脚本"
+        }
+
+        if !isHomebrewInstalled {
+            return "请先安装 Homebrew"
+        }
+
+        return status.dependency.installCommand
+    }
+
     func pull(_ image: ManagedDockerImage) async {
         isCheckingDependencies = true
         dependencyMessage = "正在后台启动 Colima 并拉取 \(image.imageName)..."
@@ -169,5 +193,9 @@ final class SettingsViewModel: ObservableObject {
         store.finderDirectoryURLs = finderDirectories
         finderDirectories = store.finderDirectoryURLs
         finderDirectoryMessage = "已保存 \(finderDirectories.count) 个 Finder 监听目录；重启 Finder 后生效。"
+    }
+
+    private var isHomebrewInstalled: Bool {
+        dependencyStatuses.first { $0.dependency == .homebrew }?.isInstalled ?? false
     }
 }

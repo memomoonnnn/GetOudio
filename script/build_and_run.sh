@@ -86,10 +86,16 @@ verify_entitlements() {
     exit 1
   fi
 
-  if ! /usr/bin/grep -q "com.apple.security.app-sandbox" "$entitlements_file" ||
-     ! /usr/bin/grep -q "com.apple.security.application-groups" "$entitlements_file" ||
+  if ! /usr/bin/grep -q "com.apple.security.app-sandbox" "$entitlements_file"; then
+    echo "missing sandbox entitlement in $bundle_path" >&2
+    /bin/cat "$entitlements_file" >&2
+    rm -f "$entitlements_file"
+    exit 1
+  fi
+
+  if ! /usr/bin/grep -q "com.apple.security.application-groups" "$entitlements_file" ||
      ! /usr/bin/grep -q "$APP_GROUP_ID" "$entitlements_file"; then
-    echo "missing sandbox or app group entitlements in $bundle_path" >&2
+    echo "missing app group entitlement in $bundle_path" >&2
     /bin/cat "$entitlements_file" >&2
     rm -f "$entitlements_file"
     exit 1

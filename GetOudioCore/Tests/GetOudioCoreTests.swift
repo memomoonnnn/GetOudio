@@ -21,6 +21,20 @@ final class GetOudioCoreTests: XCTestCase {
         XCTAssertTrue(extensions.isSuperset(of: ["m4a", "mp3", "flac", "wav"]))
     }
 
+    func testPresetOriginalTitlesUseFinderFriendlySuffix() {
+        XCTAssertEqual(ConversionPreset.alacSource.title, "ALAC Original")
+        XCTAssertEqual(ConversionPreset.flacSource.title, "FLAC Original")
+        XCTAssertEqual(ConversionPreset.pcmSource.title, "PCM Original")
+    }
+
+    func testPresetGroupsCoverAllPresets() {
+        let groupedPresets = ConversionPresetGroup.allCases.flatMap(\.presets)
+
+        XCTAssertEqual(Set(groupedPresets), Set(ConversionPreset.allCases))
+        XCTAssertEqual(groupedPresets.count, ConversionPreset.allCases.count)
+        XCTAssertEqual(ConversionPresetGroup.allCases.map(\.displayName), ["AAC", "MP3", "ALAC", "FLAC", "PCM"])
+    }
+
     func testFileCategoryClassification() {
         XCTAssertEqual(FileCategory.classify(URL(fileURLWithPath: "/tmp/demo.ncm")), .ncm)
         XCTAssertEqual(FileCategory.classify(URL(fileURLWithPath: "/tmp/demo.mp3")), .audio)
@@ -113,9 +127,16 @@ final class GetOudioCoreTests: XCTestCase {
     }
 
     func testAppleMusicUsesDockerCLIWithColimaInsteadOfDockerDesktop() {
+        XCTAssertEqual(RuntimeDependency.allCases.first, .homebrew)
+        XCTAssertEqual(RuntimeDependency.homebrew.displayName, "Homebrew")
+        XCTAssertEqual(RuntimeDependency.homebrew.executableName, "brew")
+        XCTAssertTrue(RuntimeDependency.homebrew.installCommand.contains("raw.githubusercontent.com/Homebrew/install/HEAD/install.sh"))
         XCTAssertEqual(RuntimeDependency.docker.displayName, "Docker CLI")
+        XCTAssertEqual(RuntimeDependency.ffmpeg.installCommand, "brew install ffmpeg")
         XCTAssertEqual(RuntimeDependency.docker.installCommand, "brew install docker")
         XCTAssertEqual(RuntimeDependency.colima.installCommand, "brew install colima")
+        XCTAssertEqual(RuntimeDependency.gpac.installCommand, "brew install gpac")
+        XCTAssertEqual(RuntimeDependency.go.installCommand, "brew install go")
         XCTAssertTrue(RuntimeDependency.allCases.contains(.colima))
     }
 

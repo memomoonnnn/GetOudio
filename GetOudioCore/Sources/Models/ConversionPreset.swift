@@ -19,6 +19,21 @@ public enum ConversionPreset: String, Codable, CaseIterable, Identifiable, Senda
 
     public var id: String { rawValue }
 
+    public var group: ConversionPresetGroup {
+        switch self {
+        case .aac128, .aac256, .aac320:
+            return .aac
+        case .mp3128, .mp3256, .mp3320:
+            return .mp3
+        case .alac24Bit48k, .alac16Bit48k, .alacSource:
+            return .alac
+        case .flac24Bit48k, .flac16Bit48k, .flacSource:
+            return .flac
+        case .pcm24Bit48k, .pcm16Bit48k, .pcmSource:
+            return .pcm
+        }
+    }
+
     public var title: String {
         switch self {
         case .aac128: return "AAC 128Kbps"
@@ -29,13 +44,13 @@ public enum ConversionPreset: String, Codable, CaseIterable, Identifiable, Senda
         case .mp3320: return "MP3 320Kbps"
         case .alac24Bit48k: return "ALAC 24bit 48KHz"
         case .alac16Bit48k: return "ALAC 16bit 48KHz"
-        case .alacSource: return "ALAC 原始规格"
+        case .alacSource: return "ALAC Original"
         case .flac24Bit48k: return "FLAC 24bit 48KHz"
         case .flac16Bit48k: return "FLAC 16bit 48KHz"
-        case .flacSource: return "FLAC 原始规格"
+        case .flacSource: return "FLAC Original"
         case .pcm24Bit48k: return "PCM WAV 24bit 48KHz"
         case .pcm16Bit48k: return "PCM WAV 16bit 48KHz"
-        case .pcmSource: return "PCM WAV 原始规格"
+        case .pcmSource: return "PCM Original"
         }
     }
 
@@ -104,3 +119,26 @@ public enum ConversionPreset: String, Codable, CaseIterable, Identifiable, Senda
     }
 }
 
+public enum ConversionPresetGroup: String, CaseIterable, Identifiable, Sendable {
+    case aac
+    case mp3
+    case alac
+    case flac
+    case pcm
+
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .aac: return "AAC"
+        case .mp3: return "MP3"
+        case .alac: return "ALAC"
+        case .flac: return "FLAC"
+        case .pcm: return "PCM"
+        }
+    }
+
+    public var presets: [ConversionPreset] {
+        ConversionPreset.allCases.filter { $0.group == self }
+    }
+}

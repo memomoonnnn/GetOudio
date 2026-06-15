@@ -42,14 +42,14 @@ import GetOudioCore
             }
 
             if !audioURLs.isEmpty {
-                let transcodeMenu = NSMenu(title: "重编码音频")
+                let transcodeMenu = NSMenu(title: "Get Oudio")
                 for preset in enabledPresets() {
                     let item = NSMenuItem(title: preset.finderMenuTitle, action: #selector(runPreset(_:)), keyEquivalent: "")
                     item.target = self
                     item.representedObject = preset.rawValue
                     transcodeMenu.addItem(item)
                 }
-                let parent = NSMenuItem(title: "重编码音频", action: nil, keyEquivalent: "")
+                let parent = NSMenuItem(title: "Get Oudio", action: nil, keyEquivalent: "")
                 menu.setSubmenu(transcodeMenu, for: parent)
                 menu.addItem(parent)
             }

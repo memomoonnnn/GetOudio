@@ -12,14 +12,6 @@ struct GetOudioApp: App {
             }
             .environmentObject(appModel)
         }
-        .commands {
-            CommandGroup(replacing: .appSettings) {
-                SettingsLink {
-                    Label("设置...", systemImage: "gearshape")
-                }
-                .keyboardShortcut(",", modifiers: .command)
-            }
-        }
 
         Window("转换", id: "convert") {
             EventHandlingView {
@@ -28,9 +20,5 @@ struct GetOudioApp: App {
             .environmentObject(appModel)
         }
         .defaultSize(width: 760, height: 560)
-
-        Settings {
-            SettingsView()
-        }
     }
 }
