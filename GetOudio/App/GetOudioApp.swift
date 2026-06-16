@@ -1,29 +1,13 @@
 import SwiftUI
 
+/// GetOudioApp is no longer the @main entry point.
+/// Normal launches are handled by NormalLauncher (AppKit NSWindow + NSHostingController).
+/// Headless launches are handled by HeadlessRunner.
+/// This struct remains only to avoid breaking the project file list.
 struct GetOudioApp: App {
-    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @StateObject private var appModel = AppModel()
-
     var body: some Scene {
-        // Main window — NavigationSplitView for settings & overview
-        WindowGroup("Get Oudio", id: "main") {
-            EventHandlingView(sceneRole: .main) {
-                MainView()
-            }
-            .environmentObject(appModel)
+        WindowGroup {
+            EmptyView()
         }
-        .defaultSize(width: 820, height: 600)
-        .commands {
-            CommandGroup(replacing: .newItem) {}
-        }
-
-        // Convert/confirmation window
-        Window("转换", id: "convert") {
-            EventHandlingView(sceneRole: .convert) {
-                ConvertWindowView()
-            }
-            .environmentObject(appModel)
-        }
-        .defaultSize(width: 760, height: 560)
     }
 }

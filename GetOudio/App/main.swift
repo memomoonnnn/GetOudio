@@ -2,13 +2,12 @@ import AppKit
 import GetOudioCore
 
 // ── Headless detection ──────────────────────────────────────────────
-// LSUIElement=true in Info.plist means the app ALWAYS starts as a
-// background agent (no Dock icon, no window).  This completely
-// eliminates the window flash that would otherwise occur when the
-// app is launched by a Finder/Share extension.
+// The floating-panel window configuration (level=.floating,
+// collectionBehavior=.stationary) is what enables dual foreground/background
+// behaviour — NOT LSUIElement or TransformProcessType.
 //
-// For normal (direct) launches we explicitly promote to .regular.
-// For extension-triggered launches we stay background → process → notify → exit.
+//   • Normal launch → floating panel window appears
+//   • Extension trigger → no window, jobs run silently → notification → exit
 
 let isHeadless: Bool = {
     guard let defaults = UserDefaults(suiteName: AppConstants.appGroupIdentifier) else {
@@ -25,10 +24,7 @@ let isHeadless: Bool = {
 }()
 
 if isHeadless {
-    // Stay as background agent (LSUIElement default) — no UI ever
     HeadlessRunner.main()
 } else {
-    // Promote to full GUI app so SwiftUI windows & Dock icon appear
-    NSApp.setActivationPolicy(.regular)
-    GetOudioApp.main()
+    NormalLauncher.main()
 }

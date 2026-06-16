@@ -16,9 +16,8 @@ final class HeadlessRunner: NSObject, NSApplicationDelegate, UNUserNotificationC
     // MARK: - Entry point
 
     static func main() {
-        // LSUIElement=true in Info.plist already makes us a background agent.
-        // No need to set activationPolicy — macOS won't show Dock or windows.
         let app = NSApplication.shared
+        app.setActivationPolicy(.accessory)
         let runner = HeadlessRunner()
         app.delegate = runner
         app.run()

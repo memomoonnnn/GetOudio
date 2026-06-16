@@ -21,7 +21,8 @@ struct EventHandlingView<Content: View>: View {
     var body: some View {
         content
             .onAppear {
-                if sceneRole == .main { configureOnAppear() }
+                if sceneRole == .main { configureMainWindow() }
+                else if sceneRole == .convert { configureFloatingPanel() }
             }
             .onReceive(NotificationCenter.default.publisher(for: .getOudioOpenFiles)) { notification in
                 guard sceneRole == .main else { return }
@@ -30,7 +31,6 @@ struct EventHandlingView<Content: View>: View {
                 Task {
                     guard appModel.receiveOpenFileURLs(urls) else { return }
                     if appModel.openItems.allSatisfy({ $0.category == .ncm }) {
-                        // NCM files: run silently in background, show notification
                         await appModel.runNCMConversion()
                     } else {
                         NSApp.setActivationPolicy(.regular)
@@ -45,14 +45,40 @@ struct EventHandlingView<Content: View>: View {
             }
     }
 
-    // MARK: - Launch
+    // MARK: - Window Configuration
 
-    private func configureOnAppear() {
+    /// Configure the main window:
+    /// 1. Apply floating-panel properties (above normal windows, invisible to Stage Manager)
+    /// 2. Promote from LSUIElement/background to foreground if needed
+    private func configureMainWindow() {
         if let delegate = NSApp.delegate as? AppDelegate {
             appModel.launchSource = delegate.detectedLaunchSource
         }
-        NSApp.setActivationPolicy(.regular)
+
+        // Apply floating-panel attributes
+        configureFloatingPanel()
+
+        // Bring to front — necessary after TransformProcessType foreground
         NSApp.activate(ignoringOtherApps: true)
+        if let window = NSApp.windows.first(where: { $0.title == "Get Oudio" }) {
+            window.makeKeyAndOrderFront(nil)
+        }
+    }
+
+    /// Make the window float above normal windows and be excluded from
+    /// Stage Manager, Mission Control, and third-party window managers.
+    private func configureFloatingPanel() {
+        guard let window = NSApp.windows.first(where: {
+            $0.title == "Get Oudio" || $0.title == "转换"
+        }) else { return }
+
+        window.level = .floating
+        window.collectionBehavior = [
+            .canJoinAllSpaces,
+            .fullScreenAuxiliary,
+            .ignoresCycle,
+            .stationary
+        ]
     }
 
     // MARK: - URL Scheme (from Finder/Share extensions)
@@ -64,7 +90,5 @@ struct EventHandlingView<Content: View>: View {
             openWindow(id: "convert")
             NSApp.activate(ignoringOtherApps: true)
         }
-        // If not opening convert window: jobs are processed silently in background.
-        // Notification is sent by AppModel when done.
     }
 }
