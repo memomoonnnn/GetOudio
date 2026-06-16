@@ -8,13 +8,13 @@ public enum ConversionPreset: String, Codable, CaseIterable, Identifiable, Senda
     case mp3256
     case mp3320
     case alac24Bit48k
-    case alac16Bit48k
+    case alac16Bit44_1k = "alac16Bit44_1k"
     case alacSource
     case flac24Bit48k
-    case flac16Bit48k
+    case flac16Bit44_1k = "flac16Bit44_1k"
     case flacSource
     case pcm24Bit48k
-    case pcm16Bit48k
+    case pcm16Bit44_1k = "pcm16Bit44_1k"
     case pcmSource
 
     public var id: String { rawValue }
@@ -25,11 +25,11 @@ public enum ConversionPreset: String, Codable, CaseIterable, Identifiable, Senda
             return .aac
         case .mp3128, .mp3256, .mp3320:
             return .mp3
-        case .alac24Bit48k, .alac16Bit48k, .alacSource:
+        case .alac24Bit48k, .alac16Bit44_1k, .alacSource:
             return .alac
-        case .flac24Bit48k, .flac16Bit48k, .flacSource:
+        case .flac24Bit48k, .flac16Bit44_1k, .flacSource:
             return .flac
-        case .pcm24Bit48k, .pcm16Bit48k, .pcmSource:
+        case .pcm24Bit48k, .pcm16Bit44_1k, .pcmSource:
             return .pcm
         }
     }
@@ -42,27 +42,27 @@ public enum ConversionPreset: String, Codable, CaseIterable, Identifiable, Senda
         case .mp3128: return "MP3 128Kbps"
         case .mp3256: return "MP3 256Kbps"
         case .mp3320: return "MP3 320Kbps"
-        case .alac24Bit48k: return "ALAC 24bit 48KHz"
-        case .alac16Bit48k: return "ALAC 16bit 48KHz"
+        case .alac24Bit48k: return "ALAC 24bit 48kHz"
+        case .alac16Bit44_1k: return "ALAC 16bit 44.1kHz"
         case .alacSource: return "ALAC Original"
-        case .flac24Bit48k: return "FLAC 24bit 48KHz"
-        case .flac16Bit48k: return "FLAC 16bit 48KHz"
+        case .flac24Bit48k: return "FLAC 24bit 48kHz"
+        case .flac16Bit44_1k: return "FLAC 16bit 44.1kHz"
         case .flacSource: return "FLAC Original"
-        case .pcm24Bit48k: return "PCM WAV 24bit 48KHz"
-        case .pcm16Bit48k: return "PCM WAV 16bit 48KHz"
+        case .pcm24Bit48k: return "PCM 24bit 48kHz"
+        case .pcm16Bit44_1k: return "PCM 16bit 44.1kHz"
         case .pcmSource: return "PCM Original"
         }
     }
 
     public var outputExtension: String {
         switch self {
-        case .aac128, .aac256, .aac320, .alac24Bit48k, .alac16Bit48k, .alacSource:
+        case .aac128, .aac256, .aac320, .alac24Bit48k, .alac16Bit44_1k, .alacSource:
             return "m4a"
         case .mp3128, .mp3256, .mp3320:
             return "mp3"
-        case .flac24Bit48k, .flac16Bit48k, .flacSource:
+        case .flac24Bit48k, .flac16Bit44_1k, .flacSource:
             return "flac"
-        case .pcm24Bit48k, .pcm16Bit48k, .pcmSource:
+        case .pcm24Bit48k, .pcm16Bit44_1k, .pcmSource:
             return "wav"
         }
     }
@@ -77,14 +77,14 @@ public enum ConversionPreset: String, Codable, CaseIterable, Identifiable, Senda
         case .mp3128: return "MP3 128Kbps"
         case .mp3256: return "MP3 256Kbps"
         case .mp3320: return "MP3 320Kbps"
-        case .alac24Bit48k: return "ALAC 24bit 48KHz"
-        case .alac16Bit48k: return "ALAC 16bit 48KHz"
+        case .alac24Bit48k: return "ALAC 24bit 48kHz"
+        case .alac16Bit44_1k: return "ALAC 16bit 44.1kHz"
         case .alacSource: return "ALAC Original"
-        case .flac24Bit48k: return "FLAC 24bit 48KHz"
-        case .flac16Bit48k: return "FLAC 16bit 48KHz"
+        case .flac24Bit48k: return "FLAC 24bit 48kHz"
+        case .flac16Bit44_1k: return "FLAC 16bit 44.1kHz"
         case .flacSource: return "FLAC Original"
-        case .pcm24Bit48k: return "PCM 24bit 48KHz"
-        case .pcm16Bit48k: return "PCM 16bit 48KHz"
+        case .pcm24Bit48k: return "PCM 24bit 48kHz"
+        case .pcm16Bit44_1k: return "PCM 16bit 44.1kHz"
         case .pcmSource: return "PCM Original"
         }
     }
@@ -117,20 +117,20 @@ public enum ConversionPreset: String, Codable, CaseIterable, Identifiable, Senda
             arguments += ["-acodec", "libmp3lame", "-b:a", "320k"]
         case .alac24Bit48k:
             arguments += ["-acodec", "alac", "-ar", "48000", "-sample_fmt", "s32p"]
-        case .alac16Bit48k:
-            arguments += ["-acodec", "alac", "-ar", "48000", "-sample_fmt", "s16p"]
+        case .alac16Bit44_1k:
+            arguments += ["-acodec", "alac", "-ar", "44100", "-sample_fmt", "s16p"]
         case .alacSource:
             arguments += ["-acodec", "alac"]
         case .flac24Bit48k:
             arguments += ["-acodec", "flac", "-ar", "48000", "-sample_fmt", "s32", "-bits_per_raw_sample", "24"]
-        case .flac16Bit48k:
-            arguments += ["-acodec", "flac", "-ar", "48000", "-sample_fmt", "s16"]
+        case .flac16Bit44_1k:
+            arguments += ["-acodec", "flac", "-ar", "44100", "-sample_fmt", "s16"]
         case .flacSource:
             arguments += ["-acodec", "flac"]
         case .pcm24Bit48k:
             arguments += ["-acodec", "pcm_s24le", "-ar", "48000"]
-        case .pcm16Bit48k:
-            arguments += ["-acodec", "pcm_s16le", "-ar", "48000"]
+        case .pcm16Bit44_1k:
+            arguments += ["-acodec", "pcm_s16le", "-ar", "44100"]
         case .pcmSource:
             arguments += ["-acodec", "pcm_s16le"]
         }
@@ -138,7 +138,7 @@ public enum ConversionPreset: String, Codable, CaseIterable, Identifiable, Senda
         arguments += ["-map", "0:a:0", "-map_metadata", "0:g", "-map_chapters", "0", "-y", "-vn"]
 
         switch self {
-        case .aac128, .aac256, .aac320, .alac24Bit48k, .alac16Bit48k, .alacSource:
+        case .aac128, .aac256, .aac320, .alac24Bit48k, .alac16Bit44_1k, .alacSource:
             arguments += ["-movflags", "use_metadata_tags"]
         case .mp3128, .mp3256, .mp3320:
             arguments += ["-write_id3v2", "1", "-id3v2_version", "3"]

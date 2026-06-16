@@ -39,6 +39,42 @@ final class GetOudioCoreTests: XCTestCase {
         XCTAssertEqual(ConversionPreset.pcmSource.title, "PCM Original")
     }
 
+    func testSixteenBitPresetsUse44100HzNamingAndArguments() throws {
+        let input = URL(fileURLWithPath: "/tmp/song.aiff")
+        let cases: [(ConversionPreset, String, String, String)] = [
+            (.alac16Bit44_1k, "ALAC 16bit 44.1kHz", "m4a", "alac"),
+            (.flac16Bit44_1k, "FLAC 16bit 44.1kHz", "flac", "flac"),
+            (.pcm16Bit44_1k, "PCM 16bit 44.1kHz", "wav", "pcm_s16le")
+        ]
+
+        for (preset, expectedTitle, expectedExtension, expectedCodec) in cases {
+            let output = preset.outputURL(for: input)
+            let arguments = preset.ffmpegArguments(inputURL: input, outputURL: output)
+
+            XCTAssertEqual(preset.title, expectedTitle)
+            XCTAssertEqual(preset.outputNameSuffix, expectedTitle)
+            XCTAssertEqual(output.path, "/tmp/song [\(expectedTitle)].\(expectedExtension)")
+            XCTAssertTrue(arguments.contains(expectedCodec))
+            let sampleRateIndex = try XCTUnwrap(arguments.firstIndex(of: "-ar"))
+            XCTAssertEqual(arguments[sampleRateIndex + 1], "44100")
+            XCTAssertFalse(arguments.contains("48000"))
+        }
+    }
+
+    func testPresetCatalogDoesNotExposeLegacy16Bit48kNames() {
+        let rawValues = ConversionPreset.allCases.map(\.rawValue)
+        let labels = ConversionPreset.allCases.flatMap { [$0.title, $0.outputNameSuffix, $0.finderMenuTitle] }
+
+        XCTAssertFalse(rawValues.contains("alac16Bit48k"))
+        XCTAssertFalse(rawValues.contains("flac16Bit48k"))
+        XCTAssertFalse(rawValues.contains("pcm16Bit48k"))
+        XCTAssertTrue(rawValues.contains("alac16Bit44_1k"))
+        XCTAssertTrue(rawValues.contains("flac16Bit44_1k"))
+        XCTAssertTrue(rawValues.contains("pcm16Bit44_1k"))
+        XCTAssertFalse(labels.contains { $0.contains("PCM WAV") })
+        XCTAssertFalse(labels.contains { $0.contains("16bit 48kHz") || $0.contains("16bit 48KHz") })
+    }
+
     func testPresetGroupsCoverAllPresets() {
         let groupedPresets = ConversionPresetGroup.allCases.flatMap(\.presets)
 

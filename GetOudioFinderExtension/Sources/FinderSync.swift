@@ -120,13 +120,13 @@ private final class FinderActionContext: NSObject {
     @objc private func runMP3256(_ sender: NSMenuItem) { runPreset(.mp3256) }
     @objc private func runMP3320(_ sender: NSMenuItem) { runPreset(.mp3320) }
     @objc private func runALAC24Bit48k(_ sender: NSMenuItem) { runPreset(.alac24Bit48k) }
-    @objc private func runALAC16Bit48k(_ sender: NSMenuItem) { runPreset(.alac16Bit48k) }
+    @objc private func runALAC16Bit44_1k(_ sender: NSMenuItem) { runPreset(.alac16Bit44_1k) }
     @objc private func runALACSource(_ sender: NSMenuItem) { runPreset(.alacSource) }
     @objc private func runFLAC24Bit48k(_ sender: NSMenuItem) { runPreset(.flac24Bit48k) }
-    @objc private func runFLAC16Bit48k(_ sender: NSMenuItem) { runPreset(.flac16Bit48k) }
+    @objc private func runFLAC16Bit44_1k(_ sender: NSMenuItem) { runPreset(.flac16Bit44_1k) }
     @objc private func runFLACSource(_ sender: NSMenuItem) { runPreset(.flacSource) }
     @objc private func runPCM24Bit48k(_ sender: NSMenuItem) { runPreset(.pcm24Bit48k) }
-    @objc private func runPCM16Bit48k(_ sender: NSMenuItem) { runPreset(.pcm16Bit48k) }
+    @objc private func runPCM16Bit44_1k(_ sender: NSMenuItem) { runPreset(.pcm16Bit44_1k) }
     @objc private func runPCMSource(_ sender: NSMenuItem) { runPreset(.pcmSource) }
 
     @objc private func extractVideoAudio(_ sender: NSMenuItem) {
@@ -179,6 +179,14 @@ private final class FinderActionContext: NSObject {
         guard let url = URL(string: "\(AppConstants.appURLScheme)://run-queued") else {
             return
         }
+
+        // Signal launch source before opening app
+        if let sharedDefaults = UserDefaults(suiteName: AppConstants.appGroupIdentifier) {
+            sharedDefaults.set(LaunchSource.finderSync.rawValue, forKey: AppConstants.extensionLaunchSourceKey)
+            sharedDefaults.set(Date().timeIntervalSince1970, forKey: AppConstants.extensionLaunchTimestampKey)
+            sharedDefaults.synchronize()
+        }
+
         DiagnosticLog.append("finder open url \(url.absoluteString)")
         NSWorkspace.shared.open(url)
     }
@@ -233,20 +241,20 @@ private final class FinderActionContext: NSObject {
             return #selector(runMP3320(_:))
         case .alac24Bit48k:
             return #selector(runALAC24Bit48k(_:))
-        case .alac16Bit48k:
-            return #selector(runALAC16Bit48k(_:))
+        case .alac16Bit44_1k:
+            return #selector(runALAC16Bit44_1k(_:))
         case .alacSource:
             return #selector(runALACSource(_:))
         case .flac24Bit48k:
             return #selector(runFLAC24Bit48k(_:))
-        case .flac16Bit48k:
-            return #selector(runFLAC16Bit48k(_:))
+        case .flac16Bit44_1k:
+            return #selector(runFLAC16Bit44_1k(_:))
         case .flacSource:
             return #selector(runFLACSource(_:))
         case .pcm24Bit48k:
             return #selector(runPCM24Bit48k(_:))
-        case .pcm16Bit48k:
-            return #selector(runPCM16Bit48k(_:))
+        case .pcm16Bit44_1k:
+            return #selector(runPCM16Bit44_1k(_:))
         case .pcmSource:
             return #selector(runPCMSource(_:))
         }

@@ -1,117 +1,255 @@
 import GetOudioCore
 import SwiftUI
 
+// MARK: - SettingsSection (Reusable Card Component)
+
+/// 仿 Thaw 项目 IceSection 风格的分块卡片组件。
+/// 每个板块为带圆角边框的独立卡片，包含标题、内容和可选脚注。
+struct SettingsSection<Content: View, Footer: View>: View {
+    let title: String
+    let systemImage: String
+    let content: Content
+    let footer: Footer
+
+    init(
+        _ title: String,
+        systemImage: String = "gearshape",
+        @ViewBuilder content: () -> Content,
+        @ViewBuilder footer: () -> Footer = { EmptyView() }
+    ) {
+        self.title = title
+        self.systemImage = systemImage
+        self.content = content()
+        self.footer = footer()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Header
+            Label(title, systemImage: systemImage)
+                .font(.headline)
+                .foregroundStyle(.primary)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+
+            Divider()
+
+            // Content
+            VStack(alignment: .leading, spacing: 0) {
+                content
+            }
+            .padding(12)
+
+            if !(footer is EmptyView) {
+                Divider()
+                VStack(alignment: .leading, spacing: 4) {
+                    footer
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+            }
+        }
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(.quaternary, lineWidth: 0.5)
+        )
+    }
+}
+
+// MARK: - SettingsForm (Scrollable Container)
+
+/// 仿 Thaw 项目 IceForm 风格的滚动表单容器。
+struct SettingsForm<Content: View>: View {
+    let spacing: CGFloat
+    let content: Content
+
+    init(spacing: CGFloat = 20, @ViewBuilder content: () -> Content) {
+        self.spacing = spacing
+        self.content = content()
+    }
+
+    var body: some View {
+        ScrollView(.vertical) {
+            VStack(alignment: .leading, spacing: spacing) {
+                content
+            }
+            .padding(24)
+        }
+        .background(.windowBackground)
+    }
+}
+
+// MARK: - TranscodingSettingsPage
+
 struct TranscodingSettingsPage: View {
     @ObservedObject var viewModel: SettingsViewModel
 
     var body: some View {
-        Form {
-            Section("监听目录") {
-                Text("由于MacOS的限制，右键拓展仅在设定的目录下生效。")
-                    .foregroundStyle(.secondary)
-
-                List {
-                    ForEach(viewModel.finderDirectories, id: \.self) { url in
-                        HStack(spacing: 10) {
-                            Label(url.path, systemImage: "folder")
-                                .lineLimit(1)
-
-                            Spacer()
-
-                            Button {
-                                viewModel.revealFinderDirectory(url)
-                            } label: {
-                                Image(systemName: "arrow.up.forward.square")
-                            }
-                            .buttonStyle(.borderless)
-                            .help("在 Finder 中显示")
-
-                            Button {
-                                viewModel.removeFinderDirectory(url)
-                            } label: {
-                                Image(systemName: "minus.circle")
-                            }
-                            .buttonStyle(.borderless)
-                            .help("移除")
-                        }
-                    }
-                    .onDelete(perform: viewModel.removeFinderDirectories)
-                }
-                .frame(minHeight: 140)
-
-                HStack {
-                    Button {
-                        viewModel.addFinderDirectory()
-                    } label: {
-                        Label("添加目录", systemImage: "plus")
-                    }
-
-                    Button {
-                        viewModel.restoreDefaultFinderDirectories()
-                    } label: {
-                        Label("恢复默认", systemImage: "arrow.counterclockwise")
-                    }
-
-                    Spacer()
-                }
-
-                if !viewModel.finderDirectoryMessage.isEmpty {
-                    Text(viewModel.finderDirectoryMessage)
-                        .font(.caption)
+        SettingsForm {
+            // 系统拓展板块
+            SettingsSection("系统拓展", systemImage: "switch.2") {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Finder Sync 与共享拓展由 macOS 统一授权，App 可以安装和声明拓展，但不能在系统设置中替用户默认启用。首次安装后，请在系统设置的拓展页面手动打开 Get Oudio 的“共享”和“文件提供程序”。")
+                        .font(.callout)
                         .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Button {
+                        viewModel.openExtensionSettings()
+                    } label: {
+                        Label("打开拓展设置", systemImage: "switch.2")
+                    }
                 }
             }
 
-            Section("Finder Sync 中启用的预设") {
-                ForEach(ConversionPresetGroup.allCases) { group in
-                    DisclosureGroup(group.displayName) {
-                        ForEach(group.presets) { preset in
-                            Toggle(preset.title, isOn: Binding(
-                                get: { viewModel.enabledPresets.contains(preset) },
-                                set: { viewModel.toggle(preset, isEnabled: $0) }
-                            ))
+            // 监听目录板块
+            SettingsSection("监听目录", systemImage: "folder") {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("由于 macOS 的限制，右键拓展仅在设定的目录下生效。")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+
+                    List {
+                        ForEach(viewModel.finderDirectories, id: \.self) { url in
+                            HStack(spacing: 10) {
+                                Label(url.path, systemImage: "folder")
+                                    .lineLimit(1)
+
+                                Spacer()
+
+                                Button {
+                                    viewModel.revealFinderDirectory(url)
+                                } label: {
+                                    Image(systemName: "arrow.up.forward.square")
+                                }
+                                .buttonStyle(.borderless)
+                                .help("在 Finder 中显示")
+
+                                Button {
+                                    viewModel.removeFinderDirectory(url)
+                                } label: {
+                                    Image(systemName: "minus.circle")
+                                }
+                                .buttonStyle(.borderless)
+                                .help("移除")
+                            }
                         }
+                        .onDelete(perform: viewModel.removeFinderDirectories)
+                    }
+                    .frame(minHeight: 120)
+
+                    HStack {
+                        Button {
+                            viewModel.addFinderDirectory()
+                        } label: {
+                            Label("添加目录", systemImage: "plus")
+                        }
+
+                        Button {
+                            viewModel.restoreDefaultFinderDirectories()
+                        } label: {
+                            Label("恢复默认", systemImage: "arrow.counterclockwise")
+                        }
+
+                        Spacer()
+                    }
+                }
+            } footer: {
+                if !viewModel.finderDirectoryMessage.isEmpty {
+                    Text(viewModel.finderDirectoryMessage)
+                }
+            }
+
+            // 重编码预设板块 — 每个编码格式独立一块
+            SettingsSection("重编码预设", systemImage: "slider.horizontal.3") {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("在右键菜单与转换窗口中启用的预设。至少保留一项。")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+
+                    ForEach(ConversionPresetGroup.allCases) { group in
+                        presetGroupBoard(group)
                     }
                 }
             }
         }
-        .formStyle(.grouped)
-        .padding(24)
+    }
+
+    /// 单个编码格式板块（AAC / MP3 / ALAC / FLAC / PCM）
+    @ViewBuilder
+    private func presetGroupBoard(_ group: ConversionPresetGroup) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(group.displayName)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .padding(.leading, 4)
+
+            VStack(spacing: 0) {
+                ForEach(Array(group.presets.enumerated()), id: \.element.id) { index, preset in
+                    Toggle(isOn: Binding(
+                        get: { viewModel.enabledPresets.contains(preset) },
+                        set: { viewModel.toggle(preset, isEnabled: $0) }
+                    )) {
+                        Text(preset.title)
+                    }
+                    .toggleStyle(.switch)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+
+                    if index < group.presets.count - 1 {
+                        Divider()
+                            .padding(.leading, 12)
+                    }
+                }
+            }
+            .background(.quinary, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
     }
 }
+
+// MARK: - NCMSettingsPage
 
 struct NCMSettingsPage: View {
     @ObservedObject var viewModel: SettingsViewModel
 
     var body: some View {
-        Form {
-            Section("NCM 转换输出") {
-                Picker("输出位置", selection: Binding(
-                    get: { viewModel.ncmOutputMode },
-                    set: { viewModel.setNCMOutputMode($0) }
-                )) {
-                    Text("源文件所在目录").tag("sourceDirectory")
-                    Text("指定目录").tag("customDirectory")
-                }
-                .pickerStyle(.radioGroup)
-
-                HStack {
-                    Text(viewModel.ncmCustomOutputURL?.path ?? "未选择指定目录")
+        SettingsForm {
+            SettingsSection("NCM 转换输出", systemImage: "music.note") {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("选择 NCM 加密音乐转换后的输出位置。")
+                        .font(.callout)
                         .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                    Spacer()
-                    Button {
-                        viewModel.chooseNCMOutputDirectory()
-                    } label: {
-                        Label("选择目录", systemImage: "folder")
+
+                    Picker("输出位置", selection: Binding(
+                        get: { viewModel.ncmOutputMode },
+                        set: { viewModel.setNCMOutputMode($0) }
+                    )) {
+                        Text("源文件所在目录").tag("sourceDirectory")
+                        Text("指定目录").tag("customDirectory")
+                    }
+                    .pickerStyle(.radioGroup)
+
+                    HStack {
+                        Text(viewModel.ncmCustomOutputURL?.path ?? "未选择指定目录")
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                        Spacer()
+                        Button {
+                            viewModel.chooseNCMOutputDirectory()
+                        } label: {
+                            Label("选择目录", systemImage: "folder")
+                        }
                     }
                 }
             }
         }
-        .formStyle(.grouped)
-        .padding(24)
     }
 }
+
+// MARK: - AppleMusicSettingsPage
 
 struct AppleMusicSettingsPage: View {
     @ObservedObject var viewModel: SettingsViewModel
@@ -124,63 +262,96 @@ struct AppleMusicSettingsPage: View {
     private let downloadService = AppleMusicDownloadService()
 
     var body: some View {
-        Form {
-            Section("初始化") {
-                TextField("Apple ID", text: $username)
-                SecureField("密码", text: $password)
-                TextField("验证码", text: $verificationCode)
-                Text(status)
-                    .foregroundStyle(.secondary)
+        SettingsForm {
+            // 账号初始化板块
+            SettingsSection("账号初始化", systemImage: "person.badge.key") {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("输入 Apple ID 凭据以初始化 Apple Music 下载功能。凭据将安全存储在 Keychain 中。")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
 
-                HStack {
-                    Button {
-                        saveCredentials()
-                    } label: {
-                        Label("保存凭据", systemImage: "key")
+                    LabeledContent("Apple ID") {
+                        TextField("example@icloud.com", text: $username)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(maxWidth: 280)
                     }
 
-                    Button {
-                        Task { await initializeWrapper() }
-                    } label: {
-                        Label("开始初始化", systemImage: "play")
+                    LabeledContent("密码") {
+                        SecureField("••••••••", text: $password)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(maxWidth: 280)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(isInitializing || username.isEmpty || password.isEmpty)
 
-                    Button {
-                        submitVerificationCode()
-                    } label: {
-                        Label("提交验证码", systemImage: "number")
+                    LabeledContent("验证码") {
+                        TextField("123456", text: $verificationCode)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(maxWidth: 140)
                     }
-                    .disabled(verificationCode.isEmpty)
+
+                    if !status.isEmpty {
+                        Text(status)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .padding(.vertical, 2)
+                    }
+
+                    HStack(spacing: 12) {
+                        Button {
+                            saveCredentials()
+                        } label: {
+                            Label("保存凭据", systemImage: "key")
+                        }
+
+                        Button {
+                            Task { await initializeWrapper() }
+                        } label: {
+                            Label("开始初始化", systemImage: "play.fill")
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .disabled(isInitializing || username.isEmpty || password.isEmpty)
+
+                        Button {
+                            submitVerificationCode()
+                        } label: {
+                            Label("提交验证码", systemImage: "number")
+                        }
+                        .disabled(verificationCode.isEmpty)
+                    }
                 }
             }
 
-            Section("Apple Music 下载") {
-                HStack {
-                    Text(viewModel.appleMusicOutputURL.path)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                    Spacer()
-                    Button {
-                        viewModel.chooseAppleMusicOutputDirectory()
-                    } label: {
-                        Label("选择输出目录", systemImage: "folder")
+            // 下载设置板块
+            SettingsSection("下载设置", systemImage: "arrow.down.circle") {
+                VStack(alignment: .leading, spacing: 12) {
+                    LabeledContent("输出目录") {
+                        HStack {
+                            Text(viewModel.appleMusicOutputURL.path)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                            Spacer()
+                            Button {
+                                viewModel.chooseAppleMusicOutputDirectory()
+                            } label: {
+                                Label("选择", systemImage: "folder")
+                            }
+                        }
                     }
-                }
 
-                Picker("下载类型", selection: Binding(
-                    get: { viewModel.appleMusicDownloadFormat },
-                    set: { viewModel.setAppleMusicDownloadFormat($0) }
-                )) {
-                    ForEach(AppleMusicDownloadFormat.allCases) { format in
-                        Text(format.displayName).tag(format)
+                    Divider()
+
+                    Picker("下载格式", selection: Binding(
+                        get: { viewModel.appleMusicDownloadFormat },
+                        set: { viewModel.setAppleMusicDownloadFormat($0) }
+                    )) {
+                        ForEach(AppleMusicDownloadFormat.allCases) { format in
+                            Text(format.displayName).tag(format)
+                        }
                     }
+                    .pickerStyle(.menu)
                 }
             }
         }
-        .formStyle(.grouped)
-        .padding(24)
     }
 
     private func saveCredentials() {
@@ -195,7 +366,7 @@ struct AppleMusicSettingsPage: View {
 
     private func initializeWrapper() async {
         isInitializing = true
-        status = "正在后台启动 Colima 并运行 wrapper 镜像。收到 Apple 验证码后，在此输入并点击提交验证码。"
+        status = "正在后台启动 Colima 并运行 wrapper 镜像..."
         let summary = await downloadService.initializeWrapper(username: username, password: password, verificationCode: verificationCode)
         isInitializing = false
 
@@ -209,119 +380,9 @@ struct AppleMusicSettingsPage: View {
     private func submitVerificationCode() {
         let summary = downloadService.submitWrapperVerificationCode(verificationCode)
         if summary.failureCount == 0 {
-            status = "验证码已写入 wrapper 运行目录"
+            status = "验证码已提交"
         } else {
-            status = summary.messages.first ?? "验证码写入失败"
+            status = summary.messages.first ?? "验证码提交失败"
         }
-    }
-}
-
-struct DependencySettingsPage: View {
-    @ObservedObject var viewModel: SettingsViewModel
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text(viewModel.dependencyMessage)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Button {
-                    Task { await viewModel.refreshDependencies() }
-                } label: {
-                    Label("重新检测", systemImage: "arrow.clockwise")
-                }
-                .disabled(viewModel.isCheckingDependencies)
-            }
-
-            List {
-                Section("运行时工具") {
-                    ForEach(viewModel.dependencyStatuses) { status in
-                        HStack(spacing: 12) {
-                            Image(systemName: status.isInstalled ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                                .foregroundStyle(status.isInstalled ? .green : .orange)
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(status.dependency.displayName)
-                                    .font(.headline)
-                                Text(status.detail)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(2)
-                            }
-
-                            Spacer()
-
-                            Button {
-                                Task { await viewModel.install(status.dependency) }
-                            } label: {
-                                Label(status.installActionTitle, systemImage: "square.and.arrow.down")
-                            }
-                            .disabled(viewModel.isDependencyInstallDisabled(status))
-                            .help(viewModel.installHelp(for: status))
-                        }
-                        .padding(.vertical, 4)
-                    }
-                }
-
-                Section("App 内嵌组件") {
-                    ForEach(viewModel.bundledComponentStatuses) { status in
-                        HStack(spacing: 12) {
-                            Image(systemName: status.isEmbedded ? "checkmark.circle.fill" : "archivebox.fill")
-                                .foregroundStyle(status.isEmbedded ? .green : .secondary)
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(status.component.displayName)
-                                    .font(.headline)
-                                Text(status.detail)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(2)
-                            }
-
-                            Spacer()
-                        }
-                        .padding(.vertical, 4)
-                    }
-                }
-
-                Section("Colima 托管容器镜像") {
-                    ForEach(viewModel.dockerImageStatuses) { status in
-                        HStack(spacing: 12) {
-                            Image(systemName: status.isAvailable ? "checkmark.circle.fill" : "externaldrive.badge.exclamationmark")
-                                .foregroundStyle(status.isAvailable ? .green : .orange)
-
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(status.image.displayName)
-                                    .font(.headline)
-                                Text(status.detail)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(2)
-                            }
-
-                            Spacer()
-
-                            Button {
-                                Task { await viewModel.pull(status.image) }
-                            } label: {
-                                Label(status.isAvailable ? "重新拉取" : "启动并拉取", systemImage: "arrow.down.circle")
-                            }
-                            .disabled(viewModel.isCheckingDependencies)
-                        }
-                        .padding(.vertical, 4)
-                    }
-                }
-            }
-        }
-        .padding(24)
-    }
-}
-
-private extension DependencyStatus {
-    var installActionTitle: String {
-        if dependency == .homebrew {
-            return isInstalled ? "重新安装" : "安装"
-        }
-        return isInstalled ? "更新" : "安装"
     }
 }

@@ -63,17 +63,6 @@ targets:
             CFBundleURLSchemes:
               - getoudio
         CFBundleDocumentTypes:
-          - CFBundleTypeName: Audio File
-            CFBundleTypeRole: Editor
-            LSHandlerRank: Alternate
-            LSItemContentTypes:
-              - public.audio
-          - CFBundleTypeName: Video File
-            CFBundleTypeRole: Editor
-            LSHandlerRank: Alternate
-            LSItemContentTypes:
-              - public.movie
-              - public.audiovisual-content
           - CFBundleTypeName: NCM File
             CFBundleTypeRole: Editor
             LSHandlerRank: Owner

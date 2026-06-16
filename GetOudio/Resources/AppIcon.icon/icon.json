@@ -1,54 +1,92 @@
 {
-  "fill" : "automatic",
+  "fill" : {
+    "automatic-gradient" : "srgb:1.00000,1.00000,1.00000,1.00000"
+  },
   "groups" : [
     {
+      "blend-mode" : "normal",
+      "blur-material" : null,
+      "hidden" : false,
       "layers" : [
         {
-          "blend-mode" : "normal",
-          "fill" : {
-            "linear-gradient" : [
-              "display-p3:0.22753,0.57509,0.73616,1.00000",
-              "display-p3:0.03344,0.41962,0.59858,1.00000"
-            ],
-            "orientation" : {
-              "start" : {
-                "x" : 0.9138462370242214,
-                "y" : 1.0952862995426829
-              },
-              "stop" : {
-                "x" : 0.19436634948096887,
-                "y" : 0.27066263338414637
+          "fill-specializations" : [
+            {
+              "value" : {
+                "solid" : "srgb:0.00000,0.00000,0.00000,1.00000"
+              }
+            },
+            {
+              "appearance" : "dark",
+              "value" : {
+                "solid" : "srgb:1.00000,1.00000,0.50000,1.00000"
+              }
+            },
+            {
+              "appearance" : "tinted",
+              "value" : {
+                "solid" : "srgb:0.93193,0.96824,1.00000,1.00000"
               }
             }
-          },
+          ],
           "glass" : true,
-          "image-name" : "layer7.svg",
-          "name" : "图层 7",
-          "opacity" : 0.9,
-          "position" : {
-            "scale" : 1,
-            "translation-in-points" : [
-              9,
-              0
-            ]
-          }
+          "image-name" : "1.layer-get.png",
+          "name" : "1.layer-get"
         }
       ],
       "lighting" : "individual",
-      "name" : "Group",
+      "shadow" : {
+        "kind" : "layer-color",
+        "opacity" : 0.5
+      },
+      "specular" : false,
+      "translucency" : {
+        "enabled" : true,
+        "value" : 0.5
+      }
+    },
+    {
+      "blur-material" : null,
+      "hidden" : false,
+      "layers" : [
+        {
+          "blend-mode" : "normal",
+          "fill-specializations" : [
+            {
+              "value" : "automatic"
+            },
+            {
+              "appearance" : "dark",
+              "value" : {
+                "solid" : "srgb:0.86842,0.93860,1.00000,1.00000"
+              }
+            },
+            {
+              "appearance" : "tinted",
+              "value" : {
+                "solid" : "srgb:0.82123,0.88667,0.94392,1.00000"
+              }
+            }
+          ],
+          "glass" : true,
+          "image-name" : "2.layer-word.png",
+          "name" : "2.layer-word"
+        }
+      ],
+      "lighting" : "individual",
       "shadow" : {
         "kind" : "neutral",
-        "opacity" : 0.8
+        "opacity" : 0.5
       },
       "specular" : true,
       "translucency" : {
         "enabled" : true,
-        "value" : 0.2
+        "value" : 0.5
       }
     }
   ],
   "supported-platforms" : {
-    "macos" : "shared",
-    "squares" : "shared"
+    "squares" : [
+      "macOS"
+    ]
   }
 }

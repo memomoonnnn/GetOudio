@@ -63,6 +63,14 @@ final class ShareExtension: NSObject, NSExtensionRequestHandling {
         guard let url = URL(string: "\(AppConstants.appURLScheme)://run-queued") else {
             return
         }
+
+        // Signal launch source before opening app
+        if let sharedDefaults = UserDefaults(suiteName: AppConstants.appGroupIdentifier) {
+            sharedDefaults.set(LaunchSource.shareExtension.rawValue, forKey: AppConstants.extensionLaunchSourceKey)
+            sharedDefaults.set(Date().timeIntervalSince1970, forKey: AppConstants.extensionLaunchTimestampKey)
+            sharedDefaults.synchronize()
+        }
+
         NSWorkspace.shared.open(url)
     }
 

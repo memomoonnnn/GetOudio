@@ -13,15 +13,11 @@ struct MainView: View {
                 }
             }
             .navigationSplitViewColumnWidth(min: 180, ideal: 220)
+            .listStyle(.sidebar)
         } detail: {
             detailView
         }
-        .frame(minWidth: 780, minHeight: 520)
-        .task {
-            if settingsViewModel.dependencyStatuses.isEmpty {
-                await settingsViewModel.refreshDependencies()
-            }
-        }
+        .frame(minWidth: 780, minHeight: 560)
     }
 
     @ViewBuilder
@@ -35,8 +31,6 @@ struct MainView: View {
             NCMSettingsPage(viewModel: settingsViewModel)
         case .appleMusic:
             AppleMusicSettingsPage(viewModel: settingsViewModel)
-        case .dependencies:
-            DependencySettingsPage(viewModel: settingsViewModel)
         }
     }
 }
@@ -46,7 +40,6 @@ private enum MainSidebarItem: String, CaseIterable, Identifiable {
     case transcoding
     case ncm
     case appleMusic
-    case dependencies
 
     var id: String { rawValue }
 
@@ -56,7 +49,6 @@ private enum MainSidebarItem: String, CaseIterable, Identifiable {
         case .transcoding: return "重编码设置"
         case .ncm: return "NCM设置"
         case .appleMusic: return "AM下载设置"
-        case .dependencies: return "依赖"
         }
     }
 
@@ -66,7 +58,6 @@ private enum MainSidebarItem: String, CaseIterable, Identifiable {
         case .transcoding: return "slider.horizontal.3"
         case .ncm: return "music.note"
         case .appleMusic: return "arrow.down.circle"
-        case .dependencies: return "shippingbox"
         }
     }
 }
