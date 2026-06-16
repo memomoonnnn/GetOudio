@@ -34,7 +34,42 @@ public enum ConversionPreset: String, Codable, CaseIterable, Identifiable, Senda
         }
     }
 
+    /// 设置界面中的简短标题（已通过分组标题体现格式，无需重复格式前缀）
     public var title: String {
+        switch self {
+        case .aac128: return "128Kbps"
+        case .aac256: return "256Kbps"
+        case .aac320: return "320Kbps"
+        case .mp3128: return "128Kbps"
+        case .mp3256: return "256Kbps"
+        case .mp3320: return "320Kbps"
+        case .alac24Bit48k: return "24bit 48kHz"
+        case .alac16Bit44_1k: return "16bit 44.1kHz"
+        case .alacSource: return "Original"
+        case .flac24Bit48k: return "24bit 48kHz"
+        case .flac16Bit44_1k: return "16bit 44.1kHz"
+        case .flacSource: return "Original"
+        case .pcm24Bit48k: return "24bit 48kHz"
+        case .pcm16Bit44_1k: return "16bit 44.1kHz"
+        case .pcmSource: return "Original"
+        }
+    }
+
+    public var outputExtension: String {
+        switch self {
+        case .aac128, .aac256, .aac320, .alac24Bit48k, .alac16Bit44_1k, .alacSource:
+            return "m4a"
+        case .mp3128, .mp3256, .mp3320:
+            return "mp3"
+        case .flac24Bit48k, .flac16Bit44_1k, .flacSource:
+            return "flac"
+        case .pcm24Bit48k, .pcm16Bit44_1k, .pcmSource:
+            return "wav"
+        }
+    }
+
+    /// Finder 右键菜单中的完整标题（无分组上下文，需包含格式名）
+    public var finderMenuTitle: String {
         switch self {
         case .aac128: return "AAC 128Kbps"
         case .aac256: return "AAC 256Kbps"
@@ -53,21 +88,6 @@ public enum ConversionPreset: String, Codable, CaseIterable, Identifiable, Senda
         case .pcmSource: return "PCM Original"
         }
     }
-
-    public var outputExtension: String {
-        switch self {
-        case .aac128, .aac256, .aac320, .alac24Bit48k, .alac16Bit44_1k, .alacSource:
-            return "m4a"
-        case .mp3128, .mp3256, .mp3320:
-            return "mp3"
-        case .flac24Bit48k, .flac16Bit44_1k, .flacSource:
-            return "flac"
-        case .pcm24Bit48k, .pcm16Bit44_1k, .pcmSource:
-            return "wav"
-        }
-    }
-
-    public var finderMenuTitle: String { title }
 
     public var outputNameSuffix: String {
         switch self {

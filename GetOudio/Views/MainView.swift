@@ -16,8 +16,8 @@ struct MainView: View {
             .listStyle(.sidebar)
         } detail: {
             detailView
+                .background(.windowBackground)
         }
-        .frame(minWidth: 780, minHeight: 560)
     }
 
     @ViewBuilder

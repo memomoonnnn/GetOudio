@@ -32,10 +32,6 @@ struct EventHandlingView<Content: View>: View {
                     guard appModel.receiveOpenFileURLs(urls) else { return }
                     if appModel.openItems.allSatisfy({ $0.category == .ncm }) {
                         await appModel.runNCMConversion()
-                    } else {
-                        NSApp.setActivationPolicy(.regular)
-                        openWindow(id: "convert")
-                        NSApp.activate(ignoringOtherApps: true)
                     }
                 }
             }
@@ -84,11 +80,6 @@ struct EventHandlingView<Content: View>: View {
     // MARK: - URL Scheme (from Finder/Share extensions)
 
     private func handleURLScheme(_ url: URL) async {
-        let shouldOpenConvert = await appModel.processQueuedJobsInBackground()
-        if shouldOpenConvert {
-            NSApp.setActivationPolicy(.regular)
-            openWindow(id: "convert")
-            NSApp.activate(ignoringOtherApps: true)
-        }
+        await appModel.processQueuedJobsInBackground()
     }
 }

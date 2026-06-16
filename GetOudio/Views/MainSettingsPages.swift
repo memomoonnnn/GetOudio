@@ -89,7 +89,7 @@ struct TranscodingSettingsPage: View {
             // 系统拓展板块
             SettingsSection("系统拓展", systemImage: "switch.2") {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Finder Sync 与共享拓展无法在系统设置中替你启用。首次安装后，请在系统设置的拓展页面手动打开 Get Oudio 的“共享”和“文件提供程序”。")
+                    Text("若Finder Sync 与共享拓展没有被启用。请在系统设置的拓展页面手动打开 Get Oudio 的“共享”和“文件提供程序”。")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -219,7 +219,7 @@ struct NCMSettingsPage: View {
         SettingsForm {
             SettingsSection("输出设置", systemImage: "music.note") {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("设定 NCM 转换后的输出位置。")
+                    Text("设定 NCM 转码后的输出位置。")
                         .font(.callout)
                         .foregroundStyle(.secondary)
 

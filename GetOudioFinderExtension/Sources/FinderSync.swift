@@ -52,7 +52,7 @@ private final class FinderActionContext: NSObject {
             )
 
             if audioURLs.isEmpty && videoURLs.isEmpty && ncmURLs.isEmpty {
-                let disabledItem = NSMenuItem(title: "没有可处理的音视频或 NCM 文件", action: nil, keyEquivalent: "")
+                let disabledItem = NSMenuItem(title: "没有可处理的文件", action: nil, keyEquivalent: "")
                 disabledItem.isEnabled = false
                 menu.addItem(disabledItem)
                 return menu
@@ -64,7 +64,7 @@ private final class FinderActionContext: NSObject {
 
                 if !audioURLs.isEmpty {
                     for preset in presets {
-                        let item = NSMenuItem(title: "转换为 \(preset.finderMenuTitle)", action: actionSelector(for: preset), keyEquivalent: "")
+                        let item = NSMenuItem(title: "to \(preset.finderMenuTitle)", action: actionSelector(for: preset), keyEquivalent: "")
                         item.target = self
                         submenu.addItem(item)
                     }
@@ -74,7 +74,7 @@ private final class FinderActionContext: NSObject {
                     if !submenu.items.isEmpty {
                         submenu.addItem(.separator())
                     }
-                    let item = NSMenuItem(title: "提取视频音频", action: #selector(extractVideoAudio(_:)), keyEquivalent: "")
+                    let item = NSMenuItem(title: "从视频中提取音频", action: #selector(extractVideoAudio(_:)), keyEquivalent: "")
                     item.target = self
                     item.representedObject = FinderActionContext(urls: videoURLs)
                     submenu.addItem(item)
@@ -84,7 +84,7 @@ private final class FinderActionContext: NSObject {
                     if !submenu.items.isEmpty {
                         submenu.addItem(.separator())
                     }
-                    let item = NSMenuItem(title: "转换 NCM", action: #selector(convertNCM(_:)), keyEquivalent: "")
+                    let item = NSMenuItem(title: "转码NCM", action: #selector(convertNCM(_:)), keyEquivalent: "")
                     item.target = self
                     item.representedObject = FinderActionContext(urls: ncmURLs)
                     submenu.addItem(item)

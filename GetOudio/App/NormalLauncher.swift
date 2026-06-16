@@ -12,7 +12,6 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
 
     private var appModel: AppModel!
     private var mainWindow: NSWindow?
-    private var convertWindow: NSWindow?
 
     // MARK: - Entry point
 
@@ -74,6 +73,9 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
 
     func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool { false }
 
+    /// 当所有窗口都关闭后自动退出应用
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+
     func application(_ sender: NSApplication, openFiles filenames: [String]) {
         let urls = filenames.map { URL(fileURLWithPath: $0) }
         guard !urls.isEmpty, urls.allSatisfy({ FileCategory.classify($0) == .ncm }) else {
@@ -102,32 +104,8 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
               url.scheme == AppConstants.appURLScheme else { return }
 
         Task {
-            let shouldOpenConvert = await appModel.processQueuedJobsInBackground()
-            if shouldOpenConvert {
-                await MainActor.run { openConvertWindow() }
-            }
+            await appModel.processQueuedJobsInBackground()
         }
-    }
-
-    // MARK: - Convert Window
-
-    private func openConvertWindow() {
-        if convertWindow == nil {
-            let contentView = ConvertWindowView().environmentObject(appModel)
-            let hostingController = NSHostingController(rootView: contentView)
-
-            let window = NSWindow(contentViewController: hostingController)
-            window.title = "转换"
-            window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
-            window.setContentSize(NSSize(width: 760, height: 560))
-            window.isReleasedWhenClosed = false
-            window.level = .floating
-            window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle, .stationary]
-            window.center()
-            convertWindow = window
-        }
-        convertWindow?.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
     }
 
     // MARK: - UNUserNotificationCenterDelegate

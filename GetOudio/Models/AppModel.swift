@@ -35,13 +35,6 @@ final class AppModel: ObservableObject {
     private var lastOpenFileEventSignature: String?
     private var lastOpenFileEventDate = Date.distantPast
 
-    // MARK: - Computed
-
-    var hasConvertibleAudioItems: Bool { openItems.contains { $0.category == .audio } }
-    var hasVideoItems: Bool { openItems.contains { $0.category == .video } }
-    var hasNCMItems: Bool { openItems.contains { $0.category == .ncm } }
-    var hasAppleMusicItems: Bool { openItems.contains { $0.category == .appleMusic } }
-
     // MARK: - File input
 
     func receiveOpenFileURLs(_ urls: [URL]) -> Bool {
@@ -66,10 +59,9 @@ final class AppModel: ObservableObject {
 
     // MARK: - Background processing (from URL scheme / extension)
 
-    /// Process queued jobs silently in the background.  Returns `true` when the
-    /// convert window should be opened (Apple Music format selection needed).
-    func processQueuedJobsInBackground() async -> Bool {
-        guard !isHandlingQueuedJobs, !isRunning else { return false }
+    /// Process queued jobs silently in the background.
+    func processQueuedJobsInBackground() async {
+        guard !isHandlingQueuedJobs, !isRunning else { return }
         isHandlingQueuedJobs = true
         defer { isHandlingQueuedJobs = false }
 
@@ -86,62 +78,25 @@ final class AppModel: ObservableObject {
             guard !jobs.isEmpty else {
                 statusMessage = "没有待处理的 Finder 任务"
                 DiagnosticLog.append("app queued jobs empty")
-                return false
+                return
             }
 
             openItems = jobs.map { OpenFileItem(url: $0.fileURL, category: $0.category) }
-            queuedJobs = jobs
             lastSummary = nil
-
-            if shouldOpenWindowForQueuedJobs(jobs) {
-                statusMessage = "收到 \(jobs.count) 个 Apple Music 任务，请确认下载选项"
-                return true
-            }
 
             DiagnosticLog.append("app bg run count=\(jobs.count)")
             await executeAndNotify(jobs)
             queuedJobs = []
-            return false
         } catch {
             statusMessage = "读取 Finder 任务失败：\(error.localizedDescription)"
             DiagnosticLog.append("app queued jobs failed \(error.localizedDescription)")
-            return false
         }
-    }
-
-    // MARK: - User-triggered actions (convert window)
-
-    func runTranscode(preset: ConversionPreset) async {
-        let jobs = openItems
-            .filter { $0.category == .audio }
-            .map { JobRequest(fileURL: $0.url, category: .audio, operation: .transcode(preset), source: .openWith) }
-        await executeAndNotify(jobs)
-    }
-
-    func runExtractAudio() async {
-        let jobs = openItems
-            .filter { $0.category == .video }
-            .map { JobRequest(fileURL: $0.url, category: .video, operation: .extractAudio, source: .openWith) }
-        await executeAndNotify(jobs)
     }
 
     func runNCMConversion() async {
         let jobs = openItems
             .filter { $0.category == .ncm }
             .map { JobRequest(fileURL: $0.url, category: .ncm, operation: .convertNCM, source: .openWith) }
-        await executeAndNotify(jobs)
-    }
-
-    func runAppleMusicDownload(format: AppleMusicDownloadFormat?) async {
-        let jobs = openItems
-            .filter { $0.category == .appleMusic }
-            .map { JobRequest(fileURL: $0.url, category: .appleMusic, operation: .appleMusicDownload(format), source: .shareExtension) }
-        await executeAndNotify(jobs)
-    }
-
-    func runQueuedJobs() async {
-        let jobs = queuedJobs
-        queuedJobs = []
         await executeAndNotify(jobs)
     }
 
@@ -209,11 +164,6 @@ final class AppModel: ObservableObject {
         let now = Date()
         defer { lastOpenFileEventSignature = signature; lastOpenFileEventDate = now }
         return lastOpenFileEventSignature == signature && now.timeIntervalSince(lastOpenFileEventDate) < 1
-    }
-
-    private func shouldOpenWindowForQueuedJobs(_ jobs: [JobRequest]) -> Bool {
-        guard settingsStore.appleMusicDownloadFormat == .askEveryTime else { return false }
-        return jobs.contains { if case .appleMusicDownload = $0.operation { true } else { false } }
     }
 
     private func writeConversionLog(summary: ConversionSummary, jobs: [JobRequest]) {
