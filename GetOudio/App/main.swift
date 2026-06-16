@@ -2,10 +2,13 @@ import AppKit
 import GetOudioCore
 
 // ── Headless detection ──────────────────────────────────────────────
-// When launched from Finder Sync / Share Extension, the extension sets
-// `ExtensionLaunchSource` + `ExtensionLaunchTimestamp` in shared
-// UserDefaults BEFORE calling open(url).  If those markers are present
-// and recent, this launch should run headless (no UI, notify on completion).
+// LSUIElement=true in Info.plist means the app ALWAYS starts as a
+// background agent (no Dock icon, no window).  This completely
+// eliminates the window flash that would otherwise occur when the
+// app is launched by a Finder/Share extension.
+//
+// For normal (direct) launches we explicitly promote to .regular.
+// For extension-triggered launches we stay background → process → notify → exit.
 
 let isHeadless: Bool = {
     guard let defaults = UserDefaults(suiteName: AppConstants.appGroupIdentifier) else {
@@ -22,7 +25,10 @@ let isHeadless: Bool = {
 }()
 
 if isHeadless {
+    // Stay as background agent (LSUIElement default) — no UI ever
     HeadlessRunner.main()
 } else {
+    // Promote to full GUI app so SwiftUI windows & Dock icon appear
+    NSApp.setActivationPolicy(.regular)
     GetOudioApp.main()
 }

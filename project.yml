@@ -57,6 +57,7 @@ targets:
     info:
       path: GetOudio/Info.plist
       properties:
+        LSUIElement: true
         CFBundleIconName: AppIcon
         CFBundleURLTypes:
           - CFBundleURLName: com.shengjiacheng.GetOudio
