@@ -3,8 +3,6 @@ import SwiftUI
 
 // MARK: - SettingsSection (Reusable Card Component)
 
-/// 仿 Thaw 项目 IceSection 风格的分块卡片组件。
-/// 每个板块为带圆角边框的独立卡片，包含标题、内容和可选脚注。
 struct SettingsSection<Content: View, Footer: View>: View {
     let title: String
     let systemImage: String
@@ -61,7 +59,6 @@ struct SettingsSection<Content: View, Footer: View>: View {
 
 // MARK: - SettingsForm (Scrollable Container)
 
-/// 仿 Thaw 项目 IceForm 风格的滚动表单容器。
 struct SettingsForm<Content: View>: View {
     let spacing: CGFloat
     let content: Content
@@ -92,7 +89,7 @@ struct TranscodingSettingsPage: View {
             // 系统拓展板块
             SettingsSection("系统拓展", systemImage: "switch.2") {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Finder Sync 与共享拓展由 macOS 统一授权，App 可以安装和声明拓展，但不能在系统设置中替用户默认启用。首次安装后，请在系统设置的拓展页面手动打开 Get Oudio 的“共享”和“文件提供程序”。")
+                    Text("Finder Sync 与共享拓展无法在系统设置中替你启用。首次安装后，请在系统设置的拓展页面手动打开 Get Oudio 的“共享”和“文件提供程序”。")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -164,9 +161,9 @@ struct TranscodingSettingsPage: View {
             }
 
             // 重编码预设板块 — 每个编码格式独立一块
-            SettingsSection("重编码预设", systemImage: "slider.horizontal.3") {
+            SettingsSection("Re-Encoding预设", systemImage: "slider.horizontal.3") {
                 VStack(alignment: .leading, spacing: 16) {
-                    Text("在右键菜单与转换窗口中启用的预设。至少保留一项。")
+                    Text("在右键菜单中启用的预设，至少保留一项。")
                         .font(.callout)
                         .foregroundStyle(.secondary)
 
@@ -189,13 +186,16 @@ struct TranscodingSettingsPage: View {
 
             VStack(spacing: 0) {
                 ForEach(Array(group.presets.enumerated()), id: \.element.id) { index, preset in
-                    Toggle(isOn: Binding(
-                        get: { viewModel.enabledPresets.contains(preset) },
-                        set: { viewModel.toggle(preset, isEnabled: $0) }
-                    )) {
+                    HStack {
                         Text(preset.title)
+                        Spacer()
+                        Toggle("", isOn: Binding(
+                            get: { viewModel.enabledPresets.contains(preset) },
+                            set: { viewModel.toggle(preset, isEnabled: $0) }
+                        ))
+                        .toggleStyle(.switch)
+                        .labelsHidden()
                     }
-                    .toggleStyle(.switch)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
 
@@ -217,13 +217,13 @@ struct NCMSettingsPage: View {
 
     var body: some View {
         SettingsForm {
-            SettingsSection("NCM 转换输出", systemImage: "music.note") {
+            SettingsSection("输出设置", systemImage: "music.note") {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("选择 NCM 加密音乐转换后的输出位置。")
+                    Text("设定 NCM 转换后的输出位置。")
                         .font(.callout)
                         .foregroundStyle(.secondary)
 
-                    Picker("输出位置", selection: Binding(
+                    Picker("输出到", selection: Binding(
                         get: { viewModel.ncmOutputMode },
                         set: { viewModel.setNCMOutputMode($0) }
                     )) {
@@ -264,7 +264,7 @@ struct AppleMusicSettingsPage: View {
     var body: some View {
         SettingsForm {
             // 账号初始化板块
-            SettingsSection("账号初始化", systemImage: "person.badge.key") {
+            SettingsSection("初始化", systemImage: "person.badge.key") {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("输入 Apple ID 凭据以初始化 Apple Music 下载功能。凭据将安全存储在 Keychain 中。")
                         .font(.callout)
@@ -323,7 +323,7 @@ struct AppleMusicSettingsPage: View {
             // 下载设置板块
             SettingsSection("下载设置", systemImage: "arrow.down.circle") {
                 VStack(alignment: .leading, spacing: 12) {
-                    LabeledContent("输出目录") {
+                    LabeledContent("输出到") {
                         HStack {
                             Text(viewModel.appleMusicOutputURL.path)
                                 .foregroundStyle(.secondary)

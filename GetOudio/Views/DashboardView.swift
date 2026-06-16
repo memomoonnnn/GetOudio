@@ -12,7 +12,7 @@ struct DashboardView: View {
                             .frame(width: 64, height: 64)
 
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("Get Oudio")
+                            Text("Get! OOOOOOOOOOOOOOOOOudio")
                                 .font(.title.weight(.bold))
                             if let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String,
                                let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String {
@@ -23,7 +23,7 @@ struct DashboardView: View {
                         }
                     }
 
-                    Text("一款原生 macOS 音频转换工具，支持 NCM 解密、音频重编码与 Apple Music 下载。")
+                    Text("包装了几个优秀开源项目的脚本执行器。")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -35,20 +35,20 @@ struct DashboardView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     quickStartRow(
                         icon: "music.note",
-                        title: "转换 NCM 文件",
-                        description: "在 Finder 中右键点击 .ncm 文件，或使用打开方式选择 Get Oudio"
+                        title: "Transcode NCM",
+                        description: "对 .ncm 文件在 Finder 右键菜单中选择「Get Oudio」，或使用打开方式选择 Get Oudio。"
                     )
                     Divider()
                     quickStartRow(
                         icon: "slider.horizontal.3",
-                        title: "音频重编码",
-                        description: "将音频文件拖入转换窗口，选择预设格式后开始转码"
+                        title: "Re-Encoding",
+                        description: "对音频文件在 Finder 右键菜单中选择「Get Oudio」预设，还可以提取视频中的音频轨。"
                     )
                     Divider()
                     quickStartRow(
                         icon: "arrow.down.circle",
-                        title: "Apple Music 下载",
-                        description: "在 AM 下载设置中启用并初始化后即可使用"
+                        title: "从 Apple Music 下载",
+                        description: "在设置中启用并初始化，随后在Apple Music中分享至「Get Oudio」。"
                     )
                 }
             }

@@ -46,9 +46,9 @@ private enum MainSidebarItem: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .overview: return "概览"
-        case .transcoding: return "重编码设置"
-        case .ncm: return "NCM设置"
-        case .appleMusic: return "AM下载设置"
+        case .transcoding: return "Re-Encoding"
+        case .ncm: return "NCM Transcoder"
+        case .appleMusic: return "Apple Music Downloader"
         }
     }
 

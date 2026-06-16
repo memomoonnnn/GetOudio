@@ -16,21 +16,35 @@ final class HeadlessRunner: NSObject, NSApplicationDelegate, UNUserNotificationC
     // MARK: - Entry point
 
     static func main() {
+        // Set activation policy as early as possible to minimise any visual flash.
+        // A sub-second flicker is a macOS limitation — LSUIElement can't be used
+        // because the same bundle also runs as a normal windowed app.
         let app = NSApplication.shared
+        app.setActivationPolicy(.accessory)
         let runner = HeadlessRunner()
         app.delegate = runner
-        app.setActivationPolicy(.accessory)
         app.run()
     }
 
     // MARK: - NSApplicationDelegate
 
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        // Belt and suspenders: close any phantom window the system may have created
+        for window in NSApp.windows {
+            window.close()
+        }
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Double-check no windows survived
+        for window in NSApp.windows {
+            window.close()
+        }
+
         UNUserNotificationCenter.current().delegate = self
 
         Task {
             await processAndNotify()
-            // Give the notification a moment to be delivered, then exit
             try? await Task.sleep(nanoseconds: 1_500_000_000)
             await MainActor.run { NSApp.terminate(nil) }
         }
