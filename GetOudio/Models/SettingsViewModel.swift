@@ -35,9 +35,14 @@ final class SettingsViewModel: ObservableObject {
         if isEnabled {
             enabledPresets.insert(preset)
         } else {
+            guard enabledPresets.count > 1 else {
+                enabledPresets = store.enabledPresets
+                return
+            }
             enabledPresets.remove(preset)
         }
         store.enabledPresets = enabledPresets
+        enabledPresets = store.enabledPresets
     }
 
     func addFinderDirectory() {

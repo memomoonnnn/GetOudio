@@ -16,6 +16,7 @@ public final class JobQueue {
         var existing = try read()
         existing.append(contentsOf: jobs)
         try write(existing)
+        DiagnosticLog.append("queue enqueue count=\(jobs.count) total=\(existing.count)")
     }
 
     public func read() throws -> [JobRequest] {
@@ -32,6 +33,7 @@ public final class JobQueue {
     public func drain() throws -> [JobRequest] {
         let jobs = try read()
         try write([])
+        DiagnosticLog.append("queue drain count=\(jobs.count)")
         return jobs
     }
 
@@ -40,4 +42,3 @@ public final class JobQueue {
         try data.write(to: fileURL, options: [.atomic])
     }
 }
-

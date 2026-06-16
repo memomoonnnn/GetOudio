@@ -69,13 +69,34 @@ public enum ConversionPreset: String, Codable, CaseIterable, Identifiable, Senda
 
     public var finderMenuTitle: String { title }
 
+    public var outputNameSuffix: String {
+        switch self {
+        case .aac128: return "AAC 128Kbps"
+        case .aac256: return "AAC 256Kbps"
+        case .aac320: return "AAC 320Kbps"
+        case .mp3128: return "MP3 128Kbps"
+        case .mp3256: return "MP3 256Kbps"
+        case .mp3320: return "MP3 320Kbps"
+        case .alac24Bit48k: return "ALAC 24bit 48KHz"
+        case .alac16Bit48k: return "ALAC 16bit 48KHz"
+        case .alacSource: return "ALAC Original"
+        case .flac24Bit48k: return "FLAC 24bit 48KHz"
+        case .flac16Bit48k: return "FLAC 16bit 48KHz"
+        case .flacSource: return "FLAC Original"
+        case .pcm24Bit48k: return "PCM 24bit 48KHz"
+        case .pcm16Bit48k: return "PCM 16bit 48KHz"
+        case .pcmSource: return "PCM Original"
+        }
+    }
+
     public static var defaultEnabled: Set<ConversionPreset> {
         Set(allCases)
     }
 
     public func outputURL(for inputURL: URL) -> URL {
         let baseName = inputURL.deletingPathExtension().lastPathComponent
-        return inputURL.deletingLastPathComponent().appendingPathComponent(baseName).appendingPathExtension(outputExtension)
+        let outputName = "\(baseName) [\(outputNameSuffix)]"
+        return inputURL.deletingLastPathComponent().appendingPathComponent(outputName).appendingPathExtension(outputExtension)
     }
 
     public func ffmpegArguments(inputURL: URL, outputURL: URL) -> [String] {
@@ -114,7 +135,18 @@ public enum ConversionPreset: String, Codable, CaseIterable, Identifiable, Senda
             arguments += ["-acodec", "pcm_s16le"]
         }
 
-        arguments += ["-map_metadata", "0", "-y", "-vn", outputURL.path]
+        arguments += ["-map", "0:a:0", "-map_metadata", "0:g", "-map_chapters", "0", "-y", "-vn"]
+
+        switch self {
+        case .aac128, .aac256, .aac320, .alac24Bit48k, .alac16Bit48k, .alacSource:
+            arguments += ["-movflags", "use_metadata_tags"]
+        case .mp3128, .mp3256, .mp3320:
+            arguments += ["-write_id3v2", "1", "-id3v2_version", "3"]
+        default:
+            break
+        }
+
+        arguments.append(outputURL.path)
         return arguments
     }
 }

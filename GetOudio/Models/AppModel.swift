@@ -7,6 +7,26 @@ struct OpenFileItem: Identifiable, Equatable {
     var category: FileCategory
 }
 
+struct ConversionProgressItem: Identifiable, Equatable {
+    let id: UUID
+    var fileName: String
+    var directoryPath: String
+    var operation: String
+    var phase: JobProgressPhase
+    var message: String?
+
+    var progressValue: Double? {
+        switch phase {
+        case .pending:
+            return 0
+        case .running:
+            return nil
+        case .succeeded, .failed:
+            return 1
+        }
+    }
+}
+
 @MainActor
 final class AppModel: ObservableObject {
     @Published var openItems: [OpenFileItem] = []
@@ -14,6 +34,10 @@ final class AppModel: ObservableObject {
     @Published var statusMessage = "准备就绪"
     @Published var isRunning = false
     @Published var lastSummary: ConversionSummary?
+    @Published var progressItems: [ConversionProgressItem] = []
+    @Published var progressWindowRequest: UUID?
+    @Published var shouldCloseMainWindowForProgress = false
+    @Published var showsProgressInMainWindow: Bool
 
     private let audioConversionService = AudioConversionService()
     private let mediaExtractionService = MediaExtractionService()
@@ -24,6 +48,10 @@ final class AppModel: ObservableObject {
     private var isHandlingQueuedJobs = false
     private var lastOpenFileEventSignature: String?
     private var lastOpenFileEventDate = Date.distantPast
+
+    init() {
+        showsProgressInMainWindow = Self.hasPendingQueuedJobs()
+    }
 
     var hasConvertibleAudioItems: Bool {
         openItems.contains { $0.category == .audio }
@@ -80,21 +108,26 @@ final class AppModel: ObservableObject {
             lastSummary = nil
 
             guard !jobs.isEmpty else {
+                showsProgressInMainWindow = false
                 statusMessage = "没有待处理的 Finder 任务"
+                DiagnosticLog.append("app queued jobs empty")
                 return false
             }
 
             if shouldOpenWindowForQueuedJobs(jobs) {
+                showsProgressInMainWindow = false
                 statusMessage = "收到 \(jobs.count) 个 Apple Music 任务，请确认下载选项"
                 return true
             }
 
             statusMessage = "收到 \(jobs.count) 个后台任务"
-            await runJobs(jobs)
+            DiagnosticLog.append("app queued jobs run count=\(jobs.count)")
+            await runJobs(jobs, suppressMainWindow: true)
             queuedJobs = []
             return false
         } catch {
             statusMessage = "读取 Finder 任务失败：\(error.localizedDescription)"
+            DiagnosticLog.append("app queued jobs failed \(error.localizedDescription)")
             return false
         }
     }
@@ -136,7 +169,11 @@ final class AppModel: ObservableObject {
             return
         }
 
-        await runNCMConversion()
+        let jobs = openItems
+            .filter { $0.category == .ncm }
+            .map { JobRequest(fileURL: $0.url, category: .ncm, operation: .convertNCM, source: .openWith) }
+
+        await runJobs(jobs, suppressMainWindow: true)
     }
 
     func runAppleMusicDownload(format: AppleMusicDownloadFormat?) async {
@@ -147,20 +184,33 @@ final class AppModel: ObservableObject {
         await runJobs(jobs)
     }
 
-    private func runJobs(_ jobs: [JobRequest]) async {
+    private func runJobs(_ jobs: [JobRequest], suppressMainWindow: Bool = false) async {
         guard !jobs.isEmpty else {
             statusMessage = "没有可执行任务"
+            DiagnosticLog.append("app run skipped empty jobs")
             return
         }
 
+        prepareProgressItems(for: jobs)
+        shouldCloseMainWindowForProgress = suppressMainWindow
+        showsProgressInMainWindow = suppressMainWindow
         isRunning = true
         statusMessage = "正在处理 \(jobs.count) 个任务..."
+        progressWindowRequest = UUID()
+        DiagnosticLog.append("app run start count=\(jobs.count)")
         let summary = await execute(jobs)
         lastSummary = summary
         isRunning = false
+        shouldCloseMainWindowForProgress = false
         statusMessage = "处理完成：成功 \(summary.successCount)，失败 \(summary.failureCount)"
+        DiagnosticLog.append("app run finished success=\(summary.successCount) failure=\(summary.failureCount)")
         writeConversionLog(summary: summary, jobs: jobs)
         await notificationService.notifyConversionFinished(summary: summary, jobs: jobs)
+    }
+
+    func finishProgressWindowDismissal() {
+        showsProgressInMainWindow = false
+        shouldCloseMainWindowForProgress = false
     }
 
     private func execute(_ jobs: [JobRequest]) async -> ConversionSummary {
@@ -180,17 +230,27 @@ final class AppModel: ObservableObject {
         }
 
         var summaries: [ConversionSummary] = []
+        let progressHandler: @Sendable (JobRequest, JobProgressPhase, String?) -> Void = { [weak self] job, phase, message in
+            Task { @MainActor in
+                self?.updateProgress(for: job, phase: phase, message: message)
+            }
+        }
+
         if !transcodeJobs.isEmpty {
-            summaries.append(await audioConversionService.convert(transcodeJobs))
+            summaries.append(await audioConversionService.convert(transcodeJobs, progressHandler: progressHandler))
         }
         if !extractJobs.isEmpty {
-            summaries.append(await mediaExtractionService.extractAudio(from: extractJobs))
+            summaries.append(await mediaExtractionService.extractAudio(from: extractJobs, progressHandler: progressHandler))
         }
         if !ncmJobs.isEmpty {
-            summaries.append(await ncmConversionService.convert(ncmJobs))
+            summaries.append(await ncmConversionService.convert(ncmJobs, progressHandler: progressHandler))
         }
         if !appleMusicJobs.isEmpty {
+            appleMusicJobs.forEach { updateProgress(for: $0, phase: .running, message: nil) }
             summaries.append(await appleMusicDownloadService.download(appleMusicJobs))
+            let appleMusicSummary = summaries.last
+            let phase: JobProgressPhase = appleMusicSummary?.failureCount == 0 ? .succeeded : .failed
+            appleMusicJobs.forEach { updateProgress(for: $0, phase: phase, message: appleMusicSummary?.messages.first) }
         }
 
         for summary in summaries {
@@ -224,6 +284,29 @@ final class AppModel: ObservableObject {
             }
             return false
         }
+    }
+
+    private func prepareProgressItems(for jobs: [JobRequest]) {
+        progressItems = jobs.map {
+            ConversionProgressItem(
+                id: $0.id,
+                fileName: $0.fileURL.lastPathComponent,
+                directoryPath: $0.fileURL.deletingLastPathComponent().path,
+                operation: operationDescription(for: $0.operation),
+                phase: .pending,
+                message: nil
+            )
+        }
+    }
+
+    private func updateProgress(for job: JobRequest, phase: JobProgressPhase, message: String?) {
+        guard let index = progressItems.firstIndex(where: { $0.id == job.id }) else {
+            return
+        }
+
+        progressItems[index].phase = phase
+        progressItems[index].message = message
+        DiagnosticLog.append("app progress \(operationDescription(for: job.operation)) \(phase.rawValue) \(job.fileURL.path)\(message.map { " | \($0)" } ?? "")")
     }
 
     private func writeConversionLog(summary: ConversionSummary, jobs: [JobRequest]) {
@@ -272,6 +355,14 @@ final class AppModel: ObservableObject {
             return "convertNCM"
         case .appleMusicDownload(let format):
             return "appleMusicDownload(\(format?.rawValue ?? "default"))"
+        }
+    }
+
+    private static func hasPendingQueuedJobs() -> Bool {
+        do {
+            return try !JobQueue().read().isEmpty
+        } catch {
+            return false
         }
     }
 }

@@ -2,16 +2,28 @@ import XCTest
 @testable import GetOudioCore
 
 final class GetOudioCoreTests: XCTestCase {
-    func testAACPresetBuildsExpectedOutputAndArguments() {
+    func testAACPresetBuildsExpectedOutputAndArguments() throws {
         let input = URL(fileURLWithPath: "/tmp/song.flac")
         let preset = ConversionPreset.aac320
         let output = preset.outputURL(for: input)
         let arguments = preset.ffmpegArguments(inputURL: input, outputURL: output)
 
-        XCTAssertEqual(output.path, "/tmp/song.m4a")
+        XCTAssertEqual(output.path, "/tmp/song [AAC 320Kbps].m4a")
         XCTAssertTrue(arguments.contains("aac"))
         XCTAssertTrue(arguments.contains("320k"))
-        XCTAssertEqual(arguments.suffix(2), ["-vn", "/tmp/song.m4a"])
+        let mapIndex = try XCTUnwrap(arguments.firstIndex(of: "-map"))
+        XCTAssertEqual(arguments[mapIndex + 1], "0:a:0")
+        XCTAssertTrue(arguments.contains("-map_metadata"))
+        XCTAssertTrue(arguments.contains("0:g"))
+        XCTAssertTrue(arguments.contains("-movflags"))
+        XCTAssertEqual(arguments.suffix(1), ["/tmp/song [AAC 320Kbps].m4a"])
+    }
+
+    func testPresetOutputDoesNotCollideWithSameExtensionInput() {
+        let input = URL(fileURLWithPath: "/tmp/song.m4a")
+
+        XCTAssertEqual(ConversionPreset.aac128.outputURL(for: input).path, "/tmp/song [AAC 128Kbps].m4a")
+        XCTAssertNotEqual(ConversionPreset.aac128.outputURL(for: input), input)
     }
 
     func testPresetCatalogCoversPlannedFormats() {
@@ -75,6 +87,17 @@ final class GetOudioCoreTests: XCTestCase {
         let reloaded = SettingsStore(defaults: defaults)
         XCTAssertEqual(reloaded.enabledPresets, [.aac128, .flacSource])
         XCTAssertEqual(reloaded.finderDirectoryURLs.map(\.path).sorted(), ["/tmp/Desktop", "/tmp/Music"])
+    }
+
+    func testSettingsStoreDoesNotPersistEmptyPresetSelection() {
+        let suiteName = "GetOudioCoreTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let store = SettingsStore(defaults: defaults)
+        store.enabledPresets = []
+
+        XCTAssertEqual(store.enabledPresets, ConversionPreset.defaultEnabled)
     }
 
     func testSettingsStoreResolvesFinderDirectoryAliases() throws {

@@ -23,20 +23,28 @@ public final class AudioConversionService {
         self.dependencyManager = dependencyManager
     }
 
-    public func convert(_ jobs: [JobRequest]) async -> ConversionSummary {
+    public func convert(
+        _ jobs: [JobRequest],
+        progressHandler: (@Sendable (JobRequest, JobProgressPhase, String?) -> Void)? = nil
+    ) async -> ConversionSummary {
         var successCount = 0
         var failureCount = 0
         var messages: [String] = []
 
         let ffmpeg = await dependencyManager.check(.ffmpeg)
         guard let ffmpegPath = ffmpeg.resolvedPath else {
+            jobs.forEach { progressHandler?($0, .failed, "未找到 ffmpeg") }
             return ConversionSummary(successCount: 0, failureCount: jobs.count, messages: ["未找到 ffmpeg，请先在组件设置中安装运行时工具。"])
         }
 
         for job in jobs {
+            progressHandler?(job, .running, nil)
+
             guard case .transcode(let preset) = job.operation else {
                 failureCount += 1
-                messages.append("跳过不支持的任务：\(job.fileURL.lastPathComponent)")
+                let message = "跳过不支持的任务：\(job.fileURL.lastPathComponent)"
+                messages.append(message)
+                progressHandler?(job, .failed, message)
                 continue
             }
 
@@ -50,13 +58,17 @@ public final class AudioConversionService {
                 let result = try await runner.run(executablePath: ffmpegPath, arguments: arguments)
                 if result.succeeded {
                     successCount += 1
+                    progressHandler?(job, .succeeded, nil)
                 } else {
                     failureCount += 1
-                    messages.append(result.standardError.isEmpty ? "转换失败：\(job.fileURL.lastPathComponent)" : result.standardError)
+                    let message = result.standardError.isEmpty ? "转换失败：\(job.fileURL.lastPathComponent)" : result.standardError
+                    messages.append(message)
+                    progressHandler?(job, .failed, message)
                 }
             } catch {
                 failureCount += 1
                 messages.append(error.localizedDescription)
+                progressHandler?(job, .failed, error.localizedDescription)
             }
         }
 

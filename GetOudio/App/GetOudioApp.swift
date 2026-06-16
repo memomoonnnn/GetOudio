@@ -8,7 +8,11 @@ struct GetOudioApp: App {
     var body: some Scene {
         WindowGroup("Get Oudio", id: "main") {
             EventHandlingView {
-                MainView()
+                if appModel.showsProgressInMainWindow {
+                    ProgressWindowView()
+                } else {
+                    MainView()
+                }
             }
             .environmentObject(appModel)
         }
@@ -20,5 +24,14 @@ struct GetOudioApp: App {
             .environmentObject(appModel)
         }
         .defaultSize(width: 760, height: 560)
+
+        Window("处理进度", id: "progress") {
+            EventHandlingView {
+                ProgressWindowView()
+            }
+            .environmentObject(appModel)
+        }
+        .defaultSize(width: 520, height: 220)
+        .windowResizability(.contentSize)
     }
 }

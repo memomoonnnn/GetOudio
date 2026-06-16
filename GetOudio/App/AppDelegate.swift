@@ -3,13 +3,21 @@ import GetOudioCore
 import UserNotifications
 
 final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        NSApp.setActivationPolicy(hasPendingQueuedJobs() ? .accessory : .regular)
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApp.setActivationPolicy(.regular)
+        NSApp.setActivationPolicy(hasPendingQueuedJobs() ? .accessory : .regular)
         UNUserNotificationCenter.current().delegate = self
 
         Task {
             await NotificationService().requestAuthorization()
         }
+    }
+
+    func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool {
+        false
     }
 
     func application(_ sender: NSApplication, openFiles filenames: [String]) {
@@ -24,5 +32,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
         completionHandler([.banner, .list, .sound])
+    }
+
+    private func hasPendingQueuedJobs() -> Bool {
+        do {
+            return try !JobQueue().read().isEmpty
+        } catch {
+            return false
+        }
     }
 }

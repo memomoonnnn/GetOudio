@@ -21,10 +21,12 @@ public final class SettingsStore {
     public var enabledPresets: Set<ConversionPreset> {
         get {
             let ids = defaults.stringArray(forKey: Keys.enabledPresetIDs) ?? ConversionPreset.defaultEnabled.map(\.rawValue)
-            return Set(ids.compactMap(ConversionPreset.init(rawValue:)))
+            let presets = Set(ids.compactMap(ConversionPreset.init(rawValue:)))
+            return presets.isEmpty ? ConversionPreset.defaultEnabled : presets
         }
         set {
-            defaults.set(newValue.map(\.rawValue).sorted(), forKey: Keys.enabledPresetIDs)
+            let presets = newValue.isEmpty ? ConversionPreset.defaultEnabled : newValue
+            defaults.set(presets.map(\.rawValue).sorted(), forKey: Keys.enabledPresetIDs)
         }
     }
 

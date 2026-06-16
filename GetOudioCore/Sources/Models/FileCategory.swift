@@ -28,6 +28,14 @@ public enum FileCategory: String, Codable, CaseIterable, Sendable {
             return .ncm
         }
 
+        if Self.audioExtensions.contains(ext) {
+            return .audio
+        }
+
+        if Self.videoExtensions.contains(ext) {
+            return .video
+        }
+
         guard let type = UTType(filenameExtension: ext) else {
             return .unsupported
         }
@@ -42,4 +50,12 @@ public enum FileCategory: String, Codable, CaseIterable, Sendable {
 
         return .unsupported
     }
+
+    private static let audioExtensions: Set<String> = [
+        "aac", "aif", "aiff", "alac", "ape", "caf", "flac", "m4a", "m4b", "mp3", "ogg", "opus", "wav", "wma"
+    ]
+
+    private static let videoExtensions: Set<String> = [
+        "avi", "flv", "m4v", "mkv", "mov", "mp4", "mpeg", "mpg", "webm", "wmv"
+    ]
 }

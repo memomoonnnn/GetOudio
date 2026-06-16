@@ -9,20 +9,28 @@ public final class MediaExtractionService {
         self.dependencyManager = dependencyManager
     }
 
-    public func extractAudio(from jobs: [JobRequest]) async -> ConversionSummary {
+    public func extractAudio(
+        from jobs: [JobRequest],
+        progressHandler: (@Sendable (JobRequest, JobProgressPhase, String?) -> Void)? = nil
+    ) async -> ConversionSummary {
         var successCount = 0
         var failureCount = 0
         var messages: [String] = []
 
         let ffmpeg = await dependencyManager.check(.ffmpeg)
         guard let ffmpegPath = ffmpeg.resolvedPath else {
+            jobs.forEach { progressHandler?($0, .failed, "未找到 ffmpeg") }
             return ConversionSummary(successCount: 0, failureCount: jobs.count, messages: ["未找到 ffmpeg，请先在组件设置中安装运行时工具。"])
         }
 
         for job in jobs {
+            progressHandler?(job, .running, nil)
+
             guard job.category == .video else {
                 failureCount += 1
-                messages.append("跳过非视频文件：\(job.fileURL.lastPathComponent)")
+                let message = "跳过非视频文件：\(job.fileURL.lastPathComponent)"
+                messages.append(message)
+                progressHandler?(job, .failed, message)
                 continue
             }
 
@@ -32,13 +40,17 @@ public final class MediaExtractionService {
 
                 guard let codec = try await detectAudioCodec(ffmpegPath: ffmpegPath, inputURL: access.fileURL) else {
                     failureCount += 1
-                    messages.append("未能识别音频编码：\(job.fileURL.lastPathComponent)")
+                    let message = "未能识别音频编码：\(job.fileURL.lastPathComponent)"
+                    messages.append(message)
+                    progressHandler?(job, .failed, message)
                     continue
                 }
 
                 guard let outputURL = outputURL(for: access.fileURL, codec: codec) else {
                     failureCount += 1
-                    messages.append("未能识别音频编码：\(job.fileURL.lastPathComponent)")
+                    let message = "未能识别音频编码：\(job.fileURL.lastPathComponent)"
+                    messages.append(message)
+                    progressHandler?(job, .failed, message)
                     continue
                 }
 
@@ -49,13 +61,17 @@ public final class MediaExtractionService {
 
                 if result.succeeded {
                     successCount += 1
+                    progressHandler?(job, .succeeded, nil)
                 } else {
                     failureCount += 1
-                    messages.append(result.standardError.isEmpty ? "提取失败：\(job.fileURL.lastPathComponent)" : result.standardError)
+                    let message = result.standardError.isEmpty ? "提取失败：\(job.fileURL.lastPathComponent)" : result.standardError
+                    messages.append(message)
+                    progressHandler?(job, .failed, message)
                 }
             } catch {
                 failureCount += 1
                 messages.append(error.localizedDescription)
+                progressHandler?(job, .failed, error.localizedDescription)
             }
         }
 
