@@ -22,12 +22,15 @@ public final class NCMConversionService {
         }
 
         do {
+            let accesses = ncmJobs.map { $0.startAccessingSecurityScopedResources() }
+            defer { accesses.reversed().forEach { $0.stopAccessing() } }
+
             let executableURL = try componentManager.executableURL(for: .ncmdump)
-            let outputDirectory = try outputDirectory(for: ncmJobs)
+            let outputDirectory = try outputDirectory(for: ncmJobs, accesses: accesses)
             try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
 
-            var arguments = ncmJobs.map(\.fileURL.path)
-            arguments += ["-o", outputDirectory.path]
+            var arguments = ["-o", outputDirectory.path]
+            arguments += accesses.map(\.fileURL.path)
 
             let result = try await runner.run(executablePath: executableURL.path, arguments: arguments)
             if result.succeeded {
@@ -44,9 +47,13 @@ public final class NCMConversionService {
         }
     }
 
-    private func outputDirectory(for jobs: [JobRequest]) throws -> URL {
+    private func outputDirectory(for jobs: [JobRequest], accesses: [ScopedJobAccess]) throws -> URL {
         if settingsStore.ncmOutputMode == "customDirectory", let customURL = settingsStore.ncmCustomOutputURL {
             return customURL
+        }
+
+        if let directoryURL = accesses.first?.directoryURL {
+            return directoryURL
         }
 
         guard let first = jobs.first else {
@@ -56,4 +63,3 @@ public final class NCMConversionService {
         return first.fileURL.deletingLastPathComponent()
     }
 }
-

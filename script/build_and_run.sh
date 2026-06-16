@@ -9,6 +9,7 @@ FINDER_EXTENSION_ID="com.shengjiacheng.GetOudio.FinderExtension"
 FINDER_EXTENSION_POINT_ID="com.apple.FinderSync"
 SHARE_EXTENSION_POINT_ID="com.apple.share-services"
 APP_GROUP_ID="group.com.shengjiacheng.GetOudio"
+SHARE_EXTENSION_ID="com.shengjiacheng.GetOudio.ShareExtension"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DERIVED_DATA="$ROOT_DIR/build/DerivedData"
 DEBUG_CONFIGURATION="Debug"
@@ -101,6 +102,13 @@ verify_entitlements() {
     exit 1
   fi
 
+  if ! /usr/bin/grep -q "com.apple.security.files.bookmarks.app-scope" "$entitlements_file"; then
+    echo "missing app-scope bookmark entitlement in $bundle_path" >&2
+    /bin/cat "$entitlements_file" >&2
+    rm -f "$entitlements_file"
+    exit 1
+  fi
+
   rm -f "$entitlements_file"
 }
 
@@ -119,19 +127,65 @@ verify_extension_point() {
   fi
 }
 
+verify_url_scheme() {
+  local bundle_path="$1"
+  local info_plist="$bundle_path/Contents/Info.plist"
+  local schemes
+
+  schemes="$(/usr/libexec/PlistBuddy -c "Print :CFBundleURLTypes:0:CFBundleURLSchemes" "$info_plist" 2>/dev/null || true)"
+
+  if ! /usr/bin/grep -q "getoudio" <<<"$schemes"; then
+    echo "missing getoudio URL scheme in $bundle_path" >&2
+    /usr/bin/plutil -p "$info_plist" >&2
+    exit 1
+  fi
+}
+
+unregister_existing_plugins() {
+  local bundle_path
+
+  pluginkit -e ignore -i "$FINDER_EXTENSION_ID" >/dev/null 2>&1 || true
+  pluginkit -e ignore -i "$SHARE_EXTENSION_ID" >/dev/null 2>&1 || true
+
+  while IFS= read -r bundle_path; do
+    [[ -n "$bundle_path" ]] || continue
+    pluginkit -r "$bundle_path" >/dev/null 2>&1 || true
+  done < <(
+    /usr/bin/mdfind \
+      "kMDItemCFBundleIdentifier == '$BUNDLE_ID' || kMDItemCFBundleIdentifier == '$FINDER_EXTENSION_ID' || kMDItemCFBundleIdentifier == '$SHARE_EXTENSION_ID'" \
+      2>/dev/null || true
+  )
+
+  local candidates=(
+    "$INSTALLED_APP"
+    "$LEGACY_USER_APP"
+    "$DEBUG_APP_BUNDLE"
+    "$INSTALL_APP_BUNDLE"
+    "$INSTALLED_APP/Contents/PlugIns/GetOudioFinderExtension.appex"
+    "$INSTALLED_APP/Contents/PlugIns/GetOudioShareExtension.appex"
+    "$LEGACY_USER_APP/Contents/PlugIns/GetOudioFinderExtension.appex"
+    "$LEGACY_USER_APP/Contents/PlugIns/GetOudioShareExtension.appex"
+    "$DEBUG_APP_BUNDLE/Contents/PlugIns/GetOudioFinderExtension.appex"
+    "$DEBUG_APP_BUNDLE/Contents/PlugIns/GetOudioShareExtension.appex"
+    "$INSTALL_APP_BUNDLE/Contents/PlugIns/GetOudioFinderExtension.appex"
+    "$INSTALL_APP_BUNDLE/Contents/PlugIns/GetOudioShareExtension.appex"
+  )
+
+  for bundle_path in "${candidates[@]}"; do
+    pluginkit -r "$bundle_path" >/dev/null 2>&1 || true
+  done
+
+  /usr/bin/pkill -x pkd >/dev/null 2>&1 || true
+}
+
 install_app() {
   build_signed
 
   mkdir -p "$INSTALL_DIR"
-  pluginkit -e ignore -i "$FINDER_EXTENSION_ID" >/dev/null 2>&1 || true
-  pluginkit -r "$INSTALLED_APP" >/dev/null 2>&1 || true
-  pluginkit -r "$LEGACY_USER_APP" >/dev/null 2>&1 || true
-  pluginkit -r "$INSTALLED_APP/Contents/PlugIns/GetOudioFinderExtension.appex" >/dev/null 2>&1 || true
-  pluginkit -r "$LEGACY_USER_APP/Contents/PlugIns/GetOudioFinderExtension.appex" >/dev/null 2>&1 || true
-  pluginkit -r "$INSTALLED_APP/Contents/PlugIns/GetOudioShareExtension.appex" >/dev/null 2>&1 || true
-  pluginkit -r "$LEGACY_USER_APP/Contents/PlugIns/GetOudioShareExtension.appex" >/dev/null 2>&1 || true
+  unregister_existing_plugins
   rm -rf "$INSTALLED_APP"
   /usr/bin/ditto "$INSTALL_APP_BUNDLE" "$INSTALLED_APP"
+  verify_url_scheme "$INSTALLED_APP"
   verify_extension_point "$INSTALLED_APP/Contents/PlugIns/GetOudioFinderExtension.appex" "$FINDER_EXTENSION_POINT_ID"
   verify_extension_point "$INSTALLED_APP/Contents/PlugIns/GetOudioShareExtension.appex" "$SHARE_EXTENSION_POINT_ID"
   verify_entitlements "$INSTALLED_APP"
@@ -171,8 +225,13 @@ case "$MODE" in
   --install|install)
     install_app
     ;;
+  --clean-plugins|clean-plugins)
+    unregister_existing_plugins
+    killall Finder >/dev/null 2>&1 || true
+    pluginkit -m -v -i "$FINDER_EXTENSION_ID"
+    ;;
   *)
-    echo "usage: $0 [run|--verify|--logs|--telemetry|--install]" >&2
+    echo "usage: $0 [run|--verify|--logs|--telemetry|--install|--clean-plugins]" >&2
     exit 2
     ;;
 esac

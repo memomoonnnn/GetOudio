@@ -2,6 +2,16 @@ import Cocoa
 import FinderSync
 import GetOudioCore
 
+private final class FinderActionContext: NSObject {
+    let urls: [URL]
+    let presetID: String?
+
+    init(urls: [URL], presetID: String? = nil) {
+        self.urls = urls
+        self.presetID = presetID
+    }
+}
+
 @objc final class FinderSync: FIFinderSync {
     private let settingsStore = SettingsStore()
 
@@ -46,7 +56,7 @@ import GetOudioCore
                 for preset in enabledPresets() {
                     let item = NSMenuItem(title: preset.finderMenuTitle, action: #selector(runPreset(_:)), keyEquivalent: "")
                     item.target = self
-                    item.representedObject = preset.rawValue
+                    item.representedObject = FinderActionContext(urls: audioURLs, presetID: preset.rawValue)
                     transcodeMenu.addItem(item)
                 }
                 let parent = NSMenuItem(title: "Get Oudio", action: nil, keyEquivalent: "")
@@ -55,14 +65,16 @@ import GetOudioCore
             }
 
             if !videoURLs.isEmpty {
-                let item = NSMenuItem(title: "提取视频音频", action: #selector(extractVideoAudio), keyEquivalent: "")
+                let item = NSMenuItem(title: "提取视频音频", action: #selector(extractVideoAudio(_:)), keyEquivalent: "")
                 item.target = self
+                item.representedObject = FinderActionContext(urls: videoURLs)
                 menu.addItem(item)
             }
 
             if !ncmURLs.isEmpty {
-                let item = NSMenuItem(title: "转换 NCM", action: #selector(convertNCM), keyEquivalent: "")
+                let item = NSMenuItem(title: "转换 NCM", action: #selector(convertNCM(_:)), keyEquivalent: "")
                 item.target = self
+                item.representedObject = FinderActionContext(urls: ncmURLs)
                 menu.addItem(item)
             }
 
@@ -77,36 +89,47 @@ import GetOudioCore
 
     @objc private func runPreset(_ sender: NSMenuItem) {
         guard
-            let presetID = sender.representedObject as? String,
+            let context = sender.representedObject as? FinderActionContext,
+            let presetID = context.presetID,
             let preset = ConversionPreset(rawValue: presetID)
         else {
             return
         }
 
-        let selectedURLs = FIFinderSyncController.default().selectedItemURLs() ?? []
-        let jobs = selectedURLs
+        let jobs = context.urls
             .filter { FileCategory.classify($0) == .audio }
-            .map { JobRequest(fileURL: $0, category: .audio, operation: .transcode(preset), source: .finderSync) }
+            .map { makeJob(fileURL: $0, category: .audio, operation: .transcode(preset)) }
 
         enqueue(jobs)
     }
 
-    @objc private func extractVideoAudio() {
-        let selectedURLs = FIFinderSyncController.default().selectedItemURLs() ?? []
-        let jobs = selectedURLs
+    @objc private func extractVideoAudio(_ sender: NSMenuItem) {
+        let urls = (sender.representedObject as? FinderActionContext)?.urls ?? FIFinderSyncController.default().selectedItemURLs() ?? []
+        let jobs = urls
             .filter { FileCategory.classify($0) == .video }
-            .map { JobRequest(fileURL: $0, category: .video, operation: .extractAudio, source: .finderSync) }
+            .map { makeJob(fileURL: $0, category: .video, operation: .extractAudio) }
 
         enqueue(jobs)
     }
 
-    @objc private func convertNCM() {
-        let selectedURLs = FIFinderSyncController.default().selectedItemURLs() ?? []
-        let jobs = selectedURLs
+    @objc private func convertNCM(_ sender: NSMenuItem) {
+        let urls = (sender.representedObject as? FinderActionContext)?.urls ?? FIFinderSyncController.default().selectedItemURLs() ?? []
+        let jobs = urls
             .filter { FileCategory.classify($0) == .ncm }
-            .map { JobRequest(fileURL: $0, category: .ncm, operation: .convertNCM, source: .finderSync) }
+            .map { makeJob(fileURL: $0, category: .ncm, operation: .convertNCM) }
 
         enqueue(jobs)
+    }
+
+    private func makeJob(fileURL: URL, category: FileCategory, operation: JobOperation) -> JobRequest {
+        JobRequest(
+            fileURL: fileURL,
+            fileBookmarkData: JobRequest.securityScopedBookmarkData(for: fileURL),
+            directoryBookmarkData: JobRequest.securityScopedBookmarkData(for: fileURL.deletingLastPathComponent()),
+            category: category,
+            operation: operation,
+            source: .finderSync
+        )
     }
 
     private func enqueue(_ jobs: [JobRequest]) {

@@ -4,6 +4,13 @@ options:
   deploymentTarget:
     macOS: "14.0"
   createIntermediateGroups: true
+  postGenCommand: |
+    # Fix AppIcon.icon lastKnownFileType from folder to folder.iconcomposer.icon
+    # This is needed because XcodeGen doesn't support Icon Composer file type directly
+    PBXPROJ="GetOudio.xcodeproj/project.pbxproj"
+    if [ -f "$PBXPROJ" ]; then
+      sed -i '' 's/lastKnownFileType = folder; name = AppIcon.icon; path = GetOudio\/Resources\/AppIcon.icon/lastKnownFileType = folder.iconcomposer.icon; name = AppIcon.icon; path = GetOudio\/Resources\/AppIcon.icon/g' "$PBXPROJ"
+    fi
 settings:
   base:
     CLANG_ANALYZER_NONNULL: YES
@@ -36,6 +43,7 @@ targets:
       - path: GetOudio/Models
       - path: GetOudio/Views
       - path: GetOudio/Resources/AppIcon.icon
+        type: folder
         buildPhase: resources
       - path: GetOudio/Resources/ThirdParty
         type: folder
@@ -50,6 +58,10 @@ targets:
       path: GetOudio/Info.plist
       properties:
         CFBundleIconName: AppIcon
+        CFBundleURLTypes:
+          - CFBundleURLName: com.shengjiacheng.GetOudio
+            CFBundleURLSchemes:
+              - getoudio
         CFBundleDocumentTypes:
           - CFBundleTypeName: Audio File
             CFBundleTypeRole: Editor
@@ -80,6 +92,9 @@ targets:
       properties:
         com.apple.security.app-sandbox: true
         com.apple.security.files.user-selected.read-write: true
+        com.apple.security.files.bookmarks.app-scope: true
+        com.apple.security.files.desktop.read-write: true
+        com.apple.security.files.documents.read-write: true
         com.apple.security.files.downloads.read-write: true
         com.apple.security.files.movies.read-write: true
         com.apple.security.files.music.read-write: true
@@ -90,6 +105,8 @@ targets:
           - group.com.shengjiacheng.GetOudio
     settings:
       base:
+        ASSETCATALOG_COMPILER_STANDALONE_ICON_BEHAVIOR: default
+        ASSETCATALOG_COMPILER_SKIP_APP_STORE_DEPLOYMENT: YES
         ENABLE_APP_SANDBOX: YES
         PRODUCT_BUNDLE_IDENTIFIER: com.shengjiacheng.GetOudio
         PRODUCT_NAME: Get Oudio
@@ -114,6 +131,8 @@ targets:
       path: GetOudioFinderExtension/GetOudioFinderExtension.entitlements
       properties:
         com.apple.security.app-sandbox: true
+        com.apple.security.files.user-selected.read-write: true
+        com.apple.security.files.bookmarks.app-scope: true
         com.apple.security.application-groups:
           - group.com.shengjiacheng.GetOudio
     settings:

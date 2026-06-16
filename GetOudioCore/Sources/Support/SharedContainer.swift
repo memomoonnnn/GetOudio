@@ -20,5 +20,8 @@ public enum SharedContainer {
     public static func queueFileURL() throws -> URL {
         try directory().appendingPathComponent("queued-jobs.json")
     }
-}
 
+    public static func conversionLogFileURL() throws -> URL {
+        try directory().appendingPathComponent("conversion-log.txt")
+    }
+}

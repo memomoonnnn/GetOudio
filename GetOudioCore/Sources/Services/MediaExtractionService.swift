@@ -27,13 +27,16 @@ public final class MediaExtractionService {
             }
 
             do {
-                guard let codec = try await detectAudioCodec(ffmpegPath: ffmpegPath, inputURL: job.fileURL) else {
+                let access = job.startAccessingSecurityScopedResources()
+                defer { access.stopAccessing() }
+
+                guard let codec = try await detectAudioCodec(ffmpegPath: ffmpegPath, inputURL: access.fileURL) else {
                     failureCount += 1
                     messages.append("未能识别音频编码：\(job.fileURL.lastPathComponent)")
                     continue
                 }
 
-                guard let outputURL = outputURL(for: job.fileURL, codec: codec) else {
+                guard let outputURL = outputURL(for: access.fileURL, codec: codec) else {
                     failureCount += 1
                     messages.append("未能识别音频编码：\(job.fileURL.lastPathComponent)")
                     continue
@@ -41,7 +44,7 @@ public final class MediaExtractionService {
 
                 let result = try await runner.run(
                     executablePath: ffmpegPath,
-                    arguments: ["-i", job.fileURL.path, "-c:a", "copy", "-map_metadata", "0", "-vn", "-y", outputURL.path]
+                    arguments: ["-i", access.fileURL.path, "-c:a", "copy", "-map_metadata", "0", "-vn", "-y", outputURL.path]
                 )
 
                 if result.succeeded {

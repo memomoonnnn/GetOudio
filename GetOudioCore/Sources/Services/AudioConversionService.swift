@@ -40,8 +40,11 @@ public final class AudioConversionService {
                 continue
             }
 
-            let outputURL = preset.outputURL(for: job.fileURL)
-            let arguments = preset.ffmpegArguments(inputURL: job.fileURL, outputURL: outputURL)
+            let access = job.startAccessingSecurityScopedResources()
+            defer { access.stopAccessing() }
+
+            let outputURL = preset.outputURL(for: access.fileURL)
+            let arguments = preset.ffmpegArguments(inputURL: access.fileURL, outputURL: outputURL)
 
             do {
                 let result = try await runner.run(executablePath: ffmpegPath, arguments: arguments)

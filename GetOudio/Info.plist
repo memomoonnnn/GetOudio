@@ -58,6 +58,17 @@
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>1.0</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.shengjiacheng.GetOudio</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>getoudio</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>UTExportedTypeDeclarations</key>

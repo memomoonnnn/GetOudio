@@ -41,6 +41,7 @@ struct ConvertWindowView: View {
             } else {
                 fileList
                 actionPanel
+                summaryPanel
             }
 
             Spacer(minLength: 0)
@@ -130,6 +131,27 @@ struct ConvertWindowView: View {
         .padding()
         .background(.regularMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    @ViewBuilder
+    private var summaryPanel: some View {
+        if let summary = appModel.lastSummary, !summary.messages.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("执行详情")
+                    .font(.headline)
+
+                ForEach(Array(summary.messages.prefix(4).enumerated()), id: \.offset) { _, message in
+                    Text(message)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(3)
+                        .textSelection(.enabled)
+                }
+            }
+            .padding()
+            .background(.regularMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
     }
 
     private var secondaryActionText: String {

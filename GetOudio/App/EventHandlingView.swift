@@ -16,16 +16,27 @@ struct EventHandlingView<Content: View>: View {
             .onReceive(NotificationCenter.default.publisher(for: .getOudioOpenFiles)) { notification in
                 let urls = notification.userInfo?[OpenFileNotificationKey.urls] as? [URL] ?? []
                 guard !urls.isEmpty else { return }
-                appModel.receiveOpenFileURLs(urls)
-                openWindow(id: "convert")
-                NSApp.activate(ignoringOtherApps: true)
+                Task {
+                    guard appModel.receiveOpenFileURLs(urls) else { return }
+                    if appModel.openItems.allSatisfy({ $0.category == .ncm }) {
+                        await appModel.runOpenFileNCMConversionIfNeeded()
+                    } else {
+                        openWindow(id: "convert")
+                        NSApp.activate(ignoringOtherApps: true)
+                    }
+                }
             }
             .onOpenURL { url in
                 guard url.scheme == AppConstants.appURLScheme else { return }
                 Task {
-                    await appModel.receiveQueuedJobs()
-                    openWindow(id: "convert")
-                    NSApp.activate(ignoringOtherApps: true)
+                    await MainActor.run {
+                        NSApp.hide(nil)
+                    }
+                    let shouldOpenWindow = await appModel.receiveAndRunQueuedJobs()
+                    if shouldOpenWindow {
+                        openWindow(id: "convert")
+                        NSApp.activate(ignoringOtherApps: true)
+                    }
                 }
             }
     }

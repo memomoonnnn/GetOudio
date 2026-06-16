@@ -1,20 +1,5 @@
 {
-  "fill" : {
-    "linear-gradient" : [
-      "display-p3:1.00000,1.00000,1.00000,1.00000",
-      "display-p3:0.92924,0.95749,0.95046,1.00000"
-    ],
-    "orientation" : {
-      "start" : {
-        "x" : 0.5,
-        "y" : 1
-      },
-      "stop" : {
-        "x" : 0.5,
-        "y" : 0.3
-      }
-    }
-  },
+  "fill" : "automatic",
   "groups" : [
     {
       "layers" : [
@@ -55,7 +40,7 @@
         "kind" : "neutral",
         "opacity" : 0.8
       },
-      "specular" : false,
+      "specular" : true,
       "translucency" : {
         "enabled" : true,
         "value" : 0.2
@@ -63,6 +48,7 @@
     }
   ],
   "supported-platforms" : {
+    "macos" : "shared",
     "squares" : "shared"
   }
 }

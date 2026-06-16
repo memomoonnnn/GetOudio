@@ -92,6 +92,8 @@ public enum AppleMusicDownloadFormat: String, Codable, CaseIterable, Identifiabl
 public struct JobRequest: Codable, Identifiable, Equatable, Sendable {
     public var id: UUID
     public var fileURL: URL
+    public var fileBookmarkData: Data?
+    public var directoryBookmarkData: Data?
     public var category: FileCategory
     public var operation: JobOperation
     public var source: JobEntrySource
@@ -100,6 +102,8 @@ public struct JobRequest: Codable, Identifiable, Equatable, Sendable {
     public init(
         id: UUID = UUID(),
         fileURL: URL,
+        fileBookmarkData: Data? = nil,
+        directoryBookmarkData: Data? = nil,
         category: FileCategory = .unsupported,
         operation: JobOperation,
         source: JobEntrySource,
@@ -107,9 +111,59 @@ public struct JobRequest: Codable, Identifiable, Equatable, Sendable {
     ) {
         self.id = id
         self.fileURL = fileURL
+        self.fileBookmarkData = fileBookmarkData
+        self.directoryBookmarkData = directoryBookmarkData
         self.category = category == .unsupported ? FileCategory.classify(fileURL) : category
         self.operation = operation
         self.source = source
         self.createdAt = createdAt
+    }
+
+    public static func securityScopedBookmarkData(for url: URL) -> Data? {
+        try? url.bookmarkData(options: [.withSecurityScope], includingResourceValuesForKeys: nil, relativeTo: nil)
+    }
+
+    public func startAccessingSecurityScopedResources() -> ScopedJobAccess {
+        var accessedURLs: [URL] = []
+        let scopedFileURL = Self.resolveSecurityScopedURL(from: fileBookmarkData) ?? fileURL
+        let scopedDirectoryURL = Self.resolveSecurityScopedURL(from: directoryBookmarkData)
+
+        for url in [scopedDirectoryURL, scopedFileURL].compactMap({ $0 }) {
+            if url.startAccessingSecurityScopedResource() {
+                accessedURLs.append(url)
+            }
+        }
+
+        return ScopedJobAccess(fileURL: scopedFileURL, directoryURL: scopedDirectoryURL, accessedURLs: accessedURLs)
+    }
+
+    private static func resolveSecurityScopedURL(from bookmarkData: Data?) -> URL? {
+        guard let bookmarkData else {
+            return nil
+        }
+
+        var isStale = false
+        return try? URL(
+            resolvingBookmarkData: bookmarkData,
+            options: [.withSecurityScope],
+            relativeTo: nil,
+            bookmarkDataIsStale: &isStale
+        )
+    }
+}
+
+public struct ScopedJobAccess {
+    public let fileURL: URL
+    public let directoryURL: URL?
+    private let accessedURLs: [URL]
+
+    init(fileURL: URL, directoryURL: URL?, accessedURLs: [URL]) {
+        self.fileURL = fileURL
+        self.directoryURL = directoryURL
+        self.accessedURLs = accessedURLs
+    }
+
+    public func stopAccessing() {
+        accessedURLs.reversed().forEach { $0.stopAccessingSecurityScopedResource() }
     }
 }
