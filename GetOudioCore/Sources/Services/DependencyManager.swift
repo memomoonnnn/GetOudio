@@ -134,7 +134,11 @@ public final class DockerImageManager {
         }
 
         do {
-            let result = try await runner.run(executablePath: dockerPath, arguments: runtime.dockerArguments(["image", "inspect", image.imageName]))
+            let result = try await runner.run(
+                executablePath: dockerPath,
+                arguments: runtime.dockerArguments(["image", "inspect", image.imageName]),
+                environment: runtime.runtimeEnvironment
+            )
             if result.succeeded {
                 return ManagedDockerImageStatus(image: image, isAvailable: true, detail: "\(image.imageName) (\(image.platform), Colima)")
             }
@@ -146,6 +150,10 @@ public final class DockerImageManager {
 
     public func pull(_ image: ManagedDockerImage) async throws -> ProcessResult {
         let dockerPath = try await runtime.ensureRunning()
-        return try await runner.run(executablePath: dockerPath, arguments: runtime.dockerArguments(["pull", "--platform", image.platform, image.imageName]))
+        return try await runner.run(
+            executablePath: dockerPath,
+            arguments: runtime.dockerArguments(["pull", "--platform", image.platform, image.imageName]),
+            environment: runtime.runtimeEnvironment
+        )
     }
 }

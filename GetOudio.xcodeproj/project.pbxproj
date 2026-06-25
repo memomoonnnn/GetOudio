@@ -15,26 +15,32 @@
 		1E4668A8BDB0F2F9431B77C9 /* SharedContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07E142F989021D191723AA81 /* SharedContainer.swift */; };
 		21909135C633A36CA4A2EBCA /* SettingsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E935EA0A23172AF7AE10BEB /* SettingsViewModel.swift */; };
 		28D57F1082E7B71F53AB415F /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CEC2CD73CA5DB57DD39B2D2 /* DashboardView.swift */; };
+		299ADABA555847D6E5F92734 /* GetOudioCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 49BFF2708ED14CF05FA36161 /* GetOudioCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		2A6A646F2170DC2516434BF2 /* JobQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F29A548AD0635BE90D34456 /* JobQueue.swift */; };
-		2D469F35ACF7EFCBEBC2D0D5 /* ThirdParty in Resources */ = {isa = PBXBuildFile; fileRef = 72934EBDA00A4994F366A4FC /* ThirdParty */; };
 		2F9FB03C3C2FD83ADA63BE09 /* HeadlessRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1435730CBD8D1117C241A57D /* HeadlessRunner.swift */; };
 		3588567EC971BABD0CD8BDEE /* AppleMusicWrapperRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCD1166F4ECCEF206816E275 /* AppleMusicWrapperRuntime.swift */; };
+		3629BE86D263E7B1F003F248 /* AgentMain.swift in Sources */ = {isa = PBXBuildFile; fileRef = F194F1D1BF8520F04C51A8C1 /* AgentMain.swift */; };
+		3AD5723738429067C46F5E53 /* apple-music-downloader in Resources */ = {isa = PBXBuildFile; fileRef = 944D0886B6ADDE240A0D8BFB /* apple-music-downloader */; };
+		3C4CA233D572B5BA3D1A397F /* ncmdump in Resources */ = {isa = PBXBuildFile; fileRef = F806E2D0D02BD05E19A347FF /* ncmdump */; };
 		4033D26C1DA591C4CEBBD6CC /* GetOudioCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 49BFF2708ED14CF05FA36161 /* GetOudioCore.framework */; };
 		4AA1533CE03FF44C8D8BAA04 /* GetOudioShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 43638432B32307180F0DC2FD /* GetOudioShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		4C929C5B97ADD1C16FFF5544 /* GetOudioCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 49BFF2708ED14CF05FA36161 /* GetOudioCore.framework */; };
 		52BD90AFFCB576C038304959 /* JobProgressPhase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 968CA7DFC4B0913F91E093B7 /* JobProgressPhase.swift */; };
 		553A9EBFF18953287DAE4119 /* FinderSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 260A59E1B28DDC4E921E9C39 /* FinderSync.swift */; };
 		57CB351D3CDE41108F4C1104 /* EventHandlingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 656DE3FECCFED49DE666582F /* EventHandlingView.swift */; };
+		627CEBE7088E7474514D3D37 /* GetOudioCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 49BFF2708ED14CF05FA36161 /* GetOudioCore.framework */; };
 		6904F0FB596F94F32435DD49 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A577CA70A6281C42298445E0 /* AppModel.swift */; };
 		6B7F869F53164AF502E07505 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36C3426B683BFDBD6C3083B1 /* AppDelegate.swift */; };
 		7E091D7050D2D90DC030B7FA /* ProcessRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D9341EFFB773C117429DF56 /* ProcessRunner.swift */; };
 		7E4140D91A905E5B8076794C /* AppConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74D3AADF75639B9295A0B4BF /* AppConstants.swift */; };
+		7ED8DE418C76BCDE5276D98A /* AppleMusicRuntimeAgentLauncher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24D6241F048302C55FF222E9 /* AppleMusicRuntimeAgentLauncher.swift */; };
 		80A877F95C99E226655664B6 /* GetOudioFinderExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = E71B1DAE2F34CAAE4261B2F0 /* GetOudioFinderExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		84E264F729CDCBA406A0C041 /* ColimaDockerRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C389A0C8BA4A129E65FAEA3 /* ColimaDockerRuntime.swift */; };
 		8A2E661CDF858F0C513EA975 /* DiagnosticLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80F5F247C72D46445AD92B40 /* DiagnosticLog.swift */; };
 		915F26D681FDC2E5CA3D9B83 /* DependencyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88FFAF2F427E7BBA50C57633 /* DependencyManager.swift */; };
 		91E4AFF82D841A7EC3CAEE5C /* FileCategory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4092C290A220FE1E53D899C9 /* FileCategory.swift */; };
 		93C6BE7D8BA717C02E07961C /* GetOudioCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 49BFF2708ED14CF05FA36161 /* GetOudioCore.framework */; };
+		9592ABD5238190A0FECF2673 /* AppleMusicRuntimeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9C68E3D12622013AF3CB161 /* AppleMusicRuntimeManager.swift */; };
 		995A3254ABC5325D7D583905 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D84480E867AAD02E3F55067 /* main.swift */; };
 		9A58A40606282A3F920A071F /* MainSettingsPages.swift in Sources */ = {isa = PBXBuildFile; fileRef = C63E67A469198DCFAAEF52A5 /* MainSettingsPages.swift */; };
 		A284874C51E3738AEDC9BC65 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A31E47AC388151B7BA99BFE6 /* NotificationService.swift */; };
@@ -44,6 +50,8 @@
 		AFFB08D96001497CFBF8AC88 /* ConversionPreset.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96C485724CAA57FDA4F744D0 /* ConversionPreset.swift */; };
 		B5F80E9EFB10E160D4C82A8C /* AppleMusicSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B40B7032B5BBB584D60D5ED /* AppleMusicSetupView.swift */; };
 		B96987E37666C7F4E82D6AB3 /* GetOudioCoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C43975B92D52741C9A75DC77 /* GetOudioCoreTests.swift */; };
+		BA2B129FF3760A61CFEEF0E2 /* AppleMusicRuntimeAgentClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 323FD01C817E384689C4EAA8 /* AppleMusicRuntimeAgentClient.swift */; };
+		D0471A3CCE40DBACF8511587 /* ffmpeg in Resources */ = {isa = PBXBuildFile; fileRef = 4AD5E91E2A5C903C19F28C4E /* ffmpeg */; };
 		D3B2A574D58BB6A994DDC271 /* Dependency.swift in Sources */ = {isa = PBXBuildFile; fileRef = 218718BFCE1EB8C4B99AED9F /* Dependency.swift */; };
 		D52AE571DC64BBCF63A285E3 /* MediaExtractionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF11B1E80B3F43236531D6A8 /* MediaExtractionService.swift */; };
 		D543D039DDD7E5350D5A5039 /* GetOudioApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EF54D78BEC6CD9ABA21E0B7 /* GetOudioApp.swift */; };
@@ -62,6 +70,20 @@
 			proxyType = 1;
 			remoteGlobalIDString = DCCB63A986CE40B8EBFBE2CF;
 			remoteInfo = GetOudioFinderExtension;
+		};
+		4C06EF9BE372E507D05BE5FE /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 765A5E52E8CEDAD270702356 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = F9246AF6FE72CF2A656008F0;
+			remoteInfo = GetOudioCore;
+		};
+		AE19CF3B690919C60D79BBC8 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 765A5E52E8CEDAD270702356 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 771BA082D2D4EC90E96CE749;
+			remoteInfo = GetOudioAMRuntimeAgent;
 		};
 		B71E9CBDE90258119F31A523 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -135,6 +157,17 @@
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		CD34036723D8C9708225B342 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				299ADABA555847D6E5F92734 /* GetOudioCore.framework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
@@ -146,13 +179,16 @@
 		1435730CBD8D1117C241A57D /* HeadlessRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeadlessRunner.swift; sourceTree = "<group>"; };
 		1C389A0C8BA4A129E65FAEA3 /* ColimaDockerRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColimaDockerRuntime.swift; sourceTree = "<group>"; };
 		218718BFCE1EB8C4B99AED9F /* Dependency.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Dependency.swift; sourceTree = "<group>"; };
+		24D6241F048302C55FF222E9 /* AppleMusicRuntimeAgentLauncher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleMusicRuntimeAgentLauncher.swift; sourceTree = "<group>"; };
 		260A59E1B28DDC4E921E9C39 /* FinderSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinderSync.swift; sourceTree = "<group>"; };
 		277323E37349CB4F0E1FDA52 /* SettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsStore.swift; sourceTree = "<group>"; };
 		2D84480E867AAD02E3F55067 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
+		323FD01C817E384689C4EAA8 /* AppleMusicRuntimeAgentClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleMusicRuntimeAgentClient.swift; sourceTree = "<group>"; };
 		36C3426B683BFDBD6C3083B1 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		4092C290A220FE1E53D899C9 /* FileCategory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileCategory.swift; sourceTree = "<group>"; };
 		43638432B32307180F0DC2FD /* GetOudioShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = GetOudioShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		49BFF2708ED14CF05FA36161 /* GetOudioCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = GetOudioCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		4AD5E91E2A5C903C19F28C4E /* ffmpeg */ = {isa = PBXFileReference; lastKnownFileType = folder; name = ffmpeg; path = GetOudio/Resources/ThirdParty/ffmpeg; sourceTree = SOURCE_ROOT; };
 		4BF24B8150C8DA146AEE6312 /* GetOudioCoreTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GetOudioCoreTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		4EF54D78BEC6CD9ABA21E0B7 /* GetOudioApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GetOudioApp.swift; sourceTree = "<group>"; };
 		54C8CCAA28BE713D16820038 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; name = AppIcon.icon; path = GetOudio/Resources/AppIcon.icon; sourceTree = SOURCE_ROOT; };
@@ -161,7 +197,6 @@
 		656DE3FECCFED49DE666582F /* EventHandlingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventHandlingView.swift; sourceTree = "<group>"; };
 		6BE0DC2B93928C094187FC44 /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
 		7085A54F704E59442755202F /* NormalLauncher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NormalLauncher.swift; sourceTree = "<group>"; };
-		72934EBDA00A4994F366A4FC /* ThirdParty */ = {isa = PBXFileReference; lastKnownFileType = folder; name = ThirdParty; path = GetOudio/Resources/ThirdParty; sourceTree = SOURCE_ROOT; };
 		74D3AADF75639B9295A0B4BF /* AppConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConstants.swift; sourceTree = "<group>"; };
 		7E935EA0A23172AF7AE10BEB /* SettingsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsViewModel.swift; sourceTree = "<group>"; };
 		7F29A548AD0635BE90D34456 /* JobQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JobQueue.swift; sourceTree = "<group>"; };
@@ -171,16 +206,21 @@
 		8B40B7032B5BBB584D60D5ED /* AppleMusicSetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleMusicSetupView.swift; sourceTree = "<group>"; };
 		8D9341EFFB773C117429DF56 /* ProcessRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessRunner.swift; sourceTree = "<group>"; };
 		8E1B72668091E326BEC5A293 /* Notifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Notifications.swift; sourceTree = "<group>"; };
+		944D0886B6ADDE240A0D8BFB /* apple-music-downloader */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "apple-music-downloader"; path = "GetOudio/Resources/ThirdParty/apple-music-downloader"; sourceTree = SOURCE_ROOT; };
 		968CA7DFC4B0913F91E093B7 /* JobProgressPhase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JobProgressPhase.swift; sourceTree = "<group>"; };
 		96C485724CAA57FDA4F744D0 /* ConversionPreset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversionPreset.swift; sourceTree = "<group>"; };
 		9CEC2CD73CA5DB57DD39B2D2 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
 		A31E47AC388151B7BA99BFE6 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
 		A577CA70A6281C42298445E0 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		B9C68E3D12622013AF3CB161 /* AppleMusicRuntimeManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleMusicRuntimeManager.swift; sourceTree = "<group>"; };
 		C43975B92D52741C9A75DC77 /* GetOudioCoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GetOudioCoreTests.swift; sourceTree = "<group>"; };
 		C63E67A469198DCFAAEF52A5 /* MainSettingsPages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainSettingsPages.swift; sourceTree = "<group>"; };
 		DCD1166F4ECCEF206816E275 /* AppleMusicWrapperRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleMusicWrapperRuntime.swift; sourceTree = "<group>"; };
 		DF11B1E80B3F43236531D6A8 /* MediaExtractionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaExtractionService.swift; sourceTree = "<group>"; };
 		E71B1DAE2F34CAAE4261B2F0 /* GetOudioFinderExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = GetOudioFinderExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		F194F1D1BF8520F04C51A8C1 /* AgentMain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentMain.swift; sourceTree = "<group>"; };
+		F7B61544D149878F77979B5A /* GetOudioAMRuntimeAgent.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GetOudioAMRuntimeAgent.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F806E2D0D02BD05E19A347FF /* ncmdump */ = {isa = PBXFileReference; lastKnownFileType = folder; name = ncmdump; path = GetOudio/Resources/ThirdParty/ncmdump; sourceTree = SOURCE_ROOT; };
 		FCE6C13E6BA94A818DA3068B /* AudioConversionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioConversionService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -198,6 +238,14 @@
 			buildActionMask = 2147483647;
 			files = (
 				1275386606BDFC5FA9E31D62 /* GetOudioCore.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C643FA021658140559891BF2 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				627CEBE7088E7474514D3D37 /* GetOudioCore.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -228,6 +276,14 @@
 				A084B515448677D27F7C739F /* Support */,
 			);
 			path = Sources;
+			sourceTree = "<group>";
+		};
+		102DB913D423C375B2A61053 /* GetOudioAMRuntimeAgent */ = {
+			isa = PBXGroup;
+			children = (
+				AE638C709A26DF127F968654 /* Sources */,
+			);
+			path = GetOudioAMRuntimeAgent;
 			sourceTree = "<group>";
 		};
 		38216A3A01B34681C8FBE926 /* App */ = {
@@ -269,6 +325,7 @@
 			isa = PBXGroup;
 			children = (
 				0709132ABB400330E134F753 /* GetOudio.app */,
+				F7B61544D149878F77979B5A /* GetOudioAMRuntimeAgent.app */,
 				49BFF2708ED14CF05FA36161 /* GetOudioCore.framework */,
 				4BF24B8150C8DA146AEE6312 /* GetOudioCoreTests.xctest */,
 				E71B1DAE2F34CAAE4261B2F0 /* GetOudioFinderExtension.appex */,
@@ -289,7 +346,7 @@
 			isa = PBXGroup;
 			children = (
 				54C8CCAA28BE713D16820038 /* AppIcon.icon */,
-				72934EBDA00A4994F366A4FC /* ThirdParty */,
+				ECE867F4C2F8E4FFDE4263F2 /* ThirdParty */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -298,6 +355,7 @@
 			isa = PBXGroup;
 			children = (
 				75EDBBE0FB400424F6530F1C /* GetOudio */,
+				102DB913D423C375B2A61053 /* GetOudioAMRuntimeAgent */,
 				3D8FEB326FADC416A892FA56 /* GetOudioCore */,
 				7F17B539629433A1A728EEE5 /* GetOudioFinderExtension */,
 				BF7D3B8E69C5A4127940CBC2 /* GetOudioShareExtension */,
@@ -317,6 +375,8 @@
 			isa = PBXGroup;
 			children = (
 				0BB207379790847AB20869D3 /* AppleMusicDownloadService.swift */,
+				323FD01C817E384689C4EAA8 /* AppleMusicRuntimeAgentClient.swift */,
+				B9C68E3D12622013AF3CB161 /* AppleMusicRuntimeManager.swift */,
 				DCD1166F4ECCEF206816E275 /* AppleMusicWrapperRuntime.swift */,
 				FCE6C13E6BA94A818DA3068B /* AudioConversionService.swift */,
 				1C389A0C8BA4A129E65FAEA3 /* ColimaDockerRuntime.swift */,
@@ -354,6 +414,7 @@
 		89D6A081CD8FFECAC15A8F70 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				24D6241F048302C55FF222E9 /* AppleMusicRuntimeAgentLauncher.swift */,
 				A577CA70A6281C42298445E0 /* AppModel.swift */,
 				6443C0992771CFEA49338C37 /* KeychainService.swift */,
 				7E935EA0A23172AF7AE10BEB /* SettingsViewModel.swift */,
@@ -389,6 +450,14 @@
 			path = Views;
 			sourceTree = "<group>";
 		};
+		AE638C709A26DF127F968654 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				F194F1D1BF8520F04C51A8C1 /* AgentMain.swift */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
 		BF7D3B8E69C5A4127940CBC2 /* GetOudioShareExtension */ = {
 			isa = PBXGroup;
 			children = (
@@ -404,6 +473,16 @@
 				07A513B3F5F8C121D7D1145B /* ShareExtension.swift */,
 			);
 			path = Sources;
+			sourceTree = "<group>";
+		};
+		ECE867F4C2F8E4FFDE4263F2 /* ThirdParty */ = {
+			isa = PBXGroup;
+			children = (
+				944D0886B6ADDE240A0D8BFB /* apple-music-downloader */,
+				4AD5E91E2A5C903C19F28C4E /* ffmpeg */,
+				F806E2D0D02BD05E19A347FF /* ncmdump */,
+			);
+			path = ThirdParty;
 			sourceTree = "<group>";
 		};
 		FC90E37BE3F9EAD323CC8EBE /* Tests */ = {
@@ -437,6 +516,26 @@
 			productReference = 4BF24B8150C8DA146AEE6312 /* GetOudioCoreTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		771BA082D2D4EC90E96CE749 /* GetOudioAMRuntimeAgent */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 62524FC5D16EB858A9EE0EED /* Build configuration list for PBXNativeTarget "GetOudioAMRuntimeAgent" */;
+			buildPhases = (
+				D41390D03B11D1D479204BD2 /* Sources */,
+				C643FA021658140559891BF2 /* Frameworks */,
+				CD34036723D8C9708225B342 /* Embed Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				5BE315E740506DD13573269F /* PBXTargetDependency */,
+			);
+			name = GetOudioAMRuntimeAgent;
+			packageProductDependencies = (
+			);
+			productName = GetOudioAMRuntimeAgent;
+			productReference = F7B61544D149878F77979B5A /* GetOudioAMRuntimeAgent.app */;
+			productType = "com.apple.product-type.application";
+		};
 		A4AAEF6C327EDD968B1A98C5 /* GetOudio */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 10243C244E566F18FCA42A0F /* Build configuration list for PBXNativeTarget "GetOudio" */;
@@ -446,11 +545,13 @@
 				CB89E45DB93CB5C19E3BDD2E /* Frameworks */,
 				A7404D723DF252EBC38A8CF4 /* Embed Foundation Extensions */,
 				6F0A90185C0E9CE10A10C48A /* Embed Frameworks */,
+				1B61F6C2C795AE948160319B /* Copy Apple Music Runtime Agent */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 				95C91FBF2F6B8C08E42B911D /* PBXTargetDependency */,
+				641482CA6AE43AF361E9E9F8 /* PBXTargetDependency */,
 				638AEA41CE95486B4AAD9156 /* PBXTargetDependency */,
 				F3CE56CD2AEBBC9217225D3E /* PBXTargetDependency */,
 			);
@@ -529,6 +630,10 @@
 						DevelopmentTeam = ZWNUJ64F36;
 						ProvisioningStyle = Automatic;
 					};
+					771BA082D2D4EC90E96CE749 = {
+						DevelopmentTeam = ZWNUJ64F36;
+						ProvisioningStyle = Automatic;
+					};
 					A4AAEF6C327EDD968B1A98C5 = {
 						DevelopmentTeam = ZWNUJ64F36;
 						ProvisioningStyle = Automatic;
@@ -562,6 +667,7 @@
 			projectRoot = "";
 			targets = (
 				A4AAEF6C327EDD968B1A98C5 /* GetOudio */,
+				771BA082D2D4EC90E96CE749 /* GetOudioAMRuntimeAgent */,
 				F9246AF6FE72CF2A656008F0 /* GetOudioCore */,
 				14A0FE9FE15B05CBFDBA438B /* GetOudioCoreTests */,
 				DCCB63A986CE40B8EBFBE2CF /* GetOudioFinderExtension */,
@@ -576,11 +682,36 @@
 			buildActionMask = 2147483647;
 			files = (
 				043B134B72CE2E5637C11530 /* AppIcon.icon in Resources */,
-				2D469F35ACF7EFCBEBC2D0D5 /* ThirdParty in Resources */,
+				3AD5723738429067C46F5E53 /* apple-music-downloader in Resources */,
+				D0471A3CCE40DBACF8511587 /* ffmpeg in Resources */,
+				3C4CA233D572B5BA3D1A397F /* ncmdump in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		1B61F6C2C795AE948160319B /* Copy Apple Music Runtime Agent */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(BUILT_PRODUCTS_DIR)/GetOudioAMRuntimeAgent.app/Contents/MacOS/GetOudioAMRuntimeAgent",
+			);
+			name = "Copy Apple Music Runtime Agent";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Library/LoginItems/GetOudioAMRuntimeAgent.app/Contents/MacOS/GetOudioAMRuntimeAgent",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -euo pipefail\nAGENT_APP=\"$BUILT_PRODUCTS_DIR/GetOudioAMRuntimeAgent.app\"\nDEST=\"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Library/LoginItems\"\nLEGACY_DEST=\"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers\"\nmkdir -p \"$DEST\"\nif [ ! -d \"$AGENT_APP\" ]; then\n  echo \"missing Apple Music Runtime Agent app at $AGENT_APP\" >&2\n  exit 1\nfi\nrm -rf \"$LEGACY_DEST/GetOudioAMRuntimeAgent.app\"\nrm -rf \"$DEST/GetOudioAMRuntimeAgent.app\"\ncp -R \"$AGENT_APP\" \"$DEST/GetOudioAMRuntimeAgent.app\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		371AAAA9A04C8F59EFACCFCE /* Sources */ = {
@@ -597,6 +728,8 @@
 			files = (
 				7E4140D91A905E5B8076794C /* AppConstants.swift in Sources */,
 				DE31BC37B7DA0B57A7594782 /* AppleMusicDownloadService.swift in Sources */,
+				BA2B129FF3760A61CFEEF0E2 /* AppleMusicRuntimeAgentClient.swift in Sources */,
+				9592ABD5238190A0FECF2673 /* AppleMusicRuntimeManager.swift in Sources */,
 				3588567EC971BABD0CD8BDEE /* AppleMusicWrapperRuntime.swift in Sources */,
 				AD82AD58BE8240DDF4201215 /* AudioConversionService.swift in Sources */,
 				84E264F729CDCBA406A0C041 /* ColimaDockerRuntime.swift in Sources */,
@@ -623,6 +756,7 @@
 			files = (
 				6B7F869F53164AF502E07505 /* AppDelegate.swift in Sources */,
 				6904F0FB596F94F32435DD49 /* AppModel.swift in Sources */,
+				7ED8DE418C76BCDE5276D98A /* AppleMusicRuntimeAgentLauncher.swift in Sources */,
 				B5F80E9EFB10E160D4C82A8C /* AppleMusicSetupView.swift in Sources */,
 				28D57F1082E7B71F53AB415F /* DashboardView.swift in Sources */,
 				57CB351D3CDE41108F4C1104 /* EventHandlingView.swift in Sources */,
@@ -654,6 +788,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		D41390D03B11D1D479204BD2 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				3629BE86D263E7B1F003F248 /* AgentMain.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -662,10 +804,20 @@
 			target = F9246AF6FE72CF2A656008F0 /* GetOudioCore */;
 			targetProxy = DDDE9BAAFA8395065647D08B /* PBXContainerItemProxy */;
 		};
+		5BE315E740506DD13573269F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = F9246AF6FE72CF2A656008F0 /* GetOudioCore */;
+			targetProxy = 4C06EF9BE372E507D05BE5FE /* PBXContainerItemProxy */;
+		};
 		638AEA41CE95486B4AAD9156 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = DCCB63A986CE40B8EBFBE2CF /* GetOudioFinderExtension */;
 			targetProxy = 06528AF10FA2B05B7303EA7C /* PBXContainerItemProxy */;
+		};
+		641482CA6AE43AF361E9E9F8 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 771BA082D2D4EC90E96CE749 /* GetOudioAMRuntimeAgent */;
+			targetProxy = AE19CF3B690919C60D79BBC8 /* PBXContainerItemProxy */;
 		};
 		9027553367E1EB7F99F2F45E /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -710,17 +862,52 @@
 			};
 			name = Release;
 		};
+		05F07F816C39725C26F3F1DE /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = GetOudioAMRuntimeAgent/GetOudioAMRuntimeAgent.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				INFOPLIST_FILE = GetOudioAMRuntimeAgent/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.shengjiacheng.GetOudio.AMRuntimeAgent;
+				PRODUCT_NAME = GetOudioAMRuntimeAgent;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
 		1444178131C13867DDE179A0 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 					"@loader_path/../Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.shengjiacheng.GetOudioCoreTests;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		1782ECA77FEC4CB44DB3B8B2 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = GetOudioAMRuntimeAgent/GetOudioAMRuntimeAgent.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				INFOPLIST_FILE = GetOudioAMRuntimeAgent/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.shengjiacheng.GetOudio.AMRuntimeAgent;
+				PRODUCT_NAME = GetOudioAMRuntimeAgent;
 				SDKROOT = macosx;
 			};
 			name = Debug;
@@ -971,6 +1158,7 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -1049,6 +1237,15 @@
 			buildConfigurations = (
 				F18B869BA0E06BADF1409B24 /* Debug */,
 				2F663E9C53FAF068E33B948C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		62524FC5D16EB858A9EE0EED /* Build configuration list for PBXNativeTarget "GetOudioAMRuntimeAgent" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1782ECA77FEC4CB44DB3B8B2 /* Debug */,
+				05F07F816C39725C26F3F1DE /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

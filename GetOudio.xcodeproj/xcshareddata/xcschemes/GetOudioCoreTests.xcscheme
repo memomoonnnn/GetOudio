@@ -15,34 +15,6 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "A4AAEF6C327EDD968B1A98C5"
-               BuildableName = "GetOudio.app"
-               BlueprintName = "GetOudio"
-               ReferencedContainer = "container:GetOudio.xcodeproj">
-            </BuildableReference>
-         </BuildActionEntry>
-         <BuildActionEntry
-            buildForTesting = "YES"
-            buildForRunning = "YES"
-            buildForProfiling = "YES"
-            buildForArchiving = "YES"
-            buildForAnalyzing = "YES">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "771BA082D2D4EC90E96CE749"
-               BuildableName = "GetOudioAMRuntimeAgent.app"
-               BlueprintName = "GetOudioAMRuntimeAgent"
-               ReferencedContainer = "container:GetOudio.xcodeproj">
-            </BuildableReference>
-         </BuildActionEntry>
-         <BuildActionEntry
-            buildForTesting = "YES"
-            buildForRunning = "YES"
-            buildForProfiling = "YES"
-            buildForArchiving = "YES"
-            buildForAnalyzing = "YES">
-            <BuildableReference
-               BuildableIdentifier = "primary"
                BlueprintIdentifier = "F9246AF6FE72CF2A656008F0"
                BuildableName = "GetOudioCore.framework"
                BlueprintName = "GetOudioCore"
@@ -57,23 +29,9 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "DCCB63A986CE40B8EBFBE2CF"
-               BuildableName = "GetOudioFinderExtension.appex"
-               BlueprintName = "GetOudioFinderExtension"
-               ReferencedContainer = "container:GetOudio.xcodeproj">
-            </BuildableReference>
-         </BuildActionEntry>
-         <BuildActionEntry
-            buildForTesting = "YES"
-            buildForRunning = "YES"
-            buildForProfiling = "YES"
-            buildForArchiving = "YES"
-            buildForAnalyzing = "YES">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "E816029425E0A3BCF18A3C31"
-               BuildableName = "GetOudioShareExtension.appex"
-               BlueprintName = "GetOudioShareExtension"
+               BlueprintIdentifier = "14A0FE9FE15B05CBFDBA438B"
+               BuildableName = "GetOudioCoreTests.xctest"
+               BlueprintName = "GetOudioCoreTests"
                ReferencedContainer = "container:GetOudio.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -88,9 +46,9 @@
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "A4AAEF6C327EDD968B1A98C5"
-            BuildableName = "GetOudio.app"
-            BlueprintName = "GetOudio"
+            BlueprintIdentifier = "F9246AF6FE72CF2A656008F0"
+            BuildableName = "GetOudioCore.framework"
+            BlueprintName = "GetOudioCore"
             ReferencedContainer = "container:GetOudio.xcodeproj">
          </BuildableReference>
       </MacroExpansion>
@@ -120,18 +78,15 @@
       debugDocumentVersioning = "YES"
       debugServiceExtension = "internal"
       allowLocationSimulation = "YES">
-      <BuildableProductRunnable
-         runnableDebuggingMode = "0">
+      <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "A4AAEF6C327EDD968B1A98C5"
-            BuildableName = "GetOudio.app"
-            BlueprintName = "GetOudio"
+            BlueprintIdentifier = "F9246AF6FE72CF2A656008F0"
+            BuildableName = "GetOudioCore.framework"
+            BlueprintName = "GetOudioCore"
             ReferencedContainer = "container:GetOudio.xcodeproj">
          </BuildableReference>
-      </BuildableProductRunnable>
-      <CommandLineArguments>
-      </CommandLineArguments>
+      </MacroExpansion>
    </LaunchAction>
    <ProfileAction
       buildConfiguration = "Release"
@@ -139,16 +94,15 @@
       savedToolIdentifier = ""
       useCustomWorkingDirectory = "NO"
       debugDocumentVersioning = "YES">
-      <BuildableProductRunnable
-         runnableDebuggingMode = "0">
+      <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "A4AAEF6C327EDD968B1A98C5"
-            BuildableName = "GetOudio.app"
-            BlueprintName = "GetOudio"
+            BlueprintIdentifier = "F9246AF6FE72CF2A656008F0"
+            BuildableName = "GetOudioCore.framework"
+            BlueprintName = "GetOudioCore"
             ReferencedContainer = "container:GetOudio.xcodeproj">
          </BuildableReference>
-      </BuildableProductRunnable>
+      </MacroExpansion>
    </ProfileAction>
    <AnalyzeAction
       buildConfiguration = "Debug">

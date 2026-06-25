@@ -1,6 +1,6 @@
 import Foundation
 
-public struct ConversionSummary: Equatable, Sendable {
+public struct ConversionSummary: Codable, Equatable, Sendable {
     public var successCount: Int
     public var failureCount: Int
     public var messages: [String]

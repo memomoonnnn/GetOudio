@@ -29,6 +29,7 @@ final class AppModel: ObservableObject {
     private let mediaExtractionService = MediaExtractionService()
     private let ncmConversionService = NCMConversionService()
     private let appleMusicDownloadService = AppleMusicDownloadService()
+    private let appleMusicAgentLauncher = AppleMusicRuntimeAgentLauncher.shared
     private let notificationService = NotificationService()
     private let settingsStore = SettingsStore()
     private var isHandlingQueuedJobs = false
@@ -145,6 +146,7 @@ final class AppModel: ObservableObject {
             summaries.append(await ncmConversionService.convert(ncmJobs))
         }
         if !amJobs.isEmpty {
+            try? await appleMusicAgentLauncher.ensureRunning()
             summaries.append(await appleMusicDownloadService.download(amJobs))
         }
 

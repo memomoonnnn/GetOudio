@@ -5,16 +5,16 @@
       "name": "ncmdump",
       "upstream": "https://github.com/taurusxin/ncmdump",
       "license": "MIT",
-      "expectedPath": "ThirdParty/ncmdump/bin/ncmdump",
-      "notes": "Place the signed macOS executable here before distribution."
+      "expectedPath": "ncmdump/bin/ncmdump",
+      "notes": "Source lives under Resources/ThirdParty/ncmdump; Xcode copies the ncmdump folder to the app bundle Resources root."
     },
     {
       "id": "appleMusicDownloader",
       "name": "apple-music-downloader",
       "upstream": "https://github.com/zhaarey/apple-music-downloader",
       "license": "Check upstream repository before redistribution.",
-      "expectedPath": "ThirdParty/apple-music-downloader/apple-music-downloader",
-      "notes": "Project-private macOS executable embedded in the app bundle. Runtime config is generated from ThirdParty/apple-music-downloader/config.yaml.template under the app-managed shared container."
+      "expectedPath": "apple-music-downloader/apple-music-downloader",
+      "notes": "Project-private macOS executable embedded in the app bundle Resources root. Runtime config is generated from apple-music-downloader/config.yaml.template under the app-managed runtime directory."
     }
   ],
   "managedDockerImages": [
@@ -24,7 +24,7 @@
       "image": "ghcr.io/itouakirai/wrapper:x86",
       "platform": "linux/amd64",
       "upstream": "https://github.com/WorldObservationLog/wrapper",
-      "notes": "The wrapper is not embedded as a macOS executable. Get Oudio uses Docker CLI with the Colima context to pull and run this amd64 image with an app-managed rootfs/data directory."
+      "notes": "The wrapper is not embedded as a macOS executable. Get Oudio uses GetOudioAMRuntimeAgent to install Docker CLI, Colima, Lima, and GPAC under the App Group runtime root, then pulls and runs this amd64 image with an agent-managed wrapper-data directory."
     }
   ]
 }

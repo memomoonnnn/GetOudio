@@ -11,6 +11,7 @@ final class HeadlessRunner: NSObject, NSApplicationDelegate, UNUserNotificationC
     private let mediaService = MediaExtractionService()
     private let ncmService = NCMConversionService()
     private let amService = AppleMusicDownloadService()
+    private let appleMusicAgentLauncher = AppleMusicRuntimeAgentLauncher.shared
     private let notificationService = NotificationService()
 
     // MARK: - Entry point
@@ -140,6 +141,7 @@ final class HeadlessRunner: NSObject, NSApplicationDelegate, UNUserNotificationC
             totalSuccess += s.successCount; totalFailure += s.failureCount; messages += s.messages
         }
         if !amJobs.isEmpty {
+            try? await appleMusicAgentLauncher.ensureRunning()
             let s = await amService.download(amJobs)
             totalSuccess += s.successCount; totalFailure += s.failureCount; messages += s.messages
         }

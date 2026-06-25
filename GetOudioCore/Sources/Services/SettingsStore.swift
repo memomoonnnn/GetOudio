@@ -9,6 +9,8 @@ public final class SettingsStore {
         public static let ncmCustomOutputPath = "ncmCustomOutputPath"
         public static let appleMusicOutputPath = "appleMusicOutputPath"
         public static let appleMusicDownloadMode = "appleMusicDownloadMode"
+        public static let isAppleMusicDownloadEnabled = "isAppleMusicDownloadEnabled"
+        public static let appleMusicUseSystemProxy = "appleMusicUseSystemProxy"
     }
 
     private let defaults: UserDefaults
@@ -80,6 +82,16 @@ public final class SettingsStore {
     public var appleMusicDownloadFormat: AppleMusicDownloadFormat {
         get { AppleMusicDownloadFormat(rawValue: appleMusicDownloadMode) ?? .askEveryTime }
         set { appleMusicDownloadMode = newValue.rawValue }
+    }
+
+    public var isAppleMusicDownloadEnabled: Bool {
+        get { defaults.bool(forKey: Keys.isAppleMusicDownloadEnabled) }
+        set { defaults.set(newValue, forKey: Keys.isAppleMusicDownloadEnabled) }
+    }
+
+    public var appleMusicUseSystemProxy: Bool {
+        get { defaults.bool(forKey: Keys.appleMusicUseSystemProxy) }
+        set { defaults.set(newValue, forKey: Keys.appleMusicUseSystemProxy) }
     }
 
     public static func defaultFinderDirectories() -> [URL] {

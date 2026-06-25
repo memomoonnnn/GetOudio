@@ -9,6 +9,7 @@ struct AppleMusicSetupView: View {
     @State private var isInitializing = false
     private let keychain = KeychainService()
     private let downloadService = AppleMusicDownloadService()
+    private let appleMusicAgentLauncher = AppleMusicRuntimeAgentLauncher.shared
 
     var body: some View {
         Form {
@@ -39,7 +40,7 @@ struct AppleMusicSetupView: View {
                 .disabled(isInitializing || username.isEmpty || password.isEmpty)
 
                 Button {
-                    submitVerificationCode()
+                    Task { await submitVerificationCode() }
                 } label: {
                     Label("提交验证码", systemImage: "number")
                 }
@@ -63,19 +64,37 @@ struct AppleMusicSetupView: View {
 
     private func initializeWrapper() async {
         isInitializing = true
-        status = "正在后台启动 Colima 并运行 wrapper 镜像。收到 Apple 验证码后，在此输入并点击提交验证码。"
-        let summary = await downloadService.initializeWrapper(username: username, password: password, verificationCode: verificationCode)
+        status = "正在启动 Apple Music Runtime Agent。收到 Apple 验证码后，在此输入并点击提交验证码。"
+        do {
+            try await appleMusicAgentLauncher.ensureRunning()
+        } catch {
+            status = "启动 Runtime Agent 失败：\(error.localizedDescription)"
+            isInitializing = false
+            return
+        }
+        let summary = await downloadService.initializeWrapper(
+            username: username,
+            password: password,
+            verificationCode: nil,
+            useSystemProxy: false
+        )
         isInitializing = false
 
         if summary.failureCount == 0 {
-            status = "初始化完成"
+            status = summary.messages.first ?? "登录容器已启动"
         } else {
             status = summary.messages.first ?? "初始化失败"
         }
     }
 
-    private func submitVerificationCode() {
-        let summary = downloadService.submitWrapperVerificationCode(verificationCode)
+    private func submitVerificationCode() async {
+        do {
+            try await appleMusicAgentLauncher.ensureRunning()
+        } catch {
+            status = "启动 Runtime Agent 失败：\(error.localizedDescription)"
+            return
+        }
+        let summary = await downloadService.submitWrapperVerificationCode(verificationCode)
         if summary.failureCount == 0 {
             status = "验证码已写入 wrapper 运行目录"
         } else {

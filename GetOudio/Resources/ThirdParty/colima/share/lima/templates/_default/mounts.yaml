@@ -1,7 +1,0 @@
-mounts:
-- location: "~"
-
-# # /tmp/lima is no longer mounted by default since Lima v2.0.
-# - location: "{{.GlobalTempDir}}/lima"
-#  mountPoint: /tmp/lima
-#  writable: true

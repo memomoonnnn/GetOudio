@@ -17,48 +17,39 @@ public struct ColimaRuntimeStatus: Equatable, Sendable {
 public final class ColimaDockerRuntime {
     public let dockerContext = "colima"
     private let runner: ProcessRunner
-    private let dependencyManager: DependencyManager
-    private let resourceRoot: URL?
+    private let runtimeManager: AppleMusicRuntimeManager
 
     public init(
         runner: ProcessRunner = ProcessRunner(),
-        dependencyManager: DependencyManager = DependencyManager(),
-        resourceRoot: URL? = Bundle.main.resourceURL
+        runtimeManager: AppleMusicRuntimeManager = AppleMusicRuntimeManager()
     ) {
         self.runner = runner
-        self.dependencyManager = dependencyManager
-        self.resourceRoot = resourceRoot
+        self.runtimeManager = runtimeManager
     }
 
-    /// 构建运行 Colima 所需的环境变量，确保能找到内嵌的 limactl
-    private func colimaEnvironment(colimaPath: String) -> [String: String] {
-        let colimaDir = (colimaPath as NSString).deletingLastPathComponent
-        var env: [String: String] = [:]
-        // 将内嵌目录加到 PATH 最前面，让 Colima 能找到同目录下的 limactl
-        if let existingPath = ProcessInfo.processInfo.environment["PATH"] {
-            env["PATH"] = "\(colimaDir):\(existingPath)"
-        } else {
-            env["PATH"] = "\(colimaDir):/usr/bin:/bin"
-        }
-        return env
-    }
+    public var runtimeEnvironment: [String: String] { runtimeManager.runtimeEnvironment() }
 
     public func check() async -> ColimaRuntimeStatus {
-        let docker = await dependencyManager.check(.docker)
-        guard let dockerPath = docker.resolvedPath else {
+        guard runtimeManager.isEnabled else {
+            return ColimaRuntimeStatus(dockerPath: nil, colimaPath: nil, isRunning: false, detail: "Apple Music 下载功能尚未启用")
+        }
+
+        let dockerPath = runtimeManager.dockerURL.path
+        guard Self.isRegularExecutable(runtimeManager.dockerURL) else {
             return ColimaRuntimeStatus(dockerPath: nil, colimaPath: nil, isRunning: false, detail: "未安装 Docker CLI")
         }
 
-        let colima = await dependencyManager.check(.colima)
-        guard let colimaPath = colima.resolvedPath else {
+        let colimaPath = runtimeManager.colimaURL.path
+        guard Self.isRegularExecutable(runtimeManager.colimaURL) else {
             return ColimaRuntimeStatus(dockerPath: dockerPath, colimaPath: nil, isRunning: false, detail: "未安装 Colima")
         }
 
-        let env = colimaEnvironment(colimaPath: colimaPath)
+        let env = runtimeManager.runtimeEnvironment()
 
         do {
             let status = try await runner.run(executablePath: colimaPath, arguments: ["status"], environment: env)
-            guard status.succeeded, status.standardOutput.localizedCaseInsensitiveContains("running") else {
+            let statusOutput = status.standardOutput + status.standardError
+            guard status.succeeded, statusOutput.localizedCaseInsensitiveContains("running") else {
                 return ColimaRuntimeStatus(
                     dockerPath: dockerPath,
                     colimaPath: colimaPath,
@@ -84,23 +75,31 @@ public final class ColimaDockerRuntime {
     }
 
     public func ensureRunning() async throws -> String {
-        let docker = await dependencyManager.check(.docker)
-        guard let dockerPath = docker.resolvedPath else {
-            throw ProcessRunnerError.executableNotFound("docker")
-        }
-
-        let colima = await dependencyManager.check(.colima)
-        guard let colimaPath = colima.resolvedPath else {
-            throw ProcessRunnerError.executableNotFound("colima")
-        }
-
-        let env = colimaEnvironment(colimaPath: colimaPath)
+        try runtimeManager.ensureEnabledAndInstalled()
+        let dockerPath = runtimeManager.dockerURL.path
+        let colimaPath = runtimeManager.colimaURL.path
+        let env = runtimeManager.runtimeEnvironment()
+        try await runtimeManager.ensureLimaVirtualizationEntitlement()
 
         let currentStatus = try? await runner.run(executablePath: colimaPath, arguments: ["status"], environment: env)
-        if currentStatus?.succeeded != true || currentStatus?.standardOutput.localizedCaseInsensitiveContains("running") != true {
-            let start = try await runner.run(executablePath: colimaPath, arguments: ["start", "--runtime", "docker"], environment: env)
+        let currentStatusOutput = (currentStatus?.standardOutput ?? "") + (currentStatus?.standardError ?? "")
+        if currentStatus?.succeeded != true || !currentStatusOutput.localizedCaseInsensitiveContains("running") {
+            let start = try await runner.run(
+                executablePath: colimaPath,
+                arguments: [
+                    "start",
+                    "--runtime", "docker",
+                    "--disk", "1",
+                    "--root-disk", "6",
+                    "--downloader", "curl",
+                    "--very-verbose"
+                ],
+                environment: env
+            )
             guard start.succeeded else {
-                let detail = start.standardError.isEmpty ? start.standardOutput : start.standardError
+                let processDetail = start.standardError.isEmpty ? start.standardOutput : start.standardError
+                let limaDetail = runtimeManager.limaHostAgentError()
+                let detail = limaDetail.isEmpty ? processDetail : "\(processDetail)\nLima: \(limaDetail)"
                 throw ProcessRunnerError.processFailed("Colima 启动失败：\(detail)")
             }
         }
@@ -116,5 +115,14 @@ public final class ColimaDockerRuntime {
 
     public func dockerArguments(_ arguments: [String]) -> [String] {
         ["--context", dockerContext] + arguments
+    }
+
+    private static func isRegularExecutable(_ url: URL) -> Bool {
+        guard FileManager.default.isExecutableFile(atPath: url.path),
+              let values = try? url.resourceValues(forKeys: [.isRegularFileKey])
+        else {
+            return false
+        }
+        return values.isRegularFile == true
     }
 }

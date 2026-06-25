@@ -4,6 +4,7 @@ set -euo pipefail
 MODE="${1:-run}"
 SCHEME="GetOudio"
 APP_NAME="Get Oudio"
+AGENT_NAME="GetOudioAMRuntimeAgent"
 BUNDLE_ID="com.shengjiacheng.GetOudio"
 FINDER_EXTENSION_ID="com.shengjiacheng.GetOudio.FinderExtension"
 FINDER_EXTENSION_POINT_ID="com.apple.FinderSync"
@@ -26,7 +27,32 @@ if [[ ! -d "$ROOT_DIR/GetOudio.xcodeproj" ]]; then
   xcodegen generate
 fi
 
-pkill -x "$APP_NAME" >/dev/null 2>&1 || true
+stop_running_processes() {
+  pkill -x "$APP_NAME" >/dev/null 2>&1 || true
+  pkill -x "$AGENT_NAME" >/dev/null 2>&1 || true
+}
+
+verify_embedded_agent() {
+  local configuration="$1"
+  local app_bundle="$DERIVED_DATA/Build/Products/$configuration/$APP_NAME.app"
+  local built_agent="$DERIVED_DATA/Build/Products/$configuration/$AGENT_NAME.app/Contents/MacOS/$AGENT_NAME"
+  local embedded_agent="$app_bundle/Contents/Library/LoginItems/$AGENT_NAME.app/Contents/MacOS/$AGENT_NAME"
+
+  if [[ ! -x "$built_agent" ]]; then
+    echo "missing built Apple Music Runtime Agent executable: $built_agent" >&2
+    exit 1
+  fi
+  if [[ ! -x "$embedded_agent" ]]; then
+    echo "missing embedded Apple Music Runtime Agent executable: $embedded_agent" >&2
+    exit 1
+  fi
+  if ! cmp -s "$built_agent" "$embedded_agent"; then
+    echo "embedded Apple Music Runtime Agent is stale: $embedded_agent" >&2
+    exit 1
+  fi
+}
+
+stop_running_processes
 
 build_unsigned() {
   xcodebuild \
@@ -36,6 +62,7 @@ build_unsigned() {
     -derivedDataPath "$DERIVED_DATA" \
     CODE_SIGNING_ALLOWED=NO \
     build
+  verify_embedded_agent "$DEBUG_CONFIGURATION"
 }
 
 build_signed() {
@@ -51,6 +78,7 @@ build_signed() {
       DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" \
       clean \
       build
+    verify_embedded_agent "$INSTALL_CONFIGURATION"
     return
   fi
 
@@ -64,6 +92,7 @@ build_signed() {
     CODE_SIGN_STYLE=Automatic \
     clean \
     build
+  verify_embedded_agent "$INSTALL_CONFIGURATION"
 }
 
 open_app() {

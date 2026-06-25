@@ -45,11 +45,20 @@ targets:
       - path: GetOudio/Resources/AppIcon.icon
         type: folder
         buildPhase: resources
-      - path: GetOudio/Resources/ThirdParty
+      - path: GetOudio/Resources/ThirdParty/ffmpeg
+        type: folder
+        buildPhase: resources
+      - path: GetOudio/Resources/ThirdParty/ncmdump
+        type: folder
+        buildPhase: resources
+      - path: GetOudio/Resources/ThirdParty/apple-music-downloader
         type: folder
         buildPhase: resources
     dependencies:
       - target: GetOudioCore
+      - target: GetOudioAMRuntimeAgent
+        embed: false
+        link: false
       - target: GetOudioFinderExtension
         embed: true
       - target: GetOudioShareExtension
@@ -100,6 +109,50 @@ targets:
         ENABLE_APP_SANDBOX: YES
         PRODUCT_BUNDLE_IDENTIFIER: com.shengjiacheng.GetOudio
         PRODUCT_NAME: Get Oudio
+    postBuildScripts:
+      - name: Copy Apple Music Runtime Agent
+        inputFiles:
+          - "$(BUILT_PRODUCTS_DIR)/GetOudioAMRuntimeAgent.app/Contents/MacOS/GetOudioAMRuntimeAgent"
+        outputFiles:
+          - "$(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Library/LoginItems/GetOudioAMRuntimeAgent.app/Contents/MacOS/GetOudioAMRuntimeAgent"
+        script: |
+          set -euo pipefail
+          AGENT_APP="$BUILT_PRODUCTS_DIR/GetOudioAMRuntimeAgent.app"
+          DEST="$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Library/LoginItems"
+          LEGACY_DEST="$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers"
+          mkdir -p "$DEST"
+          if [ ! -d "$AGENT_APP" ]; then
+            echo "missing Apple Music Runtime Agent app at $AGENT_APP" >&2
+            exit 1
+          fi
+          rm -rf "$LEGACY_DEST/GetOudioAMRuntimeAgent.app"
+          rm -rf "$DEST/GetOudioAMRuntimeAgent.app"
+          cp -R "$AGENT_APP" "$DEST/GetOudioAMRuntimeAgent.app"
+
+  GetOudioAMRuntimeAgent:
+    type: application
+    platform: macOS
+    sources:
+      - path: GetOudioAMRuntimeAgent/Sources
+    dependencies:
+      - target: GetOudioCore
+    info:
+      path: GetOudioAMRuntimeAgent/Info.plist
+      properties:
+        LSUIElement: true
+        CFBundleDisplayName: Get Oudio Apple Music Runtime Agent
+    entitlements:
+      path: GetOudioAMRuntimeAgent/GetOudioAMRuntimeAgent.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.shengjiacheng.GetOudio
+        com.apple.security.network.client: true
+        com.apple.security.network.server: true
+        com.apple.security.virtualization: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.shengjiacheng.GetOudio.AMRuntimeAgent
+        PRODUCT_NAME: GetOudioAMRuntimeAgent
 
   GetOudioFinderExtension:
     type: app-extension
@@ -154,6 +207,7 @@ targets:
       path: GetOudioShareExtension/GetOudioShareExtension.entitlements
       properties:
         com.apple.security.app-sandbox: true
+        com.apple.security.files.bookmarks.app-scope: true
         com.apple.security.application-groups:
           - group.com.shengjiacheng.GetOudio
     settings:
@@ -171,14 +225,26 @@ targets:
       - target: GetOudioCore
     settings:
       base:
+        GENERATE_INFOPLIST_FILE: YES
         PRODUCT_BUNDLE_IDENTIFIER: com.shengjiacheng.GetOudioCoreTests
 
 schemes:
+  GetOudioCoreTests:
+    build:
+      targets:
+        GetOudioCore: all
+        GetOudioCoreTests: all
+    test:
+      config: Debug
+      targets:
+        - GetOudioCoreTests
+
   GetOudio:
     build:
       targets:
         GetOudio: all
         GetOudioCore: all
+        GetOudioAMRuntimeAgent: all
         GetOudioFinderExtension: all
         GetOudioShareExtension: all
     run:

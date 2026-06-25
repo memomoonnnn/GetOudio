@@ -3,25 +3,85 @@ import Foundation
 public final class AppleMusicDownloadService {
     private let runner: ProcessRunner
     private let componentManager: BundledComponentManager
-    private let dependencyManager: DependencyManager
     private let wrapperRuntime: AppleMusicWrapperRuntime
+    private let runtimeManager: AppleMusicRuntimeManager
     private let settingsStore: SettingsStore
+    private let agentClient: AppleMusicRuntimeAgentClient
+    private let useAgent: Bool
 
     public init(
         runner: ProcessRunner = ProcessRunner(),
         componentManager: BundledComponentManager = BundledComponentManager(),
-        dependencyManager: DependencyManager = DependencyManager(),
-        wrapperRuntime: AppleMusicWrapperRuntime = AppleMusicWrapperRuntime(),
-        settingsStore: SettingsStore = SettingsStore()
+        runtimeManager: AppleMusicRuntimeManager = AppleMusicRuntimeManager(),
+        wrapperRuntime: AppleMusicWrapperRuntime? = nil,
+        settingsStore: SettingsStore = SettingsStore(),
+        agentClient: AppleMusicRuntimeAgentClient = AppleMusicRuntimeAgentClient(),
+        useAgent: Bool = true
     ) {
         self.runner = runner
         self.componentManager = componentManager
-        self.dependencyManager = dependencyManager
-        self.wrapperRuntime = wrapperRuntime
+        self.runtimeManager = runtimeManager
+        self.wrapperRuntime = wrapperRuntime ?? AppleMusicWrapperRuntime(
+            runtimeManager: runtimeManager,
+            settingsStore: settingsStore
+        )
         self.settingsStore = settingsStore
+        self.agentClient = agentClient
+        self.useAgent = useAgent
     }
 
     public func download(_ jobs: [JobRequest]) async -> ConversionSummary {
+        if useAgent {
+            do {
+                return try await agentClient.download(jobs)
+            } catch {
+                return ConversionSummary(successCount: 0, failureCount: jobs.count, messages: [error.localizedDescription])
+            }
+        }
+
+        return await downloadDirect(jobs)
+    }
+
+    public func initializeWrapper(
+        username: String,
+        password: String,
+        verificationCode: String?,
+        useSystemProxy: Bool
+    ) async -> ConversionSummary {
+        if useAgent {
+            do {
+                return try await agentClient.initializeWrapper(
+                    username: username,
+                    password: password,
+                    verificationCode: verificationCode,
+                    useSystemProxy: useSystemProxy
+                )
+            } catch {
+                return ConversionSummary(successCount: 0, failureCount: 1, messages: [error.localizedDescription])
+            }
+        }
+
+        return await initializeWrapperDirect(
+            username: username,
+            password: password,
+            verificationCode: verificationCode,
+            useSystemProxy: useSystemProxy
+        )
+    }
+
+    public func submitWrapperVerificationCode(_ code: String) async -> ConversionSummary {
+        if useAgent {
+            do {
+                return try await agentClient.submitVerificationCode(code)
+            } catch {
+                return ConversionSummary(successCount: 0, failureCount: 1, messages: [error.localizedDescription])
+            }
+        }
+
+        return await submitWrapperVerificationCodeDirect(code)
+    }
+
+    private func downloadDirect(_ jobs: [JobRequest]) async -> ConversionSummary {
         let downloadJobs = jobs.filter {
             if case .appleMusicDownload = $0.operation { return true }
             return false
@@ -31,9 +91,10 @@ public final class AppleMusicDownloadService {
             return ConversionSummary(successCount: 0, failureCount: 0, messages: ["没有 Apple Music 下载任务。"])
         }
 
-        let gpac = await dependencyManager.check(.gpac)
-        guard gpac.isInstalled else {
-            return ConversionSummary(successCount: 0, failureCount: downloadJobs.count, messages: ["未找到 GPAC / MP4Box，请先在组件设置中安装运行时工具。"])
+        do {
+            try runtimeManager.ensureEnabledAndInstalled()
+        } catch {
+            return ConversionSummary(successCount: 0, failureCount: downloadJobs.count, messages: [error.localizedDescription])
         }
 
         do {
@@ -57,7 +118,8 @@ public final class AppleMusicDownloadService {
                 let result = try await runner.run(
                     executablePath: executableURL.path,
                     arguments: arguments,
-                    currentDirectoryURL: workingDirectory
+                    currentDirectoryURL: workingDirectory,
+                    environment: runtimeManager.runtimeEnvironment()
                 )
 
                 if result.succeeded {
@@ -74,11 +136,26 @@ public final class AppleMusicDownloadService {
         }
     }
 
-    public func initializeWrapper(username: String, password: String, verificationCode: String?) async -> ConversionSummary {
+    private func initializeWrapperDirect(
+        username: String,
+        password: String,
+        verificationCode: String?,
+        useSystemProxy: Bool
+    ) async -> ConversionSummary {
         do {
-            let result = try await wrapperRuntime.initialize(username: username, password: password, verificationCode: verificationCode)
+            try runtimeManager.ensureEnabledAndInstalled()
+            let result = try await wrapperRuntime.initialize(
+                username: username,
+                password: password,
+                verificationCode: verificationCode,
+                useSystemProxy: useSystemProxy
+            )
             if result.succeeded {
-                return ConversionSummary(successCount: 1, failureCount: 0, messages: [result.standardOutput])
+                return ConversionSummary(
+                    successCount: 1,
+                    failureCount: 0,
+                    messages: ["登录容器已启动；收到双重认证验证码后请立即提交。"]
+                )
             }
 
             return ConversionSummary(successCount: 0, failureCount: 1, messages: [result.standardError.isEmpty ? result.standardOutput : result.standardError])
@@ -87,9 +164,19 @@ public final class AppleMusicDownloadService {
         }
     }
 
-    public func submitWrapperVerificationCode(_ code: String) -> ConversionSummary {
+    private func submitWrapperVerificationCodeDirect(_ code: String) async -> ConversionSummary {
         do {
+            try runtimeManager.ensureEnabledAndInstalled()
+            let status = await wrapperRuntime.loginStatus()
+            guard status.canSubmitVerificationCode else {
+                throw ProcessRunnerError.processFailed(
+                    status.isAuthenticated ? "Apple Music 初始化已完成。" : "当前登录流程尚未等待验证码。"
+                )
+            }
             try wrapperRuntime.writeVerificationCode(code)
+            Task {
+                await wrapperRuntime.logLoginDiagnostics(stage: "2fa-submitted")
+            }
             return ConversionSummary(successCount: 1, failureCount: 0, messages: ["验证码已写入 2fa.txt"])
         } catch {
             return ConversionSummary(successCount: 0, failureCount: 1, messages: [error.localizedDescription])
@@ -106,8 +193,7 @@ public final class AppleMusicDownloadService {
     }
 
     private func prepareDownloaderWorkingDirectory(executableURL: URL, outputDirectory: URL) throws -> URL {
-        let workingDirectory = try SharedContainer.directory()
-            .appendingPathComponent("AppleMusicDownloader", isDirectory: true)
+        let workingDirectory = runtimeManager.downloaderWorkDirectory
         try FileManager.default.createDirectory(at: workingDirectory, withIntermediateDirectories: true)
 
         let templateURL = executableURL.deletingLastPathComponent().appendingPathComponent("config.yaml.template")
