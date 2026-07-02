@@ -23,5 +23,6 @@ public enum LaunchSource: String, Sendable {
     case finderSync
     /// Launched from Share extension (Apple Music, reserved).
     case shareExtension
+    /// Launched only to dispatch pending notification events.
+    case notificationDispatch
 }
-

@@ -38,6 +38,11 @@ final class SettingsViewModel: ObservableObject {
     private let appleMusicAgentLauncher = AppleMusicRuntimeAgentLauncher.shared
     private var runtimeProgressTask: Task<Void, Never>?
 
+    var canStopAppleMusicDownload: Bool {
+        appleMusicRuntimeProgress?.isActive == true
+            && appleMusicRuntimeProgress?.statuses == nil
+    }
+
     init() {
         enabledPresets = store.enabledPresets
         finderDirectories = store.finderDirectoryURLs
@@ -137,6 +142,21 @@ final class SettingsViewModel: ObservableObject {
     func setAppleMusicUseSystemProxy(_ isEnabled: Bool) {
         appleMusicUseSystemProxy = isEnabled
         store.appleMusicUseSystemProxy = isEnabled
+    }
+
+    func stopAppleMusicDownload() {
+        do {
+            try appleMusicAgentClient.requestDownloadCancellation()
+            appleMusicRuntimeMessage = "正在停止 Apple Music 下载..."
+            appleMusicRuntimeProgress = AppleMusicRuntimeProgress(
+                message: "正在停止 Apple Music 下载...",
+                completedUnitCount: 0,
+                totalUnitCount: 1,
+                isActive: true
+            )
+        } catch {
+            appleMusicRuntimeMessage = "停止请求失败：\(error.localizedDescription)"
+        }
     }
 
     func refreshAppleMusicRuntimeStatus() async {
@@ -249,6 +269,20 @@ final class SettingsViewModel: ObservableObject {
         }
     }
 
+    func monitorAppleMusicRuntimeProgress() async {
+        while !Task.isCancelled {
+            let progress = appleMusicAgentClient.progress()
+            appleMusicRuntimeProgress = progress
+            if progress?.isActive == true, let statuses = progress?.statuses {
+                appleMusicRuntimeStatuses = statuses
+            }
+            if let progress, progress.isActive {
+                appleMusicRuntimeMessage = progress.message
+            }
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+        }
+    }
+
     func refreshAppleMusicWrapperLoginStatus() async {
         guard isAppleMusicDownloadEnabled else {
             appleMusicWrapperLoginStatus = AppleMusicWrapperLoginStatus(
@@ -335,7 +369,7 @@ final class SettingsViewModel: ObservableObject {
                 }.value
                 await MainActor.run {
                     self?.appleMusicRuntimeProgress = progress
-                    if let statuses = progress?.statuses {
+                    if progress?.isActive == true, let statuses = progress?.statuses {
                         self?.appleMusicRuntimeStatuses = statuses
                     }
                     if let progress, progress.isActive {
@@ -351,7 +385,7 @@ final class SettingsViewModel: ObservableObject {
         runtimeProgressTask?.cancel()
         runtimeProgressTask = nil
         appleMusicRuntimeProgress = appleMusicAgentClient.progress()
-        if let statuses = appleMusicRuntimeProgress?.statuses {
+        if appleMusicRuntimeProgress?.isActive == true, let statuses = appleMusicRuntimeProgress?.statuses {
             appleMusicRuntimeStatuses = statuses
         }
     }

@@ -23,7 +23,7 @@ struct DashboardView: View {
                         }
                     }
 
-                    Text("包装了几个优秀开源项目的脚本执行器。")
+                    Text("包装了几个开源项目的脚本执行器。")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)

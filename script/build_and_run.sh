@@ -226,8 +226,10 @@ install_app() {
   pluginkit -a "$INSTALLED_APP/Contents/PlugIns/GetOudioFinderExtension.appex"
   pluginkit -a "$INSTALLED_APP/Contents/PlugIns/GetOudioShareExtension.appex"
   pluginkit -e use -i "$FINDER_EXTENSION_ID"
+  pluginkit -e use -i "$SHARE_EXTENSION_ID"
   killall Finder >/dev/null 2>&1 || true
   pluginkit -m -v -i "$FINDER_EXTENSION_ID"
+  pluginkit -m -v -i "$SHARE_EXTENSION_ID"
 }
 
 case "$MODE" in
@@ -258,6 +260,7 @@ case "$MODE" in
     unregister_existing_plugins
     killall Finder >/dev/null 2>&1 || true
     pluginkit -m -v -i "$FINDER_EXTENSION_ID"
+    pluginkit -m -v -i "$SHARE_EXTENSION_ID"
     ;;
   *)
     echo "usage: $0 [run|--verify|--logs|--telemetry|--install|--clean-plugins]" >&2

@@ -21,6 +21,18 @@ public enum SharedContainer {
         try directory().appendingPathComponent("queued-jobs.json")
     }
 
+    public static func shareEventsFileURL() throws -> URL {
+        try directory().appendingPathComponent("share-events.json")
+    }
+
+    public static func pendingAppleMusicDownloadsFileURL() throws -> URL {
+        try directory().appendingPathComponent("pending-apple-music-downloads.json")
+    }
+
+    public static func notificationEventsDirectoryURL() throws -> URL {
+        try directory().appendingPathComponent("notification-events", isDirectory: true)
+    }
+
     public static func conversionLogFileURL() throws -> URL {
         try directory().appendingPathComponent("conversion-log.txt")
     }

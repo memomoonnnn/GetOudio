@@ -112,6 +112,33 @@ final class GetOudioCoreTests: XCTestCase {
         XCTAssertEqual(try queue.read(), [])
     }
 
+    func testNotificationEventQueueClaimsAndAcknowledgesEvents() throws {
+        let rootURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+
+        let queue = try NotificationEventQueue(rootURL: rootURL)
+        let job = JobRequest(
+            fileURL: URL(fileURLWithPath: "/tmp/song.wav"),
+            category: .audio,
+            operation: .transcode(.mp3320),
+            source: .finderSync
+        )
+        let summary = ConversionSummary(successCount: 1, failureCount: 0, messages: [])
+
+        try queue.enqueueConversionFinished(summary: summary, jobs: [job])
+        let claimed = try queue.claimPending()
+
+        XCTAssertEqual(claimed.map(\.event.summary), [summary])
+        XCTAssertEqual(claimed.first?.event.jobs, [job])
+        XCTAssertTrue(try queue.claimPending().isEmpty)
+
+        if let firstClaim = claimed.first {
+            queue.acknowledge(firstClaim)
+        }
+        XCTAssertTrue(try queue.claimPending().isEmpty)
+    }
+
     func testSettingsStorePersistsPresetsAndFinderDirectories() {
         let suiteName = "GetOudioCoreTests-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
@@ -213,6 +240,153 @@ final class GetOudioCoreTests: XCTestCase {
         XCTAssertEqual(AppleMusicDownloadFormat.alac.downloaderArguments, [])
         XCTAssertEqual(AppleMusicDownloadFormat.aac.downloaderArguments, ["--aac"])
         XCTAssertEqual(AppleMusicDownloadFormat.atmos.downloaderArguments, ["--atmos"])
+    }
+
+    func testAppleMusicDownloaderArgumentsUseSongFlagForAlbumURLWithSongID() {
+        let job = JobRequest(
+            fileURL: URL(string: "https://music.apple.com/jp/album/tell-me/1756723979?i=1756724104")!,
+            category: .appleMusic,
+            operation: .appleMusicDownload(.aac),
+            source: .shareExtension
+        )
+
+        let arguments = AppleMusicDownloadService.downloaderArguments(for: job, format: .aac)
+
+        XCTAssertEqual(arguments, ["--aac", "--song", job.fileURL.absoluteString])
+    }
+
+    func testAppleMusicDownloaderArgumentsDoNotUseSongFlagForAlbumURL() {
+        let job = JobRequest(
+            fileURL: URL(string: "https://music.apple.com/jp/album/tell-me/1756723979")!,
+            category: .appleMusic,
+            operation: .appleMusicDownload(.alac),
+            source: .shareExtension
+        )
+
+        let arguments = AppleMusicDownloadService.downloaderArguments(for: job, format: .alac)
+
+        XCTAssertEqual(arguments, [job.fileURL.absoluteString])
+    }
+
+    func testAppleMusicShareURLParserAcceptsBroadAppleMusicLinks() {
+        let urls = [
+            URL(string: "https://music.apple.com/us/album/example/123")!,
+            URL(string: "https://classical.music.apple.com/us/album/example/456?i=789")!,
+            URL(string: "music://music.apple.com/us/song/example/789")!,
+            URL(string: "https://music.example.com/apple/123")!
+        ]
+
+        XCTAssertEqual(AppleMusicShareURLParser.supportedURLs(from: urls), urls)
+    }
+
+    func testAppleMusicShareURLParserRejectsNonAppleMusicLinks() {
+        let urls = [
+            URL(string: "https://example.com/music/123")!,
+            URL(string: "https://apple.com/iphone")!,
+            URL(string: "https://example.com/audio/123")!
+        ]
+
+        XCTAssertTrue(AppleMusicShareURLParser.supportedURLs(from: urls).isEmpty)
+    }
+
+    func testShareEventQueuePersistsUnsupportedDownloadSourceEvents() throws {
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("json")
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+
+        let queue = try ShareEventQueue(fileURL: fileURL)
+        let url = URL(string: "https://example.com/not-supported")!
+        try queue.enqueue([ShareEvent(kind: .unsupportedDownloadSource, urls: [url])])
+
+        let events = try queue.drain()
+
+        XCTAssertEqual(events.count, 1)
+        XCTAssertEqual(events.first?.kind, .unsupportedDownloadSource)
+        XCTAssertEqual(events.first?.urls, [url])
+        XCTAssertTrue(try queue.read().isEmpty)
+    }
+
+    func testPendingAppleMusicDownloadStoreDrainsSavedJobs() throws {
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("json")
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+
+        let store = try PendingAppleMusicDownloadStore(fileURL: fileURL)
+        let job = JobRequest(
+            fileURL: URL(string: "https://music.apple.com/us/album/example/123")!,
+            category: .appleMusic,
+            operation: .appleMusicDownload(nil),
+            source: .shareExtension
+        )
+
+        _ = try store.save([job])
+        let batch = try store.drain()
+
+        XCTAssertEqual(batch?.jobs, [job])
+        XCTAssertNil(try store.read())
+    }
+
+    func testAppleMusicDownloaderProgressParserExtractsLatestProgressLine() {
+        let text = """
+        Song: Example
+        \rDownloading... 38% (12.0/31.5 MB, 1.2 MB/s)
+        """
+
+        let message = AppleMusicDownloaderProgressParser.progressMessage(from: text)
+
+        XCTAssertEqual(message, "Downloading... 38% (12.0/31.5 MB, 1.2 MB/s)")
+    }
+
+    func testAppleMusicDownloaderProgressTrackerReturnsOnlyChangedMessages() {
+        let tracker = AppleMusicDownloaderProgressTracker()
+
+        XCTAssertEqual(tracker.observe("Song: Example\n"), "Song: Example")
+        XCTAssertNil(tracker.observe("Song: Example\n"))
+        XCTAssertEqual(tracker.observe("\rDownloading... 40%"), "Downloading... 40%")
+    }
+
+    func testAppleMusicDownloadMessageFormatterFiltersProgressLines() {
+        let output = """
+        Track 4 of 6: songs
+        Downloading... 42% (23/54 MB, 112 kB/s) Downloaded
+        Decrypting... 41% (22/54 MB, 13 MB/s) Failed to run v2: decode mdat pos 22473151: read box body length 167546 does not match expected length 3065138
+        =======  [✔ ] Completed: 3/6  |  [⚠ ] Warnings: 0  |  [✖ ] Errors: 3  =======
+        Error detected, exiting...
+        """
+
+        let message = AppleMusicDownloadMessageFormatter.coreMessage(from: output)
+
+        XCTAssertFalse(message.contains("Downloading..."))
+        XCTAssertFalse(message.contains("Decrypting..."))
+        XCTAssertTrue(message.contains("Failed to run v2"))
+        XCTAssertTrue(message.contains("Completed: 3/6"))
+    }
+
+    func testProcessRunnerDrainsLargeOutputBeforeProcessExit() async throws {
+        let result = try await ProcessRunner().run(
+            executablePath: "/usr/bin/perl",
+            arguments: ["-e", "print \"x\" x 200000; print STDERR \"e\" x 100000;"]
+        )
+
+        XCTAssertTrue(result.succeeded)
+        XCTAssertEqual(result.standardOutput.count, 200000)
+        XCTAssertEqual(result.standardError.count, 100000)
+    }
+
+    func testProcessRunnerTerminatesWhenRequested() async throws {
+        let start = Date()
+        let result = try await ProcessRunner().run(
+            executablePath: "/bin/zsh",
+            arguments: ["-c", "while true; do echo tick; sleep 1; done"],
+            shouldTerminate: {
+                Date().timeIntervalSince(start) > 0.5
+            }
+        )
+
+        XCTAssertFalse(result.succeeded)
+        XCTAssertTrue(result.standardOutput.contains("tick"))
     }
 
     func testAppleMusicWrapperInitializationMatchesUpstreamLoginFlow() throws {
@@ -344,6 +518,24 @@ final class GetOudioCoreTests: XCTestCase {
         XCTAssertEqual(RuntimeDependency.ffmpeg.bundledRelativePath, "ffmpeg/ffmpeg")
     }
 
+    func testColimaRuntimeStatusDistinguishesStoppedRuntimeFromMissingRuntime() {
+        let stoppedRuntime = ColimaRuntimeStatus(
+            dockerPath: "/managed/bin/docker",
+            colimaPath: "/managed/bin/colima",
+            isRunning: false,
+            detail: "Colima 未运行，使用 Apple Music 时会在后台启动"
+        )
+        let missingRuntime = ColimaRuntimeStatus(
+            dockerPath: "/managed/bin/docker",
+            colimaPath: nil,
+            isRunning: false,
+            detail: "未安装 Colima"
+        )
+
+        XCTAssertTrue(stoppedRuntime.canStartOnDemand)
+        XCTAssertFalse(missingRuntime.canStartOnDemand)
+    }
+
     func testBundledComponentManagerResolvesExecutableInsideResourceRoot() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         let executable = root.appendingPathComponent(BundledComponent.ncmdump.expectedRelativePath)
@@ -405,6 +597,23 @@ final class GetOudioCoreTests: XCTestCase {
             "https://download.tsi.telecom-paristech.fr/gpac/new_builds/gpac_latest_head_macos.pkg"
         )
         XCTAssertEqual(AppleMusicRuntimeManager.gpacDefaultPackageURL.pathExtension, "pkg")
+    }
+
+    func testAppleMusicRuntimeDownloadArgumentsPreservePartialFileAcrossRetries() {
+        let partial = URL(fileURLWithPath: "/tmp/gpac-runtime.pkg.part")
+        let arguments = AppleMusicRuntimeManager.downloadArguments(
+            url: AppleMusicRuntimeManager.gpacDefaultPackageURL,
+            partial: partial
+        )
+
+        XCTAssertTrue(arguments.contains("--continue-at"))
+        XCTAssertEqual(arguments[arguments.firstIndex(of: "--continue-at")! + 1], "-")
+        XCTAssertFalse(arguments.contains("--retry"))
+        XCTAssertFalse(arguments.contains("--retry-all-errors"))
+        XCTAssertEqual(arguments[arguments.firstIndex(of: "--speed-limit")! + 1], "1")
+        XCTAssertEqual(arguments[arguments.firstIndex(of: "--speed-time")! + 1], "120")
+        XCTAssertEqual(arguments[arguments.firstIndex(of: "--output")! + 1], partial.path)
+        XCTAssertEqual(AppleMusicRuntimeManager.downloadAttemptCount, 9)
     }
 
     func testAppleMusicRuntimeAgentRequestCarriesGPACOverride() throws {

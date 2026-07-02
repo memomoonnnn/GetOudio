@@ -284,6 +284,21 @@ public final class AppleMusicRuntimeAgentClient {
         return try? JSONDecoder().decode(AppleMusicRuntimeProgress.self, from: data)
     }
 
+    public func requestDownloadCancellation() throws {
+        let url = Self.downloadCancellationURL(fileManager: fileManager)
+        try fileManager.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let message = ISO8601DateFormatter().string(from: Date())
+        try Data(message.utf8).write(to: url, options: .atomic)
+    }
+
+    public static func clearDownloadCancellation(fileManager: FileManager = .default) {
+        try? fileManager.removeItem(at: downloadCancellationURL(fileManager: fileManager))
+    }
+
+    public static func isDownloadCancellationRequested(fileManager: FileManager = .default) -> Bool {
+        fileManager.fileExists(atPath: downloadCancellationURL(fileManager: fileManager).path)
+    }
+
     private func send(
         command: String,
         downloadRequest: AppleMusicRuntimeAgentDownloadRequest? = nil,
@@ -347,6 +362,10 @@ public final class AppleMusicRuntimeAgentClient {
 
     public static func progressURL(fileManager: FileManager = .default) -> URL {
         runtimeIPCDirectory(fileManager: fileManager).appendingPathComponent("progress.json")
+    }
+
+    public static func downloadCancellationURL(fileManager: FileManager = .default) -> URL {
+        runtimeIPCDirectory(fileManager: fileManager).appendingPathComponent("download-cancel.flag")
     }
 
     public static func runtimeIPCDirectory(fileManager: FileManager = .default) -> URL {

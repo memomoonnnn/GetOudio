@@ -32,9 +32,14 @@ final class AppModel: ObservableObject {
     private let appleMusicAgentLauncher = AppleMusicRuntimeAgentLauncher.shared
     private let notificationService = NotificationService()
     private let settingsStore = SettingsStore()
+    private let appleMusicShareCoordinator = AppleMusicShareDownloadCoordinator()
     private var isHandlingQueuedJobs = false
     private var lastOpenFileEventSignature: String?
     private var lastOpenFileEventDate = Date.distantPast
+
+    var hasActiveBackgroundWork: Bool {
+        isRunning || isHandlingQueuedJobs
+    }
 
     // MARK: - File input
 
@@ -62,6 +67,8 @@ final class AppModel: ObservableObject {
 
     /// Process queued jobs silently in the background.
     func processQueuedJobsInBackground() async {
+        await notificationService.dispatchPendingNotificationEvents()
+
         guard !isHandlingQueuedJobs, !isRunning else { return }
         isHandlingQueuedJobs = true
         defer { isHandlingQueuedJobs = false }
@@ -74,24 +81,38 @@ final class AppModel: ObservableObject {
         }
 
         do {
+            let eventQueue = try ShareEventQueue()
+            let shareEvents = try eventQueue.drain()
+            await appleMusicShareCoordinator.notifyShareEvents(shareEvents)
+
             let queue = try JobQueue()
             let jobs = try queue.drain()
+            let remainingJobs = await appleMusicShareCoordinator.handleShareAppleMusicJobs(jobs)
             guard !jobs.isEmpty else {
-                statusMessage = "没有待处理的 Finder 任务"
+                statusMessage = shareEvents.isEmpty ? "没有待处理的 Finder 任务" : "已处理分享请求"
                 DiagnosticLog.append("app queued jobs empty")
                 return
             }
+            guard !remainingJobs.isEmpty else {
+                statusMessage = "已处理分享请求"
+                queuedJobs = []
+                return
+            }
 
-            openItems = jobs.map { OpenFileItem(url: $0.fileURL, category: $0.category) }
+            openItems = remainingJobs.map { OpenFileItem(url: $0.fileURL, category: $0.category) }
             lastSummary = nil
 
-            DiagnosticLog.append("app bg run count=\(jobs.count)")
-            await executeAndNotify(jobs)
+            DiagnosticLog.append("app bg run count=\(remainingJobs.count)")
+            await executeAndNotify(remainingJobs)
             queuedJobs = []
         } catch {
             statusMessage = "读取 Finder 任务失败：\(error.localizedDescription)"
             DiagnosticLog.append("app queued jobs failed \(error.localizedDescription)")
         }
+    }
+
+    func processPendingAppleMusicDownload(format: AppleMusicDownloadFormat) async {
+        await appleMusicShareCoordinator.handlePendingAppleMusicDownload(format: format)
     }
 
     func runNCMConversion() async {
@@ -121,7 +142,7 @@ final class AppModel: ObservableObject {
         DiagnosticLog.append("app run finished success=\(summary.successCount) failure=\(summary.failureCount)")
 
         writeConversionLog(summary: summary, jobs: jobs)
-        await notificationService.notifyConversionFinished(summary: summary, jobs: jobs)
+        await notificationService.enqueueAndDispatchConversionFinished(summary: summary, jobs: jobs)
     }
 
     private func execute(_ jobs: [JobRequest]) async -> ConversionSummary {

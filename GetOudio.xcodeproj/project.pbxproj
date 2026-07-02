@@ -8,9 +8,11 @@
 
 /* Begin PBXBuildFile section */
 		043B134B72CE2E5637C11530 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 54C8CCAA28BE713D16820038 /* AppIcon.icon */; };
+		0D20ED1C18BE4AAD9EE1311C /* NotificationEventQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21A23B92406F8183901D2051 /* NotificationEventQueue.swift */; };
 		0E537BFEFE1F926149378250 /* MainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DC8B37B7E84B3163CBDECF5 /* MainView.swift */; };
 		1275386606BDFC5FA9E31D62 /* GetOudioCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 49BFF2708ED14CF05FA36161 /* GetOudioCore.framework */; };
 		1830DE3F5D6F7D43C5BC7923 /* NCMConversionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5824B80AB71359FF2011C2E0 /* NCMConversionService.swift */; };
+		1A5F3EF77607777EBD03007A /* AppleMusicDownloaderProgressParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = C74C0865C3389B8416877170 /* AppleMusicDownloaderProgressParser.swift */; };
 		1E2BA6165226BFEB0082B779 /* SettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 277323E37349CB4F0E1FDA52 /* SettingsStore.swift */; };
 		1E4668A8BDB0F2F9431B77C9 /* SharedContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07E142F989021D191723AA81 /* SharedContainer.swift */; };
 		21909135C633A36CA4A2EBCA /* SettingsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E935EA0A23172AF7AE10BEB /* SettingsViewModel.swift */; };
@@ -25,9 +27,11 @@
 		4033D26C1DA591C4CEBBD6CC /* GetOudioCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 49BFF2708ED14CF05FA36161 /* GetOudioCore.framework */; };
 		4AA1533CE03FF44C8D8BAA04 /* GetOudioShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 43638432B32307180F0DC2FD /* GetOudioShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		4C929C5B97ADD1C16FFF5544 /* GetOudioCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 49BFF2708ED14CF05FA36161 /* GetOudioCore.framework */; };
+		4F96746273724F3BDA14439E /* AppleMusicShareDownloadCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 730C0C3FEA5DE504A597E570 /* AppleMusicShareDownloadCoordinator.swift */; };
 		52BD90AFFCB576C038304959 /* JobProgressPhase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 968CA7DFC4B0913F91E093B7 /* JobProgressPhase.swift */; };
 		553A9EBFF18953287DAE4119 /* FinderSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 260A59E1B28DDC4E921E9C39 /* FinderSync.swift */; };
 		57CB351D3CDE41108F4C1104 /* EventHandlingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 656DE3FECCFED49DE666582F /* EventHandlingView.swift */; };
+		5AF71DB85909A76FAC7A896C /* icon.icns in Resources */ = {isa = PBXBuildFile; fileRef = 4FA258C519946194B2323E80 /* icon.icns */; };
 		627CEBE7088E7474514D3D37 /* GetOudioCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 49BFF2708ED14CF05FA36161 /* GetOudioCore.framework */; };
 		6904F0FB596F94F32435DD49 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A577CA70A6281C42298445E0 /* AppModel.swift */; };
 		6B7F869F53164AF502E07505 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36C3426B683BFDBD6C3083B1 /* AppDelegate.swift */; };
@@ -56,10 +60,14 @@
 		D52AE571DC64BBCF63A285E3 /* MediaExtractionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF11B1E80B3F43236531D6A8 /* MediaExtractionService.swift */; };
 		D543D039DDD7E5350D5A5039 /* GetOudioApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EF54D78BEC6CD9ABA21E0B7 /* GetOudioApp.swift */; };
 		DE31BC37B7DA0B57A7594782 /* AppleMusicDownloadService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BB207379790847AB20869D3 /* AppleMusicDownloadService.swift */; };
+		DE40E324B1CCD0A87D29DBD9 /* ShareEventQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6687368FC009B08493D049E3 /* ShareEventQueue.swift */; };
 		DF7AFFED926401D5521EAF82 /* ShareExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07A513B3F5F8C121D7D1145B /* ShareExtension.swift */; };
+		E1B3141EC2CA92A068CAEA90 /* AppleMusicDownloadMessageFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 931EDAB50D5DFF916FE75A07 /* AppleMusicDownloadMessageFormatter.swift */; };
 		E79AF9E57B6BD2E7727720E1 /* NormalLauncher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7085A54F704E59442755202F /* NormalLauncher.swift */; };
 		ED66D6BAC4CE297C63BFC80D /* GetOudioCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 49BFF2708ED14CF05FA36161 /* GetOudioCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		EF31BFBD5ED668E16699BCD0 /* PendingAppleMusicDownloadStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E499867F50B2D0BF3348EE4 /* PendingAppleMusicDownloadStore.swift */; };
 		FA893849DFEE336E870C6F8F /* Notifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E1B72668091E326BEC5A293 /* Notifications.swift */; };
+		FD34FCD24271E50D12647574 /* AppleMusicShareURLParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 586B2314A6D6C0E188D4EF15 /* AppleMusicShareURLParser.swift */; };
 		FF1A15EA50B6C0F50D821207 /* GetOudioCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 49BFF2708ED14CF05FA36161 /* GetOudioCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
@@ -179,6 +187,7 @@
 		1435730CBD8D1117C241A57D /* HeadlessRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeadlessRunner.swift; sourceTree = "<group>"; };
 		1C389A0C8BA4A129E65FAEA3 /* ColimaDockerRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColimaDockerRuntime.swift; sourceTree = "<group>"; };
 		218718BFCE1EB8C4B99AED9F /* Dependency.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Dependency.swift; sourceTree = "<group>"; };
+		21A23B92406F8183901D2051 /* NotificationEventQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationEventQueue.swift; sourceTree = "<group>"; };
 		24D6241F048302C55FF222E9 /* AppleMusicRuntimeAgentLauncher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleMusicRuntimeAgentLauncher.swift; sourceTree = "<group>"; };
 		260A59E1B28DDC4E921E9C39 /* FinderSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinderSync.swift; sourceTree = "<group>"; };
 		277323E37349CB4F0E1FDA52 /* SettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsStore.swift; sourceTree = "<group>"; };
@@ -191,12 +200,16 @@
 		4AD5E91E2A5C903C19F28C4E /* ffmpeg */ = {isa = PBXFileReference; lastKnownFileType = folder; name = ffmpeg; path = GetOudio/Resources/ThirdParty/ffmpeg; sourceTree = SOURCE_ROOT; };
 		4BF24B8150C8DA146AEE6312 /* GetOudioCoreTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GetOudioCoreTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		4EF54D78BEC6CD9ABA21E0B7 /* GetOudioApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GetOudioApp.swift; sourceTree = "<group>"; };
+		4FA258C519946194B2323E80 /* icon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = icon.icns; sourceTree = "<group>"; };
 		54C8CCAA28BE713D16820038 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; name = AppIcon.icon; path = GetOudio/Resources/AppIcon.icon; sourceTree = SOURCE_ROOT; };
 		5824B80AB71359FF2011C2E0 /* NCMConversionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NCMConversionService.swift; sourceTree = "<group>"; };
+		586B2314A6D6C0E188D4EF15 /* AppleMusicShareURLParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleMusicShareURLParser.swift; sourceTree = "<group>"; };
 		6443C0992771CFEA49338C37 /* KeychainService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainService.swift; sourceTree = "<group>"; };
 		656DE3FECCFED49DE666582F /* EventHandlingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventHandlingView.swift; sourceTree = "<group>"; };
+		6687368FC009B08493D049E3 /* ShareEventQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareEventQueue.swift; sourceTree = "<group>"; };
 		6BE0DC2B93928C094187FC44 /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
 		7085A54F704E59442755202F /* NormalLauncher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NormalLauncher.swift; sourceTree = "<group>"; };
+		730C0C3FEA5DE504A597E570 /* AppleMusicShareDownloadCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleMusicShareDownloadCoordinator.swift; sourceTree = "<group>"; };
 		74D3AADF75639B9295A0B4BF /* AppConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConstants.swift; sourceTree = "<group>"; };
 		7E935EA0A23172AF7AE10BEB /* SettingsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsViewModel.swift; sourceTree = "<group>"; };
 		7F29A548AD0635BE90D34456 /* JobQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JobQueue.swift; sourceTree = "<group>"; };
@@ -206,6 +219,8 @@
 		8B40B7032B5BBB584D60D5ED /* AppleMusicSetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleMusicSetupView.swift; sourceTree = "<group>"; };
 		8D9341EFFB773C117429DF56 /* ProcessRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessRunner.swift; sourceTree = "<group>"; };
 		8E1B72668091E326BEC5A293 /* Notifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Notifications.swift; sourceTree = "<group>"; };
+		8E499867F50B2D0BF3348EE4 /* PendingAppleMusicDownloadStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendingAppleMusicDownloadStore.swift; sourceTree = "<group>"; };
+		931EDAB50D5DFF916FE75A07 /* AppleMusicDownloadMessageFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleMusicDownloadMessageFormatter.swift; sourceTree = "<group>"; };
 		944D0886B6ADDE240A0D8BFB /* apple-music-downloader */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "apple-music-downloader"; path = "GetOudio/Resources/ThirdParty/apple-music-downloader"; sourceTree = SOURCE_ROOT; };
 		968CA7DFC4B0913F91E093B7 /* JobProgressPhase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JobProgressPhase.swift; sourceTree = "<group>"; };
 		96C485724CAA57FDA4F744D0 /* ConversionPreset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversionPreset.swift; sourceTree = "<group>"; };
@@ -215,6 +230,7 @@
 		B9C68E3D12622013AF3CB161 /* AppleMusicRuntimeManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleMusicRuntimeManager.swift; sourceTree = "<group>"; };
 		C43975B92D52741C9A75DC77 /* GetOudioCoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GetOudioCoreTests.swift; sourceTree = "<group>"; };
 		C63E67A469198DCFAAEF52A5 /* MainSettingsPages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainSettingsPages.swift; sourceTree = "<group>"; };
+		C74C0865C3389B8416877170 /* AppleMusicDownloaderProgressParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleMusicDownloaderProgressParser.swift; sourceTree = "<group>"; };
 		DCD1166F4ECCEF206816E275 /* AppleMusicWrapperRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleMusicWrapperRuntime.swift; sourceTree = "<group>"; };
 		DF11B1E80B3F43236531D6A8 /* MediaExtractionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaExtractionService.swift; sourceTree = "<group>"; };
 		E71B1DAE2F34CAAE4261B2F0 /* GetOudioFinderExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = GetOudioFinderExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -367,6 +383,7 @@
 			isa = PBXGroup;
 			children = (
 				6BE0DC2B93928C094187FC44 /* .gitkeep */,
+				4FA258C519946194B2323E80 /* icon.icns */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -374,9 +391,12 @@
 		64FBBF7F800201068EC00DBE /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				C74C0865C3389B8416877170 /* AppleMusicDownloaderProgressParser.swift */,
+				931EDAB50D5DFF916FE75A07 /* AppleMusicDownloadMessageFormatter.swift */,
 				0BB207379790847AB20869D3 /* AppleMusicDownloadService.swift */,
 				323FD01C817E384689C4EAA8 /* AppleMusicRuntimeAgentClient.swift */,
 				B9C68E3D12622013AF3CB161 /* AppleMusicRuntimeManager.swift */,
+				586B2314A6D6C0E188D4EF15 /* AppleMusicShareURLParser.swift */,
 				DCD1166F4ECCEF206816E275 /* AppleMusicWrapperRuntime.swift */,
 				FCE6C13E6BA94A818DA3068B /* AudioConversionService.swift */,
 				1C389A0C8BA4A129E65FAEA3 /* ColimaDockerRuntime.swift */,
@@ -384,9 +404,12 @@
 				7F29A548AD0635BE90D34456 /* JobQueue.swift */,
 				DF11B1E80B3F43236531D6A8 /* MediaExtractionService.swift */,
 				5824B80AB71359FF2011C2E0 /* NCMConversionService.swift */,
+				21A23B92406F8183901D2051 /* NotificationEventQueue.swift */,
 				A31E47AC388151B7BA99BFE6 /* NotificationService.swift */,
+				8E499867F50B2D0BF3348EE4 /* PendingAppleMusicDownloadStore.swift */,
 				8D9341EFFB773C117429DF56 /* ProcessRunner.swift */,
 				277323E37349CB4F0E1FDA52 /* SettingsStore.swift */,
+				6687368FC009B08493D049E3 /* ShareEventQueue.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -415,6 +438,7 @@
 			isa = PBXGroup;
 			children = (
 				24D6241F048302C55FF222E9 /* AppleMusicRuntimeAgentLauncher.swift */,
+				730C0C3FEA5DE504A597E570 /* AppleMusicShareDownloadCoordinator.swift */,
 				A577CA70A6281C42298445E0 /* AppModel.swift */,
 				6443C0992771CFEA49338C37 /* KeychainService.swift */,
 				7E935EA0A23172AF7AE10BEB /* SettingsViewModel.swift */,
@@ -586,6 +610,7 @@
 			buildConfigurationList = 5AA9C2B80599F82D3ACB70E4 /* Build configuration list for PBXNativeTarget "GetOudioShareExtension" */;
 			buildPhases = (
 				962F0DA33D9488F847E62E90 /* Sources */,
+				0F266B7B03663F9B7EC402C4 /* Resources */,
 				E2439A25E293C1207420D9F0 /* Frameworks */,
 			);
 			buildRules = (
@@ -688,6 +713,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		0F266B7B03663F9B7EC402C4 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5AF71DB85909A76FAC7A896C /* icon.icns in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
@@ -727,9 +760,12 @@
 			buildActionMask = 2147483647;
 			files = (
 				7E4140D91A905E5B8076794C /* AppConstants.swift in Sources */,
+				E1B3141EC2CA92A068CAEA90 /* AppleMusicDownloadMessageFormatter.swift in Sources */,
 				DE31BC37B7DA0B57A7594782 /* AppleMusicDownloadService.swift in Sources */,
+				1A5F3EF77607777EBD03007A /* AppleMusicDownloaderProgressParser.swift in Sources */,
 				BA2B129FF3760A61CFEEF0E2 /* AppleMusicRuntimeAgentClient.swift in Sources */,
 				9592ABD5238190A0FECF2673 /* AppleMusicRuntimeManager.swift in Sources */,
+				FD34FCD24271E50D12647574 /* AppleMusicShareURLParser.swift in Sources */,
 				3588567EC971BABD0CD8BDEE /* AppleMusicWrapperRuntime.swift in Sources */,
 				AD82AD58BE8240DDF4201215 /* AudioConversionService.swift in Sources */,
 				84E264F729CDCBA406A0C041 /* ColimaDockerRuntime.swift in Sources */,
@@ -743,9 +779,12 @@
 				A8AF384073CDDFCAADE1383D /* JobRequest.swift in Sources */,
 				D52AE571DC64BBCF63A285E3 /* MediaExtractionService.swift in Sources */,
 				1830DE3F5D6F7D43C5BC7923 /* NCMConversionService.swift in Sources */,
+				0D20ED1C18BE4AAD9EE1311C /* NotificationEventQueue.swift in Sources */,
 				A284874C51E3738AEDC9BC65 /* NotificationService.swift in Sources */,
+				EF31BFBD5ED668E16699BCD0 /* PendingAppleMusicDownloadStore.swift in Sources */,
 				7E091D7050D2D90DC030B7FA /* ProcessRunner.swift in Sources */,
 				1E2BA6165226BFEB0082B779 /* SettingsStore.swift in Sources */,
+				DE40E324B1CCD0A87D29DBD9 /* ShareEventQueue.swift in Sources */,
 				1E4668A8BDB0F2F9431B77C9 /* SharedContainer.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -758,6 +797,7 @@
 				6904F0FB596F94F32435DD49 /* AppModel.swift in Sources */,
 				7ED8DE418C76BCDE5276D98A /* AppleMusicRuntimeAgentLauncher.swift in Sources */,
 				B5F80E9EFB10E160D4C82A8C /* AppleMusicSetupView.swift in Sources */,
+				4F96746273724F3BDA14439E /* AppleMusicShareDownloadCoordinator.swift in Sources */,
 				28D57F1082E7B71F53AB415F /* DashboardView.swift in Sources */,
 				57CB351D3CDE41108F4C1104 /* EventHandlingView.swift in Sources */,
 				D543D039DDD7E5350D5A5039 /* GetOudioApp.swift in Sources */,
@@ -942,6 +982,7 @@
 				CODE_SIGN_ENTITLEMENTS = GetOudioShareExtension/GetOudioShareExtension.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
 				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = GetOudioShareExtension/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -1085,6 +1126,7 @@
 				CODE_SIGN_ENTITLEMENTS = GetOudioShareExtension/GetOudioShareExtension.entitlements;
 				COMBINE_HIDPI_IMAGES = YES;
 				ENABLE_APP_SANDBOX = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
 				INFOPLIST_FILE = GetOudioShareExtension/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

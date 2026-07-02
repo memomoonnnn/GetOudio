@@ -9,6 +9,8 @@ import GetOudioCore
 //   • Normal launch → floating panel window appears
 //   • Extension trigger → no window, jobs run silently → notification → exit
 
+private let extensionLaunchMarkerTTL: TimeInterval = 120
+
 let isHeadless: Bool = {
     guard let defaults = UserDefaults(suiteName: AppConstants.appGroupIdentifier) else {
         return false
@@ -20,7 +22,7 @@ let isHeadless: Bool = {
     }
     let timestamp = defaults.double(forKey: AppConstants.extensionLaunchTimestampKey)
     let now = Date().timeIntervalSince1970
-    return timestamp > 0 && (now - timestamp) < 10
+    return timestamp > 0 && (now - timestamp) < extensionLaunchMarkerTTL
 }()
 
 if isHeadless {

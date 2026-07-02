@@ -3,20 +3,64 @@ import Foundation
 import GetOudioCore
 import UniformTypeIdentifiers
 
-final class ShareExtension: NSObject, NSExtensionRequestHandling {
-    func beginRequest(with context: NSExtensionContext) {
+final class ShareExtension: NSViewController {
+    private var hasStarted = false
+
+    override func loadView() {
+        let progressIndicator = NSProgressIndicator()
+        progressIndicator.style = .spinning
+        progressIndicator.startAnimation(nil)
+
+        let label = NSTextField(labelWithString: "正在发送到 Get Oudio…")
+        label.alignment = .center
+
+        let stackView = NSStackView(views: [progressIndicator, label])
+        stackView.orientation = .vertical
+        stackView.alignment = .centerX
+        stackView.spacing = 12
+        stackView.translatesAutoresizingMaskIntoConstraints = false
+
+        let container = NSView()
+        container.addSubview(stackView)
+        NSLayoutConstraint.activate([
+            container.widthAnchor.constraint(equalToConstant: 280),
+            container.heightAnchor.constraint(equalToConstant: 120),
+            stackView.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+            stackView.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+        ])
+        view = container
+
+        Task { @MainActor in
+            guard !hasStarted, let context = extensionContext else {
+                return
+            }
+            hasStarted = true
+            process(context)
+        }
+    }
+
+    private func process(_ context: NSExtensionContext) {
         let group = DispatchGroup()
         let lock = NSLock()
         var urls: [URL] = []
 
         for item in context.inputItems.compactMap({ $0 as? NSExtensionItem }) {
+            if let text = item.attributedContentText?.string {
+                urls.append(contentsOf: Self.urls(in: text))
+            }
+
             for provider in item.attachments ?? [] {
+                DiagnosticLog.append(
+                    "[ShareExtension] registered types: \(provider.registeredTypeIdentifiers.joined(separator: ", "))"
+                )
+
                 if provider.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
                     group.enter()
                     provider.loadItem(forTypeIdentifier: UTType.url.identifier, options: nil) { item, _ in
-                        if let url = Self.url(from: item) {
+                        let loadedURLs = Self.urls(from: item)
+                        if !loadedURLs.isEmpty {
                             lock.lock()
-                            urls.append(url)
+                            urls.append(contentsOf: loadedURLs)
                             lock.unlock()
                         }
                         group.leave()
@@ -24,9 +68,10 @@ final class ShareExtension: NSObject, NSExtensionRequestHandling {
                 } else if provider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier) {
                     group.enter()
                     provider.loadItem(forTypeIdentifier: UTType.plainText.identifier, options: nil) { item, _ in
-                        if let url = Self.url(from: item) {
+                        let loadedURLs = Self.urls(from: item)
+                        if !loadedURLs.isEmpty {
                             lock.lock()
-                            urls.append(url)
+                            urls.append(contentsOf: loadedURLs)
                             lock.unlock()
                         }
                         group.leave()
@@ -35,7 +80,10 @@ final class ShareExtension: NSObject, NSExtensionRequestHandling {
             }
         }
 
-        group.notify(queue: .global(qos: .userInitiated)) {
+        group.notify(queue: .main) {
+            DiagnosticLog.append(
+                "[ShareExtension] extracted URLs: \(urls.map(\.absoluteString).joined(separator: ", "))"
+            )
             self.enqueue(urls)
             self.openContainingApp()
             context.completeRequest(returningItems: [], completionHandler: nil)
@@ -43,51 +91,64 @@ final class ShareExtension: NSObject, NSExtensionRequestHandling {
     }
 
     private func enqueue(_ urls: [URL]) {
-        let jobs = urls
-            .filter { FileCategory.classify($0) == .appleMusic }
+        let supportedURLs = AppleMusicShareURLParser.supportedURLs(from: urls)
+        let jobs = supportedURLs
             .map { JobRequest(fileURL: $0, category: .appleMusic, operation: .appleMusicDownload(nil), source: .shareExtension) }
 
-        guard !jobs.isEmpty else {
-            return
-        }
-
         do {
-            let queue = try JobQueue()
-            try queue.enqueue(jobs)
+            if !jobs.isEmpty {
+                let queue = try JobQueue()
+                try queue.enqueue(jobs)
+            }
+            if !urls.isEmpty, supportedURLs.isEmpty {
+                let eventQueue = try ShareEventQueue()
+                try eventQueue.enqueue([
+                    ShareEvent(kind: .unsupportedDownloadSource, urls: urls)
+                ])
+            }
         } catch {
             NSLog("Get Oudio Share extension failed to enqueue jobs: \(error.localizedDescription)")
         }
     }
 
     private func openContainingApp() {
-        guard let url = URL(string: "\(AppConstants.appURLScheme)://run-queued") else {
-            return
-        }
-
-        // Signal launch source before opening app
         if let sharedDefaults = UserDefaults(suiteName: AppConstants.appGroupIdentifier) {
             sharedDefaults.set(LaunchSource.shareExtension.rawValue, forKey: AppConstants.extensionLaunchSourceKey)
             sharedDefaults.set(Date().timeIntervalSince1970, forKey: AppConstants.extensionLaunchTimestampKey)
             sharedDefaults.synchronize()
         }
 
-        NSWorkspace.shared.open(url)
+        guard let runQueuedURL = URL(string: "\(AppConstants.appURLScheme)://run-queued") else {
+            return
+        }
+        NSWorkspace.shared.open(runQueuedURL)
     }
 
-    private static func url(from item: NSSecureCoding?) -> URL? {
+    private static func urls(from item: NSSecureCoding?) -> [URL] {
         if let url = item as? URL {
-            return url
+            return [url]
         }
 
         if let string = item as? String {
-            return URL(string: string.trimmingCharacters(in: .whitespacesAndNewlines))
+            return urls(in: string)
+        }
+
+        if let attributedString = item as? NSAttributedString {
+            return urls(in: attributedString.string)
         }
 
         if let data = item as? Data, let string = String(data: data, encoding: .utf8) {
-            return URL(string: string.trimmingCharacters(in: .whitespacesAndNewlines))
+            return urls(in: string)
         }
 
-        return nil
+        return []
+    }
+
+    private static func urls(in text: String) -> [URL] {
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else {
+            return []
+        }
+        return detector.matches(in: text, options: [], range: range).compactMap(\.url)
     }
 }
-

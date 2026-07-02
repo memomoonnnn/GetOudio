@@ -12,6 +12,8 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
 
     private var appModel: AppModel!
     private var mainWindow: NSWindow?
+    private let notificationService = NotificationService()
+    private var activeNotificationResponses = 0
 
     // MARK: - Entry point
 
@@ -42,7 +44,8 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
         UNUserNotificationCenter.current().delegate = self
 
         Task {
-            await NotificationService().requestAuthorization()
+            await notificationService.requestAuthorization()
+            await notificationService.dispatchPendingNotificationEvents()
         }
 
         // Build the main window
@@ -73,8 +76,10 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
 
     func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool { false }
 
-    /// 当所有窗口都关闭后自动退出应用
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+    /// 当所有窗口都关闭后自动退出应用；通知 action 触发的后台任务运行时先保持进程存活。
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        activeNotificationResponses == 0 && !appModel.hasActiveBackgroundWork
+    }
 
     func application(_ sender: NSApplication, openFiles filenames: [String]) {
         let urls = filenames.map { URL(fileURLWithPath: $0) }
@@ -104,6 +109,7 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
               url.scheme == AppConstants.appURLScheme else { return }
 
         Task {
+            await notificationService.dispatchPendingNotificationEvents()
             await appModel.processQueuedJobsInBackground()
         }
     }
@@ -116,5 +122,43 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
         completionHandler([.banner, .sound])
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        if let copyInfo = notificationService.copyInfo(for: response) {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(copyInfo, forType: .string)
+            completionHandler()
+            return
+        }
+
+        guard let format = notificationService.appleMusicFormat(for: response.actionIdentifier) else {
+            completionHandler()
+            return
+        }
+
+        beginNotificationResponse()
+        Task { @MainActor in
+            await appModel.processPendingAppleMusicDownload(format: format)
+            completionHandler()
+            endNotificationResponse()
+        }
+    }
+
+    private func beginNotificationResponse() {
+        activeNotificationResponses += 1
+        DiagnosticLog.append("normal notification response started active=\(activeNotificationResponses)")
+    }
+
+    private func endNotificationResponse() {
+        activeNotificationResponses = max(0, activeNotificationResponses - 1)
+        DiagnosticLog.append("normal notification response finished active=\(activeNotificationResponses)")
+        if activeNotificationResponses == 0, mainWindow?.isVisible != true {
+            NSApp.terminate(nil)
+        }
     }
 }

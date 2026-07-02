@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 public struct ProcessResult: Equatable, Sendable {
@@ -8,6 +9,11 @@ public struct ProcessResult: Equatable, Sendable {
     public var standardError: String
 
     public var succeeded: Bool { exitCode == 0 }
+}
+
+public enum ProcessOutputStream: Sendable {
+    case standardOutput
+    case standardError
 }
 
 public enum ProcessRunnerError: Error, LocalizedError {
@@ -27,7 +33,14 @@ public enum ProcessRunnerError: Error, LocalizedError {
 public final class ProcessRunner {
     public init() {}
 
-    public func run(executablePath: String, arguments: [String], currentDirectoryURL: URL? = nil, environment: [String: String]? = nil) async throws -> ProcessResult {
+    public func run(
+        executablePath: String,
+        arguments: [String],
+        currentDirectoryURL: URL? = nil,
+        environment: [String: String]? = nil,
+        outputHandler: (@Sendable (ProcessOutputStream, String) -> Void)? = nil,
+        shouldTerminate: (@Sendable () -> Bool)? = nil
+    ) async throws -> ProcessResult {
         try await Task.detached(priority: .utility) {
             let fileManager = FileManager.default
 
@@ -78,22 +91,124 @@ public final class ProcessRunner {
                 DiagnosticLog.append("[ProcessRunner] process.run() 失败：domain=\(nsError.domain) code=\(nsError.code) description=\(nsError.localizedDescription) path=\(resolvedPath)")
                 throw error
             }
-            process.waitUntilExit()
 
-            let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
-            let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
+            let outputData = LockedData()
+            let errorData = LockedData()
+            let readGroup = DispatchGroup()
+            let terminationState = LockedTerminationState()
+            let terminationTimer = Self.makeTerminationTimer(
+                process: process,
+                executablePath: resolvedPath,
+                shouldTerminate: shouldTerminate,
+                state: terminationState
+            )
+            defer { terminationTimer?.cancel() }
+
+            readGroup.enter()
+            outputPipe.fileHandleForReading.readabilityHandler = { handle in
+                let data = handle.availableData
+                if data.isEmpty {
+                    handle.readabilityHandler = nil
+                    readGroup.leave()
+                    return
+                }
+                outputData.append(data)
+                if let text = String(data: data, encoding: .utf8), !text.isEmpty {
+                    outputHandler?(.standardOutput, text)
+                }
+            }
+
+            readGroup.enter()
+            errorPipe.fileHandleForReading.readabilityHandler = { handle in
+                let data = handle.availableData
+                if data.isEmpty {
+                    handle.readabilityHandler = nil
+                    readGroup.leave()
+                    return
+                }
+                errorData.append(data)
+                if let text = String(data: data, encoding: .utf8), !text.isEmpty {
+                    outputHandler?(.standardError, text)
+                }
+            }
+
+            process.waitUntilExit()
+            readGroup.wait()
 
             return ProcessResult(
                 executableURL: executableURL,
                 arguments: arguments,
                 exitCode: process.terminationStatus,
-                standardOutput: String(data: outputData, encoding: .utf8) ?? "",
-                standardError: String(data: errorData, encoding: .utf8) ?? ""
+                standardOutput: outputData.stringValue,
+                standardError: errorData.stringValue
             )
         }.value
     }
 
     public func runShell(_ command: String) async throws -> ProcessResult {
         try await run(executablePath: "/bin/zsh", arguments: ["-lc", command])
+    }
+
+    private static func makeTerminationTimer(
+        process: Process,
+        executablePath: String,
+        shouldTerminate: (@Sendable () -> Bool)?,
+        state: LockedTerminationState
+    ) -> DispatchSourceTimer? {
+        guard let shouldTerminate else { return nil }
+
+        let queue = DispatchQueue(label: "com.shengjiacheng.GetOudio.process-termination")
+        let timer = DispatchSource.makeTimerSource(queue: queue)
+        timer.schedule(deadline: .now() + .milliseconds(300), repeating: .milliseconds(300))
+        timer.setEventHandler {
+            guard shouldTerminate() else { return }
+            if let elapsed = state.elapsedSinceFirstSignal, elapsed > 5 {
+                Darwin.kill(process.processIdentifier, SIGKILL)
+                return
+            }
+            guard state.markFirstSignalIfNeeded() else { return }
+            DiagnosticLog.append("[ProcessRunner] 收到终止请求，正在停止：\(executablePath)")
+            process.terminate()
+        }
+        timer.resume()
+        return timer
+    }
+}
+
+private final class LockedData: @unchecked Sendable {
+    private let lock = NSLock()
+    private var data = Data()
+
+    func append(_ newData: Data) {
+        lock.lock()
+        data.append(newData)
+        lock.unlock()
+    }
+
+    var stringValue: String {
+        lock.lock()
+        let value = String(data: data, encoding: .utf8) ?? ""
+        lock.unlock()
+        return value
+    }
+}
+
+private final class LockedTerminationState: @unchecked Sendable {
+    private let lock = NSLock()
+    private var firstSignalDate: Date?
+
+    var elapsedSinceFirstSignal: TimeInterval? {
+        lock.lock()
+        let elapsed = firstSignalDate.map { Date().timeIntervalSince($0) }
+        lock.unlock()
+        return elapsed
+    }
+
+    func markFirstSignalIfNeeded() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard firstSignalDate == nil else { return false }
+        firstSignalDate = Date()
+        return true
     }
 }

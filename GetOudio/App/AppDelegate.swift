@@ -42,4 +42,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     ) {
         completionHandler([.banner, .list, .sound])
     }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        if let copyInfo = NotificationService().copyInfo(for: response) {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(copyInfo, forType: .string)
+        }
+        completionHandler()
+    }
 }

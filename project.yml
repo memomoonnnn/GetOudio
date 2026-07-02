@@ -195,12 +195,18 @@ targets:
     info:
       path: GetOudioShareExtension/Info.plist
       properties:
+        CFBundleDisplayName: Get Oudio
+        CFBundleIconFile: icon
         NSExtension:
           NSExtensionAttributes:
             NSExtensionActivationRule:
+              NSExtensionActivationDictionaryVersion: 2
+              NSExtensionActivationSupportsAttachmentsWithMaxCount: 999
+              NSExtensionActivationSupportsFileWithMaxCount: 999
+              NSExtensionActivationSupportsImageWithMaxCount: 999
+              NSExtensionActivationSupportsMovieWithMaxCount: 999
               NSExtensionActivationSupportsText: true
               NSExtensionActivationSupportsWebURLWithMaxCount: 1
-            NSExtensionVersion: "1.0"
           NSExtensionPointIdentifier: com.apple.share-services
           NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareExtension
     entitlements:
@@ -213,6 +219,7 @@ targets:
     settings:
       base:
         ENABLE_APP_SANDBOX: YES
+        ENABLE_HARDENED_RUNTIME: YES
         PRODUCT_BUNDLE_IDENTIFIER: com.shengjiacheng.GetOudio.ShareExtension
         PRODUCT_NAME: GetOudioShareExtension
 

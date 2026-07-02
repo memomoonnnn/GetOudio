@@ -80,6 +80,7 @@ public final class AppleMusicRuntimeManager {
     public static let gpacDefaultPackageURL = URL(
         string: "https://download.tsi.telecom-paristech.fr/gpac/new_builds/gpac_latest_head_macos.pkg"
     )!
+    static let downloadAttemptCount = 9
 
     /// Default root directory for the Apple Music runtime helper.
     ///
@@ -106,6 +107,7 @@ public final class AppleMusicRuntimeManager {
     private let resourceRoot: URL?
     private let gpacPackageURLOverride: String?
     private let wrapperImageInstaller: WrapperImageInstaller?
+    private let writesSharedProgress: Bool
 
     public let rootURL: URL
     public let colimaHomeDirectory: URL
@@ -124,6 +126,7 @@ public final class AppleMusicRuntimeManager {
     ) {
         self.rootURL = rootURL
         let usesDefaultRoot = rootURL.standardizedFileURL == Self.defaultRootURL.standardizedFileURL
+        self.writesSharedProgress = usesDefaultRoot
         self.colimaHomeDirectory = colimaHomeDirectory
             ?? (usesDefaultRoot
                 ? Self.defaultVMStateRootURL.appendingPathComponent("Colima", isDirectory: true)
@@ -605,33 +608,35 @@ public final class AppleMusicRuntimeManager {
             DiagnosticLog.append("[Install] 从 \(existingBytes) bytes 继续下载：\(partial.path)")
         }
 
-        let result = try await runner.run(
-            executablePath: "/usr/bin/curl",
-            arguments: [
-                "--location",
-                "--fail",
-                "--silent",
-                "--show-error",
-                "--retry", "8",
-                "--retry-delay", "2",
-                "--retry-all-errors",
-                "--continue-at", "-",
-                "--connect-timeout", "30",
-                "--speed-limit", "1024",
-                "--speed-time", "60",
-                "--output", partial.path,
-                url.absoluteString
-            ]
-        )
-        guard result.succeeded else {
-            let partialBytes = (try? partial.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+        var lastError = "下载中断：\(url.absoluteString)"
+        for attempt in 1...Self.downloadAttemptCount {
+            let bytesBeforeAttempt = (try? partial.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+            let result = try await runner.run(
+                executablePath: "/usr/bin/curl",
+                arguments: Self.downloadArguments(url: url, partial: partial)
+            )
+            let bytesAfterAttempt = (try? partial.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+
+            guard bytesAfterAttempt >= bytesBeforeAttempt else {
+                throw ProcessRunnerError.processFailed(
+                    "下载缓存异常缩小：\(bytesBeforeAttempt) → \(bytesAfterAttempt) bytes"
+                )
+            }
+            if result.succeeded {
+                break
+            }
+
+            lastError = result.standardError.isEmpty ? lastError : result.standardError
             DiagnosticLog.append(
-                "[Install] 下载中断 exit=\(result.exitCode) partial=\(partialBytes) "
+                "[Install] 下载中断 attempt=\(attempt)/\(Self.downloadAttemptCount) "
+                    + "exit=\(result.exitCode) partial=\(bytesAfterAttempt) "
+                    + "advanced=\(bytesAfterAttempt - bytesBeforeAttempt) "
                     + "stderr=\(trimForLog(result.standardError))"
             )
-            throw ProcessRunnerError.processFailed(
-                result.standardError.isEmpty ? "下载中断：\(url.absoluteString)" : result.standardError
-            )
+            guard attempt < Self.downloadAttemptCount else {
+                throw ProcessRunnerError.processFailed(lastError)
+            }
+            try await Task.sleep(for: .seconds(2))
         }
 
         let fileSize = (try? partial.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
@@ -642,6 +647,21 @@ public final class AppleMusicRuntimeManager {
         try fileManager.moveItem(at: partial, to: destination)
         DiagnosticLog.append("[Install] 下载完成：\(name) (\(fileSize) bytes)")
         return destination
+    }
+
+    static func downloadArguments(url: URL, partial: URL) -> [String] {
+        [
+            "--location",
+            "--fail",
+            "--silent",
+            "--show-error",
+            "--continue-at", "-",
+            "--connect-timeout", "30",
+            "--speed-limit", "1",
+            "--speed-time", "120",
+            "--output", partial.path,
+            url.absoluteString
+        ]
     }
 
     private func verifyExecutable(_ url: URL, arguments: [String]) async throws {
@@ -803,6 +823,10 @@ public final class AppleMusicRuntimeManager {
         isActive: Bool,
         wrapperStatus: ManagedDockerImageStatus? = nil
     ) {
+        guard writesSharedProgress else {
+            return
+        }
+
         let progress = AppleMusicRuntimeProgress(
             message: message,
             completedUnitCount: completed,

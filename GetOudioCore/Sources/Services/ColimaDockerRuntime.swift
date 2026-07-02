@@ -12,6 +12,13 @@ public struct ColimaRuntimeStatus: Equatable, Sendable {
         self.isRunning = isRunning
         self.detail = detail
     }
+
+    public var canStartOnDemand: Bool {
+        dockerPath != nil
+            && colimaPath != nil
+            && !isRunning
+            && detail.localizedCaseInsensitiveContains("Colima 未运行")
+    }
 }
 
 public final class ColimaDockerRuntime {

@@ -127,9 +127,19 @@ public final class DockerImageManager {
         return statuses
     }
 
-    public func check(_ image: ManagedDockerImage) async -> ManagedDockerImageStatus {
+    public func check(
+        _ image: ManagedDockerImage,
+        assumeAvailableWhenRuntimeStopped: Bool = false
+    ) async -> ManagedDockerImageStatus {
         let runtimeStatus = await runtime.check()
         guard runtimeStatus.isRunning, let dockerPath = runtimeStatus.dockerPath else {
+            if assumeAvailableWhenRuntimeStopped, runtimeStatus.canStartOnDemand {
+                return ManagedDockerImageStatus(
+                    image: image,
+                    isAvailable: true,
+                    detail: "\(image.imageName) 已随 Apple Music 运行时安装；Colima 当前未运行，下载时会在后台启动后复查"
+                )
+            }
             return ManagedDockerImageStatus(image: image, isAvailable: false, detail: runtimeStatus.detail)
         }
 

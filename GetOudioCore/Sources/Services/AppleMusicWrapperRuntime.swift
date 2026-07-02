@@ -4,6 +4,7 @@ import Foundation
 public final class AppleMusicWrapperRuntime {
     public let image: ManagedDockerImage = .appleMusicWrapper
     static let loginContainerName = "get-oudio-wrapper-login"
+    static let serverContainerName = "get-oudio-wrapper"
     private let runner: ProcessRunner
     private let runtime: ColimaDockerRuntime
     private let dockerImageManager: DockerImageManager
@@ -341,16 +342,38 @@ public final class AppleMusicWrapperRuntime {
         let dockerPath = try await runtime.ensureRunning()
         let inspect = try await runner.run(
             executablePath: dockerPath,
-            arguments: runtime.dockerArguments(["inspect", "-f", "{{.State.Running}}", "get-oudio-wrapper"]),
+            arguments: runtime.dockerArguments([
+                "inspect",
+                "-f",
+                "{{.State.Status}}",
+                Self.serverContainerName
+            ]),
             environment: runtime.runtimeEnvironment
         )
-        if inspect.succeeded && inspect.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines) == "true" {
-            return
+        if inspect.succeeded {
+            let status = inspect.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines)
+            if status == "running" {
+                return
+            }
+
+            let start = try await runner.run(
+                executablePath: dockerPath,
+                arguments: runtime.dockerArguments(["start", Self.serverContainerName]),
+                environment: runtime.runtimeEnvironment
+            )
+            if start.succeeded {
+                DiagnosticLog.append("[WrapperServer] existing container started name=\(Self.serverContainerName) previousStatus=\(status)")
+                return
+            }
+            DiagnosticLog.append(
+                "[WrapperServer] existing container start failed name=\(Self.serverContainerName) "
+                    + "previousStatus=\(status) stderr=\(sanitized(start.standardError))"
+            )
         }
 
         _ = try? await runner.run(
             executablePath: dockerPath,
-            arguments: runtime.dockerArguments(["rm", "-f", "get-oudio-wrapper"]),
+            arguments: runtime.dockerArguments(["rm", "-f", Self.serverContainerName]),
             environment: runtime.runtimeEnvironment
         )
         let runtimeDirectory = try runtimeDirectory()
@@ -365,7 +388,7 @@ public final class AppleMusicWrapperRuntime {
                 "run", "-d",
                 "--privileged",
                 "--platform", image.platform,
-                "--name", "get-oudio-wrapper",
+                "--name", Self.serverContainerName,
                 "-v", mount,
                 "-p", "10020:10020",
                 "-p", "20020:20020",

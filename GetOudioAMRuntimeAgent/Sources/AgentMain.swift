@@ -39,7 +39,9 @@ enum GetOudioAMRuntimeAgent {
                     settingsStore: SettingsStore(),
                     useAgent: false
                 )
-                try write(await service.download(request.jobs))
+                let summary = await service.download(request.jobs)
+                persistShareDownloadNotificationIfNeeded(summary: summary, jobs: request.jobs)
+                try write(summary)
             case "initialize":
                 let request: AppleMusicRuntimeAgentInitializeRequest = try readRequest(options)
                 let service = AppleMusicDownloadService(
@@ -134,9 +136,11 @@ enum GetOudioAMRuntimeAgent {
                 guard let downloadRequest = request.downloadRequest else {
                     throw ProcessRunnerError.processFailed("download 请求缺少任务。")
                 }
+                let summary = await worker(resourceRoot: resourceRoot, manager: manager).download(downloadRequest.jobs)
+                persistShareDownloadNotificationIfNeeded(summary: summary, jobs: downloadRequest.jobs)
                 return AppleMusicRuntimeAgentResponseEnvelope(
                     id: request.id,
-                    summary: await worker(resourceRoot: resourceRoot, manager: manager).download(downloadRequest.jobs)
+                    summary: summary
                 )
             case "initialize":
                 guard let initializeRequest = request.initializeRequest else {
@@ -174,7 +178,10 @@ enum GetOudioAMRuntimeAgent {
 
     private static func statusReport(manager: AppleMusicRuntimeManager) async throws -> AppleMusicRuntimeAgentStatusReport {
         let runtime = ColimaDockerRuntime(runtimeManager: manager)
-        let imageStatus = await DockerImageManager(runtime: runtime).check(.appleMusicWrapper)
+        let imageStatus = await DockerImageManager(runtime: runtime).check(
+            .appleMusicWrapper,
+            assumeAvailableWhenRuntimeStopped: manager.isEnabled
+        )
         let statuses = manager.componentStatuses(wrapperStatus: imageStatus)
         let missingCount = statuses.filter { !$0.isReady }.count
         let message = missingCount == 0 && manager.isEnabled
@@ -203,6 +210,50 @@ enum GetOudioAMRuntimeAgent {
             runtimeManager: manager,
             settingsStore: SettingsStore()
         )
+    }
+
+    private static func persistShareDownloadNotificationIfNeeded(summary: ConversionSummary, jobs: [JobRequest]) {
+        guard jobs.contains(where: { job in
+            guard job.source == .shareExtension else {
+                return false
+            }
+            if case .appleMusicDownload = job.operation {
+                return true
+            }
+            return false
+        }) else {
+            return
+        }
+
+        do {
+            try NotificationEventQueue().enqueueConversionFinished(summary: summary, jobs: jobs)
+            wakeMainAppForNotificationDispatch()
+        } catch {
+            DiagnosticLog.append("[Agent] notification event enqueue failed: \(error.localizedDescription)")
+        }
+    }
+
+    private static func wakeMainAppForNotificationDispatch() {
+        guard let defaults = UserDefaults(suiteName: AppConstants.appGroupIdentifier) else {
+            DiagnosticLog.append("[Agent] notification dispatch marker unavailable")
+            return
+        }
+        defaults.set(LaunchSource.notificationDispatch.rawValue, forKey: AppConstants.extensionLaunchSourceKey)
+        defaults.set(Date().timeIntervalSince1970, forKey: AppConstants.extensionLaunchTimestampKey)
+        defaults.synchronize()
+
+        guard let url = URL(string: "\(AppConstants.appURLScheme)://run-queued") else {
+            return
+        }
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+        process.arguments = [url.absoluteString]
+        do {
+            try process.run()
+            DiagnosticLog.append("[Agent] notification dispatch wake requested")
+        } catch {
+            DiagnosticLog.append("[Agent] notification dispatch wake failed: \(error.localizedDescription)")
+        }
     }
 
     private static func readRequest<T: Decodable>(_ options: ParsedArguments) throws -> T {

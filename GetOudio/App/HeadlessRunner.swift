@@ -13,6 +13,11 @@ final class HeadlessRunner: NSObject, NSApplicationDelegate, UNUserNotificationC
     private let amService = AppleMusicDownloadService()
     private let appleMusicAgentLauncher = AppleMusicRuntimeAgentLauncher.shared
     private let notificationService = NotificationService()
+    private let appleMusicShareCoordinator = AppleMusicShareDownloadCoordinator()
+    private let lifecycleLock = NSLock()
+    private var launchProcessingFinished = false
+    private var activeNotificationResponses = 0
+    private var terminationTask: Task<Void, Never>?
 
     // MARK: - Entry point
 
@@ -42,9 +47,9 @@ final class HeadlessRunner: NSObject, NSApplicationDelegate, UNUserNotificationC
         UNUserNotificationCenter.current().delegate = self
 
         Task {
+            await notificationService.requestAuthorization()
             await processAndNotify()
-            try? await Task.sleep(nanoseconds: 1_500_000_000)
-            await MainActor.run { NSApp.terminate(nil) }
+            markLaunchProcessingFinished()
         }
     }
 
@@ -58,6 +63,88 @@ final class HeadlessRunner: NSObject, NSApplicationDelegate, UNUserNotificationC
         completionHandler([.banner, .sound])
     }
 
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        if let copyInfo = notificationService.copyInfo(for: response) {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(copyInfo, forType: .string)
+            completionHandler()
+            return
+        }
+
+        guard let format = notificationService.appleMusicFormat(for: response.actionIdentifier) else {
+            completionHandler()
+            return
+        }
+
+        beginNotificationResponse()
+        Task {
+            await appleMusicShareCoordinator.handlePendingAppleMusicDownload(format: format)
+            completionHandler()
+            endNotificationResponse()
+        }
+    }
+
+    private func beginNotificationResponse() {
+        lifecycleLock.lock()
+        activeNotificationResponses += 1
+        terminationTask?.cancel()
+        terminationTask = nil
+        let activeCount = activeNotificationResponses
+        lifecycleLock.unlock()
+        DiagnosticLog.append("headless notification response started active=\(activeCount)")
+    }
+
+    private func endNotificationResponse() {
+        lifecycleLock.lock()
+        activeNotificationResponses = max(0, activeNotificationResponses - 1)
+        let shouldScheduleTermination = launchProcessingFinished
+        let activeCount = activeNotificationResponses
+        lifecycleLock.unlock()
+
+        DiagnosticLog.append("headless notification response finished active=\(activeCount)")
+        if shouldScheduleTermination {
+            scheduleTerminationWhenIdle(reason: "notification response")
+        }
+    }
+
+    private func markLaunchProcessingFinished() {
+        lifecycleLock.lock()
+        launchProcessingFinished = true
+        lifecycleLock.unlock()
+        scheduleTerminationWhenIdle(reason: "launch processing")
+    }
+
+    private func scheduleTerminationWhenIdle(reason: String) {
+        lifecycleLock.lock()
+        guard activeNotificationResponses == 0 else {
+            let activeCount = activeNotificationResponses
+            lifecycleLock.unlock()
+            DiagnosticLog.append("headless termination deferred reason=\(reason) active=\(activeCount)")
+            return
+        }
+
+        terminationTask?.cancel()
+        let task = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            guard let self, self.canTerminateNow() else { return }
+            DiagnosticLog.append("headless terminating reason=\(reason)")
+            await MainActor.run { NSApp.terminate(nil) }
+        }
+        terminationTask = task
+        lifecycleLock.unlock()
+    }
+
+    private func canTerminateNow() -> Bool {
+        lifecycleLock.lock()
+        let canTerminate = activeNotificationResponses == 0
+        lifecycleLock.unlock()
+        return canTerminate
+    }
+
     // MARK: - Job processing
 
     private func processAndNotify() async {
@@ -68,8 +155,15 @@ final class HeadlessRunner: NSObject, NSApplicationDelegate, UNUserNotificationC
             defaults.synchronize()
         }
 
+        await notificationService.dispatchPendingNotificationEvents()
+
+        let shareEvents: [ShareEvent]
         let jobs: [JobRequest]
         do {
+            let eventQueue = try ShareEventQueue()
+            shareEvents = try eventQueue.drain()
+            await appleMusicShareCoordinator.notifyShareEvents(shareEvents)
+
             let queue = try JobQueue()
             jobs = try queue.drain()
         } catch {
@@ -77,39 +171,24 @@ final class HeadlessRunner: NSObject, NSApplicationDelegate, UNUserNotificationC
             return
         }
 
+        let remainingJobs = await appleMusicShareCoordinator.handleShareAppleMusicJobs(jobs)
         guard !jobs.isEmpty else {
-            DiagnosticLog.append("headless no pending jobs")
+            DiagnosticLog.append(shareEvents.isEmpty ? "headless no pending jobs" : "headless processed share events")
+            return
+        }
+        guard !remainingJobs.isEmpty else {
+            DiagnosticLog.append("headless processed share Apple Music jobs")
             return
         }
 
-        DiagnosticLog.append("headless processing \(jobs.count) jobs")
-        let summary = await execute(jobs)
+        DiagnosticLog.append("headless processing \(remainingJobs.count) jobs")
+        let summary = await execute(remainingJobs)
         DiagnosticLog.append("headless done success=\(summary.successCount) fail=\(summary.failureCount)")
 
         // Write conversion log
-        writeConversionLog(summary: summary, jobs: jobs)
+        writeConversionLog(summary: summary, jobs: remainingJobs)
 
-        // Notify
-        let content = UNMutableNotificationContent()
-        content.title = "Get Oudio"
-        if summary.failureCount == 0 {
-            content.body = "全部完成：\(summary.successCount) 个任务"
-        } else {
-            content.body = "完成 \(summary.successCount) 个，失败 \(summary.failureCount) 个"
-        }
-        content.sound = .default
-
-        let request = UNNotificationRequest(
-            identifier: UUID().uuidString,
-            content: content,
-            trigger: nil
-        )
-
-        do {
-            try await UNUserNotificationCenter.current().add(request)
-        } catch {
-            DiagnosticLog.append("headless notification failed: \(error.localizedDescription)")
-        }
+        await notificationService.enqueueAndDispatchConversionFinished(summary: summary, jobs: remainingJobs)
     }
 
     // MARK: - Job execution (same logic as AppModel)

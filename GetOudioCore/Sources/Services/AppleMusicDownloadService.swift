@@ -1,6 +1,8 @@
 import Foundation
 
 public final class AppleMusicDownloadService {
+    private static let maxDownloadAttempts = 3
+
     private let runner: ProcessRunner
     private let componentManager: BundledComponentManager
     private let wrapperRuntime: AppleMusicWrapperRuntime
@@ -110,28 +112,79 @@ public final class AppleMusicDownloadService {
             var successCount = 0
             var failureCount = 0
             var messages: [String] = []
+            AppleMusicRuntimeAgentClient.clearDownloadCancellation()
+            defer { AppleMusicRuntimeAgentClient.clearDownloadCancellation() }
 
             for job in downloadJobs {
                 let format = resolvedFormat(for: job)
-                var arguments = format.downloaderArguments
-                arguments += [job.fileURL.absoluteString]
-                let result = try await runner.run(
-                    executablePath: executableURL.path,
-                    arguments: arguments,
-                    currentDirectoryURL: workingDirectory,
-                    environment: runtimeManager.runtimeEnvironment()
-                )
+                let arguments = Self.downloaderArguments(for: job, format: format)
+                var lastFailureMessage = ""
+                var completed = false
 
-                if result.succeeded {
-                    successCount += 1
-                } else {
+                for attempt in 1...Self.maxDownloadAttempts {
+                    if AppleMusicRuntimeAgentClient.isDownloadCancellationRequested() {
+                        lastFailureMessage = "Apple Music 下载已由用户停止。"
+                        break
+                    }
+
+                    let prefix = attempt == 1
+                        ? "正在准备 Apple Music 下载..."
+                        : "检测到下载流中断，正在重试 \(attempt - 1)/\(Self.maxDownloadAttempts - 1)..."
+                    Self.writeDownloadProgress(prefix, active: true)
+                    let progressTracker = AppleMusicDownloaderProgressTracker()
+                    let result = try await runner.run(
+                        executablePath: executableURL.path,
+                        arguments: arguments,
+                        currentDirectoryURL: workingDirectory,
+                        environment: runtimeManager.runtimeEnvironment(),
+                        outputHandler: { _, chunk in
+                            guard let message = progressTracker.observe(chunk) else { return }
+                            Self.writeDownloadProgress(message, active: true)
+                        },
+                        shouldTerminate: {
+                            AppleMusicRuntimeAgentClient.isDownloadCancellationRequested()
+                        }
+                    )
+
+                    let rawMessage = result.standardError.isEmpty ? result.standardOutput : result.standardError
+                    if result.succeeded {
+                        successCount += 1
+                        Self.writeDownloadProgress("Apple Music 下载完成", completed: 1, active: false)
+                        completed = true
+                        break
+                    }
+
+                    if AppleMusicRuntimeAgentClient.isDownloadCancellationRequested() {
+                        lastFailureMessage = AppleMusicDownloadMessageFormatter.coreMessage(from: rawMessage)
+                        if lastFailureMessage.isEmpty {
+                            lastFailureMessage = "Apple Music 下载已由用户停止。"
+                        } else {
+                            lastFailureMessage = "Apple Music 下载已由用户停止。\n\(lastFailureMessage)"
+                        }
+                        break
+                    }
+
+                    lastFailureMessage = AppleMusicDownloadMessageFormatter.coreMessage(from: rawMessage)
+                    if Self.shouldRetryDownload(after: rawMessage), attempt < Self.maxDownloadAttempts {
+                        DiagnosticLog.append("Apple Music download retry \(attempt) for \(job.fileURL.absoluteString): \(lastFailureMessage)")
+                        continue
+                    }
+                    break
+                }
+
+                if !completed {
                     failureCount += 1
-                    messages.append(result.standardError.isEmpty ? result.standardOutput : result.standardError)
+                    messages.append(lastFailureMessage.isEmpty ? "Apple Music 下载失败。" : lastFailureMessage)
+                    let finalMessage = AppleMusicRuntimeAgentClient.isDownloadCancellationRequested()
+                        ? "Apple Music 下载已停止"
+                        : "Apple Music 下载失败"
+                    Self.writeDownloadProgress(finalMessage, completed: 1, active: false)
                 }
             }
 
             return ConversionSummary(successCount: successCount, failureCount: failureCount, messages: messages)
         } catch {
+            Self.writeDownloadProgress("Apple Music 下载失败：\(error.localizedDescription)", completed: 1, active: false)
             return ConversionSummary(successCount: 0, failureCount: downloadJobs.count, messages: [error.localizedDescription])
         }
     }
@@ -192,6 +245,33 @@ public final class AppleMusicDownloadService {
         return stored == .askEveryTime ? .alac : stored
     }
 
+    static func downloaderArguments(for job: JobRequest, format: AppleMusicDownloadFormat) -> [String] {
+        var arguments = format.downloaderArguments
+        if shouldDownloadAsSingleSong(job.fileURL) {
+            arguments.append("--song")
+        }
+        arguments.append(job.fileURL.absoluteString)
+        return arguments
+    }
+
+    static func shouldDownloadAsSingleSong(_ url: URL) -> Bool {
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+            return false
+        }
+        return components.queryItems?.contains {
+            $0.name == "i" && ($0.value?.isEmpty == false)
+        } == true
+    }
+
+    private static func shouldRetryDownload(after message: String) -> Bool {
+        let lowercased = message.lowercased()
+        return lowercased.contains("decode mdat")
+            || lowercased.contains("read box body length")
+            || lowercased.contains("unexpected eof")
+            || lowercased.contains("connection reset")
+            || lowercased.contains("response timed out")
+    }
+
     private func prepareDownloaderWorkingDirectory(executableURL: URL, outputDirectory: URL) throws -> URL {
         let workingDirectory = runtimeManager.downloaderWorkDirectory
         try FileManager.default.createDirectory(at: workingDirectory, withIntermediateDirectories: true)
@@ -233,5 +313,28 @@ public final class AppleMusicDownloadService {
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "\"", with: "\\\"")
         return "\"\(escaped)\""
+    }
+
+    private static func writeDownloadProgress(
+        _ message: String,
+        completed: Int = 0,
+        active: Bool
+    ) {
+        do {
+            let progress = AppleMusicRuntimeProgress(
+                message: message,
+                completedUnitCount: completed,
+                totalUnitCount: 1,
+                isActive: active
+            )
+            let directory = AppleMusicRuntimeAgentClient.progressURL().deletingLastPathComponent()
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            try JSONEncoder().encode(progress).write(
+                to: AppleMusicRuntimeAgentClient.progressURL(),
+                options: .atomic
+            )
+        } catch {
+            DiagnosticLog.append("Apple Music download progress write failed: \(error.localizedDescription)")
+        }
     }
 }

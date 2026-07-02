@@ -105,7 +105,7 @@ struct TranscodingSettingsPage: View {
             // 监听目录板块
             SettingsSection("监听目录", systemImage: "folder") {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("由于 macOS 的限制，右键拓展仅在设定的目录下生效。")
+                    Text("由于 MacOS 的限制，右键拓展仅在以下设定的目录中生效。不推荐将外置硬盘置入监听目录中，因为受限于Finder的规矩，这会让硬盘图标变为「Get Oudio」的图标，非常丑陋。")
                         .font(.callout)
                         .foregroundStyle(.secondary)
 
@@ -304,6 +304,13 @@ struct AppleMusicSettingsPage: View {
                             Label("卸载", systemImage: "trash")
                         }
                         .disabled(viewModel.isManagingAppleMusicRuntime || !viewModel.isAppleMusicDownloadEnabled)
+
+                        Button(role: .destructive) {
+                            viewModel.stopAppleMusicDownload()
+                        } label: {
+                            Label("急停", systemImage: "stop.circle")
+                        }
+                        .disabled(!viewModel.canStopAppleMusicDownload)
                     }
                 }
             }
@@ -326,6 +333,9 @@ struct AppleMusicSettingsPage: View {
         }
         .task {
             await viewModel.monitorAppleMusicWrapperLoginStatus()
+        }
+        .task {
+            await viewModel.monitorAppleMusicRuntimeProgress()
         }
     }
 
