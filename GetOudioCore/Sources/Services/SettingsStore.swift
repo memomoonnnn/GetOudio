@@ -11,6 +11,7 @@ public final class SettingsStore {
         public static let appleMusicDownloadMode = "appleMusicDownloadMode"
         public static let isAppleMusicDownloadEnabled = "isAppleMusicDownloadEnabled"
         public static let appleMusicUseSystemProxy = "appleMusicUseSystemProxy"
+        public static let defaultAudioPlayerPath = "defaultAudioPlayerPath"
     }
 
     private let defaults: UserDefaults
@@ -92,6 +93,15 @@ public final class SettingsStore {
     public var appleMusicUseSystemProxy: Bool {
         get { defaults.bool(forKey: Keys.appleMusicUseSystemProxy) }
         set { defaults.set(newValue, forKey: Keys.appleMusicUseSystemProxy) }
+    }
+
+    public var defaultAudioPlayerURL: URL? {
+        get {
+            defaults.string(forKey: Keys.defaultAudioPlayerPath).map { URL(fileURLWithPath: $0) }
+        }
+        set {
+            defaults.set(newValue?.path, forKey: Keys.defaultAudioPlayerPath)
+        }
     }
 
     public static func defaultFinderDirectories() -> [URL] {

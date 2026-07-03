@@ -11,6 +11,7 @@
 		0D20ED1C18BE4AAD9EE1311C /* NotificationEventQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21A23B92406F8183901D2051 /* NotificationEventQueue.swift */; };
 		0E537BFEFE1F926149378250 /* MainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DC8B37B7E84B3163CBDECF5 /* MainView.swift */; };
 		1275386606BDFC5FA9E31D62 /* GetOudioCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 49BFF2708ED14CF05FA36161 /* GetOudioCore.framework */; };
+		1361F214AA8EAF0ACE04658B /* DefaultOpenWithService.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECC45B39B4FFC5F6D7ECA9FE /* DefaultOpenWithService.swift */; };
 		1830DE3F5D6F7D43C5BC7923 /* NCMConversionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5824B80AB71359FF2011C2E0 /* NCMConversionService.swift */; };
 		1A5F3EF77607777EBD03007A /* AppleMusicDownloaderProgressParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = C74C0865C3389B8416877170 /* AppleMusicDownloaderProgressParser.swift */; };
 		1E2BA6165226BFEB0082B779 /* SettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 277323E37349CB4F0E1FDA52 /* SettingsStore.swift */; };
@@ -234,6 +235,7 @@
 		DCD1166F4ECCEF206816E275 /* AppleMusicWrapperRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleMusicWrapperRuntime.swift; sourceTree = "<group>"; };
 		DF11B1E80B3F43236531D6A8 /* MediaExtractionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaExtractionService.swift; sourceTree = "<group>"; };
 		E71B1DAE2F34CAAE4261B2F0 /* GetOudioFinderExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = GetOudioFinderExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		ECC45B39B4FFC5F6D7ECA9FE /* DefaultOpenWithService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefaultOpenWithService.swift; sourceTree = "<group>"; };
 		F194F1D1BF8520F04C51A8C1 /* AgentMain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentMain.swift; sourceTree = "<group>"; };
 		F7B61544D149878F77979B5A /* GetOudioAMRuntimeAgent.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GetOudioAMRuntimeAgent.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F806E2D0D02BD05E19A347FF /* ncmdump */ = {isa = PBXFileReference; lastKnownFileType = folder; name = ncmdump; path = GetOudio/Resources/ThirdParty/ncmdump; sourceTree = SOURCE_ROOT; };
@@ -440,6 +442,7 @@
 			children = (
 				24D6241F048302C55FF222E9 /* AppleMusicRuntimeAgentLauncher.swift */,
 				730C0C3FEA5DE504A597E570 /* AppleMusicShareDownloadCoordinator.swift */,
+				ECC45B39B4FFC5F6D7ECA9FE /* DefaultOpenWithService.swift */,
 				6443C0992771CFEA49338C37 /* KeychainService.swift */,
 				7E935EA0A23172AF7AE10BEB /* SettingsViewModel.swift */,
 			);
@@ -798,6 +801,7 @@
 				B5F80E9EFB10E160D4C82A8C /* AppleMusicSetupView.swift in Sources */,
 				4F96746273724F3BDA14439E /* AppleMusicShareDownloadCoordinator.swift in Sources */,
 				28D57F1082E7B71F53AB415F /* DashboardView.swift in Sources */,
+				1361F214AA8EAF0ACE04658B /* DefaultOpenWithService.swift in Sources */,
 				D543D039DDD7E5350D5A5039 /* GetOudioApp.swift in Sources */,
 				2F9FB03C3C2FD83ADA63BE09 /* HeadlessRunner.swift in Sources */,
 				AE8147EEC4CD65401A029982 /* KeychainService.swift in Sources */,

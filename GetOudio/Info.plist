@@ -21,6 +21,19 @@
 		<dict>
 			<key>CFBundleTypeName</key>
 			<string>Audio File</string>
+			<key>CFBundleTypeExtensions</key>
+			<array>
+				<string>m4a</string>
+				<string>aac</string>
+				<string>mp3</string>
+				<string>alac</string>
+				<string>flac</string>
+				<string>wav</string>
+				<string>aiff</string>
+				<string>aif</string>
+				<string>ogg</string>
+				<string>caf</string>
+			</array>
 			<key>CFBundleTypeRole</key>
 			<string>Viewer</string>
 			<key>LSHandlerRank</key>

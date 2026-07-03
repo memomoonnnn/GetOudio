@@ -121,6 +121,10 @@ final class GetOudioCoreTests: XCTestCase {
     func testFileCategoryClassification() {
         XCTAssertEqual(FileCategory.classify(URL(fileURLWithPath: "/tmp/demo.ncm")), .ncm)
         XCTAssertEqual(FileCategory.classify(URL(fileURLWithPath: "/tmp/demo.mp3")), .audio)
+        XCTAssertEqual(FileCategory.classify(URL(fileURLWithPath: "/tmp/demo.ogg")), .audio)
+        XCTAssertEqual(FileCategory.classify(URL(fileURLWithPath: "/tmp/demo.caf")), .audio)
+        XCTAssertEqual(FileCategory.classify(URL(fileURLWithPath: "/tmp/demo.opus")), .unsupported)
+        XCTAssertEqual(FileCategory.classify(URL(fileURLWithPath: "/tmp/demo.wma")), .unsupported)
         XCTAssertEqual(FileCategory.classify(URL(fileURLWithPath: "/tmp/demo.mov")), .video)
         XCTAssertEqual(FileCategory.classify(URL(string: "https://music.apple.com/us/album/example/123")!), .appleMusic)
     }

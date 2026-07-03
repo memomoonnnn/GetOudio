@@ -28,20 +28,20 @@ public enum FileCategory: String, Codable, CaseIterable, Sendable {
             return .ncm
         }
 
-        if Self.audioExtensions.contains(ext) {
+        if Self.unsupportedAudioExtensionSet.contains(ext) {
+            return .unsupported
+        }
+
+        if Self.audioExtensionSet.contains(ext) {
             return .audio
         }
 
-        if Self.videoExtensions.contains(ext) {
+        if Self.videoExtensionSet.contains(ext) {
             return .video
         }
 
         guard let type = UTType(filenameExtension: ext) else {
             return .unsupported
-        }
-
-        if type.conforms(to: .audio) {
-            return .audio
         }
 
         if type.conforms(to: .movie) || type.conforms(to: .audiovisualContent) {
@@ -51,11 +51,15 @@ public enum FileCategory: String, Codable, CaseIterable, Sendable {
         return .unsupported
     }
 
-    private static let audioExtensions: Set<String> = [
-        "aac", "aif", "aiff", "alac", "ape", "caf", "flac", "m4a", "m4b", "mp3", "ogg", "opus", "wav", "wma"
+    public static let supportedAudioExtensions: [String] = [
+        "m4a", "aac", "mp3", "alac", "flac", "wav", "aiff", "aif", "ogg", "caf"
     ]
 
-    private static let videoExtensions: Set<String> = [
+    public static let supportedVideoExtensions: [String] = [
         "avi", "flv", "m4v", "mkv", "mov", "mp4", "mpeg", "mpg", "webm", "wmv"
     ]
+
+    private static let audioExtensionSet = Set(supportedAudioExtensions)
+    private static let videoExtensionSet = Set(supportedVideoExtensions)
+    private static let unsupportedAudioExtensionSet: Set<String> = ["ape", "m4b", "opus", "wma"]
 }

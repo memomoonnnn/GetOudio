@@ -81,6 +81,17 @@ targets:
           - CFBundleTypeName: Audio File
             CFBundleTypeRole: Viewer
             LSHandlerRank: Alternate
+            CFBundleTypeExtensions:
+              - m4a
+              - aac
+              - mp3
+              - alac
+              - flac
+              - wav
+              - aiff
+              - aif
+              - ogg
+              - caf
             LSItemContentTypes:
               - public.audio
         UTExportedTypeDeclarations:

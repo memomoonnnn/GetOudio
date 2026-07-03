@@ -102,6 +102,86 @@ struct TranscodingSettingsPage: View {
                 }
             }
 
+            SettingsSection("默认打开方式", systemImage: "doc.badge.gearshape") {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("打开某个格式的开关后，Finder 双击该格式音频文件会触发 Get Oudio 的 Open With 预设菜单；关闭开关后，该格式会恢复为下方指定播放器。支持格式包括 \(viewModel.supportedAudioDefaultOpenWithExtensions)。")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    HStack(spacing: 8) {
+                        Text("关闭时使用")
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Menu {
+                            if viewModel.defaultAudioPlayerOptions.isEmpty {
+                                Text("没有找到可打开 .wav 的应用")
+                            } else {
+                                ForEach(viewModel.defaultAudioPlayerOptions) { option in
+                                    Button {
+                                        viewModel.selectDefaultAudioPlayer(option)
+                                    } label: {
+                                        if option.url == viewModel.defaultAudioPlayerURL {
+                                            Label(option.displayName, systemImage: "checkmark")
+                                        } else {
+                                            Text(option.displayName)
+                                        }
+                                    }
+                                }
+                            }
+                        } label: {
+                            Label(viewModel.defaultAudioPlayerName, systemImage: "play.rectangle")
+                        }
+                        .disabled(viewModel.defaultAudioPlayerOptions.isEmpty)
+                    }
+
+                    VStack(spacing: 0) {
+                        ForEach(viewModel.audioDefaultOpenWithRows) { row in
+                            HStack(spacing: 10) {
+                                Text(row.group.displayName)
+                                    .font(.body.monospaced())
+                                    .frame(width: 108, alignment: .leading)
+
+                                Spacer()
+
+                                if viewModel.audioDefaultOpenWithBusyGroupIDs.contains(row.group.id) {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                }
+
+                                Toggle("", isOn: Binding(
+                                    get: { row.isGetOudioDefault },
+                                    set: { isEnabled in
+                                        Task {
+                                            await viewModel.setAudioDefaultOpenWith(row, isEnabled: isEnabled)
+                                        }
+                                    }
+                                ))
+                                .toggleStyle(.switch)
+                                .labelsHidden()
+                                .disabled(viewModel.audioDefaultOpenWithBusyGroupIDs.contains(row.group.id))
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 7)
+
+                            if row.id != viewModel.audioDefaultOpenWithRows.last?.id {
+                                Divider()
+                                    .padding(.leading, 12)
+                            }
+                        }
+                    }
+                    .background(.quinary, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+                    Label(
+                        viewModel.audioDefaultOpenWithMessage,
+                        systemImage: viewModel.audioDefaultOpenWithStatus.isFullyConfigured ? "checkmark.circle.fill" : "circle"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(viewModel.audioDefaultOpenWithStatus.isFullyConfigured ? .green : .secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
             // 监听目录板块
             SettingsSection("监听目录", systemImage: "folder") {
                 VStack(alignment: .leading, spacing: 8) {
@@ -243,6 +323,47 @@ struct NCMSettingsPage: View {
                             Label("选择目录", systemImage: "folder")
                         }
                     }
+                }
+            }
+
+            SettingsSection("默认打开方式", systemImage: "doc.badge.gearshape") {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("将 .ncm 文件默认交给 Get Oudio 打开，之后在 Finder 中双击 .ncm 文件会直接写入 NCM 转码队列。")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    HStack(spacing: 10) {
+                        Button {
+                            Task {
+                                await viewModel.setNCMDefaultOpenWith()
+                            }
+                        } label: {
+                            if viewModel.isSettingNCMDefaultOpenWith {
+                                Label("正在设置", systemImage: "hourglass")
+                            } else {
+                                Label("设为默认打开方式", systemImage: "doc.badge.gearshape")
+                            }
+                        }
+                        .disabled(viewModel.isSettingNCMDefaultOpenWith)
+
+                        Button {
+                            viewModel.refreshDefaultOpenWithStatus()
+                        } label: {
+                            Label("刷新状态", systemImage: "arrow.clockwise")
+                        }
+                        .disabled(viewModel.isSettingNCMDefaultOpenWith)
+
+                        Spacer()
+                    }
+
+                    Label(
+                        viewModel.ncmDefaultOpenWithMessage,
+                        systemImage: viewModel.ncmDefaultOpenWithStatus.isFullyConfigured ? "checkmark.circle.fill" : "circle"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(viewModel.ncmDefaultOpenWithStatus.isFullyConfigured ? .green : .secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
