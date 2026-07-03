@@ -3,26 +3,33 @@ import GetOudioCore
 import SwiftUI
 import UserNotifications
 
-/// Launched when the user opens Get Oudio.app directly.
-/// With LSUIElement=true in Info.plist, SwiftUI's WindowGroup cannot create
-/// visible windows.  Instead we manually build NSWindow + NSHostingController
-/// and apply floating-panel attributes so the window sits above normal windows
-/// and is invisible to Stage Manager / window managers.
+/// Handles direct settings-window launches and transient Open With interactions.
+/// Background conversion is delegated to HeadlessRunner through JobQueue.
 final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
+    private enum LaunchIntent {
+        case undecided
+        case settings
+        case transientOpenWith
+        case backgroundWake
+    }
 
-    private var appModel: AppModel!
     private var mainWindow: NSWindow?
     private let notificationService = NotificationService()
+    private let openWithDispatcher = OpenWithJobDispatcher()
+    private let openWithMenuController = OpenWithPresetMenuController()
+    private var launchIntent: LaunchIntent = .undecided
     private var activeNotificationResponses = 0
+    private var isPresentingAudioMenu = false
+    private var lastAudioOpenSignature: String?
+    private var lastAudioOpenDate = Date.distantPast
 
     // MARK: - Entry point
 
     static func main() {
         MainActor.assumeIsolated {
             let app = NSApplication.shared
-            app.setActivationPolicy(.regular)
+            app.setActivationPolicy(.accessory)
             let launcher = NormalLauncher()
-            launcher.appModel = AppModel()
             app.delegate = launcher
             app.run()
         }
@@ -31,7 +38,6 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
     // MARK: - NSApplicationDelegate
 
     func applicationWillFinishLaunching(_ notification: Notification) {
-        // Register URL scheme handler for getoudio:// events
         NSAppleEventManager.shared().setEventHandler(
             self,
             andSelector: #selector(handleGetURLEvent(_:withReplyEvent:)),
@@ -48,17 +54,69 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
             await notificationService.dispatchPendingNotificationEvents()
         }
 
-        // Build the main window
-        let contentView = MainView().environmentObject(appModel)
-        let hostingController = NSHostingController(rootView: contentView)
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 700_000_000)
+            showSettingsWindowIfNeeded()
+        }
+    }
+
+    func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool { false }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        activeNotificationResponses == 0
+    }
+
+    func application(_ sender: NSApplication, openFiles filenames: [String]) {
+        let urls = filenames.map { URL(fileURLWithPath: $0) }
+        guard !urls.isEmpty else {
+            DiagnosticLog.append("app open files rejected empty")
+            markTransientOpenWithIfNoSettingsWindow()
+            sender.reply(toOpenOrPrint: .failure)
+            finishTransientInteractionIfNeeded()
+            return
+        }
+
+        if urls.allSatisfy({ FileCategory.classify($0) == .audio }) {
+            sender.reply(toOpenOrPrint: .success)
+            presentOpenWithAudioMenu(for: urls)
+            return
+        }
+
+        guard urls.allSatisfy({ FileCategory.classify($0) == .ncm }) else {
+            DiagnosticLog.append("app open files rejected unsupported count=\(urls.count)")
+            markTransientOpenWithIfNoSettingsWindow()
+            sender.reply(toOpenOrPrint: .failure)
+            finishTransientInteractionIfNeeded()
+            return
+        }
+
+        markTransientOpenWithIfNoSettingsWindow()
+        DiagnosticLog.append("app open files ncm enqueue count=\(urls.count)")
+        let didEnqueue = openWithDispatcher.enqueueNCMJobs(urls: urls)
+        sender.reply(toOpenOrPrint: didEnqueue ? .success : .failure)
+        finishTransientInteractionIfNeeded()
+    }
+
+    private func showSettingsWindowIfNeeded() {
+        guard launchIntent == .undecided || launchIntent == .settings else { return }
+        if let mainWindow {
+            mainWindow.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+
+        launchIntent = .settings
+        showSettingsWindow()
+    }
+
+    private func showSettingsWindow() {
+        let hostingController = NSHostingController(rootView: MainView())
 
         let window = NSWindow(contentViewController: hostingController)
         window.title = "Get Oudio"
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
         window.setContentSize(NSSize(width: 820, height: 600))
         window.isReleasedWhenClosed = false
-
-        // Floating panel attributes
         window.level = .floating
         window.collectionBehavior = [
             .canJoinAllSpaces,
@@ -74,33 +132,6 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool { false }
-
-    /// 当所有窗口都关闭后自动退出应用；通知 action 触发的后台任务运行时先保持进程存活。
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        activeNotificationResponses == 0 && !appModel.hasActiveBackgroundWork
-    }
-
-    func application(_ sender: NSApplication, openFiles filenames: [String]) {
-        let urls = filenames.map { URL(fileURLWithPath: $0) }
-        guard !urls.isEmpty, urls.allSatisfy({ FileCategory.classify($0) == .ncm }) else {
-            DiagnosticLog.append("app open files rejected non-ncm count=\(urls.count)")
-            sender.reply(toOpenOrPrint: .failure)
-            return
-        }
-        DiagnosticLog.append("app open files ncm count=\(urls.count)")
-
-        guard appModel.receiveOpenFileURLs(urls) else {
-            sender.reply(toOpenOrPrint: .failure)
-            return
-        }
-
-        Task {
-            await appModel.runNCMConversion()
-        }
-        sender.reply(toOpenOrPrint: .success)
-    }
-
     // MARK: - URL Scheme (getoudio://)
 
     @objc private func handleGetURLEvent(_ event: NSAppleEventDescriptor, withReplyEvent: NSAppleEventDescriptor) {
@@ -108,10 +139,71 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
               let url = URL(string: urlString),
               url.scheme == AppConstants.appURLScheme else { return }
 
-        Task {
-            await notificationService.dispatchPendingNotificationEvents()
-            await appModel.processQueuedJobsInBackground()
+        DiagnosticLog.append("normal url wake forwarded \(url.absoluteString)")
+        if mainWindow?.isVisible != true {
+            launchIntent = .backgroundWake
         }
+        openWithDispatcher.launchHeadlessProcessor()
+        finishTransientInteractionIfNeeded()
+    }
+
+    private func presentOpenWithAudioMenu(for urls: [URL]) {
+        markTransientOpenWithIfNoSettingsWindow()
+
+        guard !isPresentingAudioMenu, !isDuplicateAudioOpenEvent(urls) else {
+            DiagnosticLog.append("app open files audio duplicate ignored count=\(urls.count)")
+            return
+        }
+
+        isPresentingAudioMenu = true
+        DiagnosticLog.append("app open files audio menu count=\(urls.count)")
+        NSRunningApplication.current.activate(options: [.activateIgnoringOtherApps])
+        openWithMenuController.present(
+            fileURLs: urls,
+            presets: openWithDispatcher.enabledPresets(),
+            at: NSEvent.mouseLocation,
+            onSelect: { [weak self] preset in
+                self?.enqueueOpenWithAudio(urls: urls, preset: preset)
+            },
+            onCancel: { [weak self] in
+                self?.finishTransientInteractionIfNeeded()
+            }
+        )
+        isPresentingAudioMenu = false
+        finishTransientInteractionIfNeeded()
+    }
+
+    private func enqueueOpenWithAudio(urls: [URL], preset: ConversionPreset) {
+        DiagnosticLog.append("app open files audio enqueue preset=\(preset.rawValue) count=\(urls.count)")
+        _ = openWithDispatcher.enqueueAudioJobs(urls: urls, preset: preset)
+    }
+
+    private func markTransientOpenWithIfNoSettingsWindow() {
+        if mainWindow?.isVisible != true {
+            launchIntent = .transientOpenWith
+        }
+    }
+
+    private func finishTransientInteractionIfNeeded() {
+        guard mainWindow?.isVisible != true,
+              activeNotificationResponses == 0,
+              launchIntent == .transientOpenWith || launchIntent == .backgroundWake else { return }
+
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 150_000_000)
+            guard self.mainWindow?.isVisible != true, self.activeNotificationResponses == 0 else { return }
+            NSApp.terminate(nil)
+        }
+    }
+
+    private func isDuplicateAudioOpenEvent(_ urls: [URL]) -> Bool {
+        let signature = urls.map(\.standardizedFileURL.path).sorted().joined(separator: "\n")
+        let now = Date()
+        defer {
+            lastAudioOpenSignature = signature
+            lastAudioOpenDate = now
+        }
+        return lastAudioOpenSignature == signature && now.timeIntervalSince(lastAudioOpenDate) < 1.5
     }
 
     // MARK: - UNUserNotificationCenterDelegate
@@ -142,10 +234,12 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
         }
 
         beginNotificationResponse()
-        Task { @MainActor in
-            await appModel.processPendingAppleMusicDownload(format: format)
+        Task {
+            await AppleMusicShareDownloadCoordinator().handlePendingAppleMusicDownload(format: format)
             completionHandler()
-            endNotificationResponse()
+            await MainActor.run {
+                self.endNotificationResponse()
+            }
         }
     }
 
@@ -154,11 +248,10 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
         DiagnosticLog.append("normal notification response started active=\(activeNotificationResponses)")
     }
 
+    @MainActor
     private func endNotificationResponse() {
         activeNotificationResponses = max(0, activeNotificationResponses - 1)
         DiagnosticLog.append("normal notification response finished active=\(activeNotificationResponses)")
-        if activeNotificationResponses == 0, mainWindow?.isVisible != true {
-            NSApp.terminate(nil)
-        }
+        finishTransientInteractionIfNeeded()
     }
 }

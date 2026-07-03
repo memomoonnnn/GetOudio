@@ -125,6 +125,47 @@ final class GetOudioCoreTests: XCTestCase {
         XCTAssertEqual(FileCategory.classify(URL(string: "https://music.apple.com/us/album/example/123")!), .appleMusic)
     }
 
+    func testConversionActionFactoryUsesEnabledPresetsAndDefaultFallback() {
+        let suiteName = "GetOudioCoreTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let store = SettingsStore(defaults: defaults)
+        store.enabledPresets = [.aac128, .flacSource]
+        let factory = ConversionActionFactory(settingsStore: store)
+
+        XCTAssertEqual(factory.enabledPresets(), [.aac128, .flacSource])
+
+        store.enabledPresets = []
+        XCTAssertEqual(Set(factory.enabledPresets()), ConversionPreset.defaultEnabled)
+    }
+
+    func testConversionActionFactoryBuildsAudioTranscodeJobs() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let audioURL = root.appendingPathComponent("song.mp3")
+        let videoURL = root.appendingPathComponent("clip.mov")
+        try Data("audio".utf8).write(to: audioURL)
+        try Data("video".utf8).write(to: videoURL)
+
+        let jobs = ConversionActionFactory().audioTranscodeJobs(
+            for: [audioURL, videoURL],
+            preset: .aac320,
+            source: .openWith
+        )
+
+        XCTAssertEqual(jobs.count, 1)
+        let job = try XCTUnwrap(jobs.first)
+        XCTAssertEqual(job.fileURL, audioURL)
+        XCTAssertEqual(job.category, .audio)
+        XCTAssertEqual(job.operation, .transcode(.aac320))
+        XCTAssertEqual(job.source, .openWith)
+        XCTAssertNotNil(job.fileBookmarkData)
+        XCTAssertNotNil(job.directoryBookmarkData)
+    }
+
     func testJobQueueRoundTripsAndDrainsJobs() throws {
         let queueURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)

@@ -14,6 +14,7 @@ private final class FinderActionContext: NSObject {
 
 @objc final class FinderSync: FIFinderSync {
     private let settingsStore = SettingsStore()
+    private let actionFactory = ConversionActionFactory()
     private var lastAudioSelection: [URL] = []
 
     override init() {
@@ -207,8 +208,7 @@ private final class FinderActionContext: NSObject {
     }
 
     private func enabledPresets() -> [ConversionPreset] {
-        let presets = ConversionPreset.allCases.filter { settingsStore.enabledPresets.contains($0) }
-        return presets.isEmpty ? ConversionPreset.allCases : presets
+        actionFactory.enabledPresets()
     }
 
     private func runPreset(_ preset: ConversionPreset) {
@@ -216,11 +216,7 @@ private final class FinderActionContext: NSObject {
         let urls = selectedURLs.isEmpty ? lastAudioSelection : selectedURLs
         DiagnosticLog.append("finder audio action preset=\(preset.rawValue) selected=\(urls.count)")
 
-        let jobs = urls
-            .filter { FileCategory.classify($0) == .audio }
-            .map { makeJob(fileURL: $0, category: .audio, operation: .transcode(preset)) }
-
-        enqueue(jobs)
+        enqueue(actionFactory.audioTranscodeJobs(for: urls, preset: preset, source: .finderSync))
     }
 
     private func actionSelector(for preset: ConversionPreset) -> Selector {

@@ -17,6 +17,8 @@ public enum AppConstants {
 public enum LaunchSource: String, Sendable {
     /// User launched the app directly (e.g., double-clicked in Finder / Dock).
     case direct
+    /// System opened audio files with Get Oudio ("Open With").
+    case openWithAudio
     /// System opened .ncm files with Get Oudio ("Open With").
     case openWithNCM
     /// Launched from Finder Sync extension.

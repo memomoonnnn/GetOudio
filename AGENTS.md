@@ -4,7 +4,7 @@
 
 ## Project Overview
 
-Get Oudio 是一个 XcodeGen 驱动的 macOS 原生音频转换工具，主 App 负责 SwiftUI/AppKit 界面和任务调度，`GetOudioCore` 承载模型、服务、队列、共享容器和进程执行逻辑，Finder Sync 与 Share 扩展只负责接收系统输入并写入 App Group 队列，Apple Music 的重型 Docker/Colima/wrapper 运行时由独立 `GetOudioAMRuntimeAgent` 管理。
+Get Oudio 是一个 XcodeGen 驱动的 macOS 原生音频转换工具。主 App 的可见职责是设置窗口、Apple Music 初始化界面和 Open With 音频的菜单式预设选择；日常转码执行不挂在设置窗口上，而是由 `HeadlessRunner` 在无窗口路径中 drain `JobQueue` 后运行、记录日志并派发通知。`GetOudioCore` 承载模型、服务、队列、共享容器和进程执行逻辑，Finder Sync、Share Extension 与 Open With 入口只负责接收系统输入并写入 App Group 队列，Apple Music 的重型 Docker/Colima/wrapper 运行时由独立 `GetOudioAMRuntimeAgent` 管理。
 
 ---
 
@@ -26,7 +26,7 @@ Get Oudio 是一个 XcodeGen 驱动的 macOS 原生音频转换工具，主 App 
 
 依赖规则是“轻量内嵌、重型托管”。App Bundle 内的第三方资源只限当前精简工具链；Apple Music 下载必须经 `GetOudioAMRuntimeAgent`、managed Colima/Docker、GPAC/MP4Box 和 wrapper 链路，主 App 不能直接依赖系统 PATH 中的运行时工具。新增网络、虚拟化、App Group、文件访问或 Hardened Runtime 需求时，必须同步检查对应 target 的 entitlements，不能通过关闭沙盒、移除安全作用域访问或写入普通容器目录来绕过权限。
 
-架构规则是扩展轻、主 App 调度、Core 复用、Agent 执行。Finder Sync 和 Share Extension 只能分类输入、写入 `JobQueue` 或共享事件、设置 launch marker，并通过 `getoudio://run-queued` 唤醒主 App；它们不能执行转换、通知派发、下载、Docker 操作或 AM Runtime Agent 请求。主 App 已运行时 URL scheme 会进入 `NormalLauncher`，后台无窗口路径由 `HeadlessRunner` 处理，`LSUIElement = true` 是避免 Finder/Share 触发窗口闪现的关键配置，不要为了使用 SwiftUI `WindowGroup` 而移除。
+架构规则是扩展轻、设置窗口轻、Core 复用、后台 runner/Agent 执行。Finder Sync、Share Extension 和 Open With 入口只能分类输入、写入 `JobQueue` 或共享事件、设置 launch marker，并通过 `getoudio://run-queued` 或新的 headless app 实例唤醒后台处理；它们不能执行转换、通知派发、下载、Docker 操作或 AM Runtime Agent 请求。`NormalLauncher` 只负责直接启动时的设置窗口、Open With 音频菜单式预设选择、NCM Open With 入队，以及把已入队任务转交给 `HeadlessRunner`；不能把日常转码重新接回设置窗口、SwiftUI view model 或 `NormalLauncher` 自身。`OpenWithPresetMenuController` 应保持菜单语义，使用 `NSMenu` 做一次性预设选择，不要退回 `NSPanel` 或 SwiftUI 浮窗；`OpenWithJobDispatcher` 是 Open With 入队、launch marker 和 headless 唤醒的边界。`LSUIElement = true` 和 accessory activation 是避免 Finder/Share/Open With 任务在 Dock 或 Stage Manager 中冒出主 App 的关键配置，不要为了使用 SwiftUI `WindowGroup` 而移除。
 
 ---
 
@@ -36,7 +36,7 @@ Get Oudio 是一个 XcodeGen 驱动的 macOS 原生音频转换工具，主 App 
 
 核心测试使用 `xcodebuild -project GetOudio.xcodeproj -scheme GetOudioCoreTests -configuration Debug -derivedDataPath build/DerivedData test`。修改核心服务、模型、队列、转换预设、Apple Music 下载参数、通知事件协议或 App Group 队列时优先跑这条命令；涉及 `NotificationEventQueue` 时至少覆盖事件写入、认领、确认删除和重复 drain 为空的行为。只修改 Finder Sync 菜单生成、分类入口或扩展侧轻量逻辑时，优先跑 `xcodebuild -project GetOudio.xcodeproj -target GetOudioFinderExtension -configuration Debug build CODE_SIGNING_ALLOWED=NO`，避免把无关的主 App 图标、签名或安装链路混入判断。
 
-本仓库没有单独的格式化命令，也不是 SwiftPM 项目；不要把 `swift test`、`swift build` 或 `Package.swift` 当成默认入口。需要重新生成工程时运行 `xcodegen generate`，并检查 `project.yml` 的 `postGenCommand` 是否仍把 `AppIcon.icon` 的 `lastKnownFileType` 修补为 `folder.iconcomposer.icon`。调试日志优先看 App Group 下的 `conversion-log.txt`，通知链路重点关注 `notification event enqueue`、`notification event claim`、`notification scheduled` 和 `[Agent] notification dispatch wake requested`，系统日志按进程使用 `log stream --predicate 'process == "Get Oudio"'`、`process == "GetOudioAMRuntimeAgent"`、`process == "GetOudioFinderExtension"` 或 `process == "GetOudioShareExtension"`。
+本仓库没有单独的格式化命令，也不是 SwiftPM 项目；不要把 `swift test`、`swift build` 或 `Package.swift` 当成默认入口。需要重新生成工程时运行 `xcodegen generate`，并检查 `project.yml` 的 `postGenCommand` 是否仍把 `AppIcon.icon` 的 `lastKnownFileType` 修补为 `folder.iconcomposer.icon`。调试日志优先看 App Group 下的 `conversion-log.txt`；Open With 音频/NCM 的正常链路应先出现 `open with enqueue ...` 和 `open with launch headless ...`，随后由 `HeadlessRunner` 写入 `headless processing ...`、转换结果和通知事件，不应出现设置窗口路径里的直接 `app run start ...`。通知链路重点关注 `notification event enqueue`、`notification event claim`、`notification scheduled` 和 `[Agent] notification dispatch wake requested`，系统日志按进程使用 `log stream --predicate 'process == "Get Oudio"'`、`process == "GetOudioAMRuntimeAgent"`、`process == "GetOudioFinderExtension"` 或 `process == "GetOudioShareExtension"`。
 
 ---
 
@@ -55,6 +55,8 @@ Apple Music runtime 必须可恢复、可验证、可清理。启用流程按 Co
 ## Common Pitfalls
 
 Finder Sync 的可见性首先受监听目录控制，不像 Share Extension 那样由内容类型激活规则精确控制。`GetOudioFinderExtension/Sources/FinderSync.swift` 的 `menu(for:)` 是最终决定右键菜单是否显示的路径：选中项经过 `FileCategory.classify(_:)` 过滤后，如果没有可处理的 audio、video 或 ncm 文件，必须直接返回 `nil`，不能返回一个包含禁用项的 `NSMenu`，否则 Finder 仍会在不支持的文件或文件夹上显示 Get Oudio；目录背景、侧边栏等非文件选择默认也应保持 `nil`，混选场景可以只对受支持文件生成动作，但不要扩大到目录、压缩包或普通文档。
+
+Open With 音频入口不是常规窗口。`NormalLauncher.application(_:openFiles:)` 对全音频选择应弹出 `OpenWithPresetMenuController` 的 `NSMenu`，用户选择预设后由 `OpenWithJobDispatcher` 生成 `.transcode(preset)` jobs、写入 `JobQueue`、设置 `LaunchSource.openWithAudio` marker 并启动新的 headless app 实例；全 NCM 选择同样只生成 `.convertNCM` jobs 并设置 `LaunchSource.openWithNCM` marker。混合、视频或 unsupported 文件应直接 `reply(.failure)` 并写诊断日志，不能顺手打开设置窗口。直接启动 App 才显示设置窗口；Finder、Share、Open With 和 notification dispatch 唤醒都应尽量保持无 Dock、无设置窗口、无 Stage Manager 干扰。
 
 Share Extension 的显示与宿主缓存容易误判。系统分享扩展不需要也不能声明只针对 Safari 或 Apple Music，宿主依据 `NSExtensionActivationRule` 与分享内容类型决定是否显示；当前结构化激活字典支持附件、文件、图片、视频、文本和一个 Web URL，不要退回 `TRUEPREDICATE` 或重新加入非标准 `NSExtensionVersion`。`ShareExtension` 应在 `loadView()` 中异步读取 `extensionContext`，同时检查附件中的 `public.url`、`public.plain-text` 和 `NSExtensionItem.attributedContentText`；可见性要用安装后的签名 App 验证，Music 会缓存分享菜单，Safari 可见且 `pluginkit` 启用时应先完整重启 Music 再判断。
 

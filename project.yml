@@ -78,6 +78,11 @@ targets:
             LSHandlerRank: Owner
             LSItemContentTypes:
               - com.shengjiacheng.getoudio.ncm
+          - CFBundleTypeName: Audio File
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes:
+              - public.audio
         UTExportedTypeDeclarations:
           - UTTypeIdentifier: com.shengjiacheng.getoudio.ncm
             UTTypeDescription: NCM File

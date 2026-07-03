@@ -191,7 +191,7 @@ final class HeadlessRunner: NSObject, NSApplicationDelegate, UNUserNotificationC
         await notificationService.enqueueAndDispatchConversionFinished(summary: summary, jobs: remainingJobs)
     }
 
-    // MARK: - Job execution (same logic as AppModel)
+    // MARK: - Job execution
 
     private func execute(_ jobs: [JobRequest]) async -> ConversionSummary {
         var totalSuccess = 0

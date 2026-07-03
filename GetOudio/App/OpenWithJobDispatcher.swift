@@ -1,0 +1,87 @@
+import AppKit
+import GetOudioCore
+
+final class OpenWithJobDispatcher {
+    private let actionFactory: ConversionActionFactory
+
+    init(actionFactory: ConversionActionFactory = ConversionActionFactory()) {
+        self.actionFactory = actionFactory
+    }
+
+    func enabledPresets() -> [ConversionPreset] {
+        actionFactory.enabledPresets()
+    }
+
+    func enqueueAudioJobs(urls: [URL], preset: ConversionPreset) -> Bool {
+        let jobs = actionFactory.audioTranscodeJobs(for: urls, preset: preset, source: .openWith)
+        guard jobs.count == urls.count, !jobs.isEmpty else {
+            DiagnosticLog.append("open with enqueue audio rejected count=\(urls.count) jobs=\(jobs.count)")
+            return false
+        }
+
+        return enqueue(jobs, launchSource: .openWithAudio)
+    }
+
+    func enqueueNCMJobs(urls: [URL]) -> Bool {
+        let jobs = urls
+            .filter { FileCategory.classify($0) == .ncm }
+            .map {
+                JobRequest(
+                    fileURL: $0,
+                    fileBookmarkData: JobRequest.securityScopedBookmarkData(for: $0),
+                    directoryBookmarkData: JobRequest.securityScopedBookmarkData(for: $0.deletingLastPathComponent()),
+                    category: .ncm,
+                    operation: .convertNCM,
+                    source: .openWith
+                )
+            }
+
+        guard jobs.count == urls.count, !jobs.isEmpty else {
+            DiagnosticLog.append("open with enqueue ncm rejected count=\(urls.count) jobs=\(jobs.count)")
+            return false
+        }
+
+        return enqueue(jobs, launchSource: .openWithNCM)
+    }
+
+    func launchHeadlessProcessor() {
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = false
+        configuration.createsNewApplicationInstance = true
+
+        let bundleURL = Bundle.main.bundleURL
+        DiagnosticLog.append("open with launch headless bundle=\(bundleURL.path)")
+        NSWorkspace.shared.openApplication(at: bundleURL, configuration: configuration) { _, error in
+            if let error {
+                DiagnosticLog.append("open with launch headless failed \(error.localizedDescription)")
+            } else {
+                DiagnosticLog.append("open with launch headless requested")
+            }
+        }
+    }
+
+    private func enqueue(_ jobs: [JobRequest], launchSource: LaunchSource) -> Bool {
+        do {
+            DiagnosticLog.append("open with enqueue start source=\(launchSource.rawValue) count=\(jobs.count)")
+            let queue = try JobQueue()
+            try queue.enqueue(jobs)
+            setLaunchMarker(launchSource)
+            launchHeadlessProcessor()
+            return true
+        } catch {
+            DiagnosticLog.append("open with enqueue failed \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    private func setLaunchMarker(_ source: LaunchSource) {
+        guard let defaults = UserDefaults(suiteName: AppConstants.appGroupIdentifier) else {
+            DiagnosticLog.append("open with launch marker unavailable")
+            return
+        }
+
+        defaults.set(source.rawValue, forKey: AppConstants.extensionLaunchSourceKey)
+        defaults.set(Date().timeIntervalSince1970, forKey: AppConstants.extensionLaunchTimestampKey)
+        defaults.synchronize()
+    }
+}

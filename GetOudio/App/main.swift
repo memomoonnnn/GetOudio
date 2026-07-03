@@ -1,13 +1,11 @@
 import AppKit
 import GetOudioCore
 
-// ── Headless detection ──────────────────────────────────────────────
-// The floating-panel window configuration (level=.floating,
-// collectionBehavior=.stationary) is what enables dual foreground/background
-// behaviour — NOT LSUIElement or TransformProcessType.
+// Headless detection
 //
-//   • Normal launch → floating panel window appears
-//   • Extension trigger → no window, jobs run silently → notification → exit
+//   • Direct launch without marker → NormalLauncher shows the settings window.
+//   • Finder/Share/Open With marker → HeadlessRunner drains JobQueue, notifies, exits.
+//   • Transient Open With UI is menu-style and only enqueues work.
 
 private let extensionLaunchMarkerTTL: TimeInterval = 120
 
