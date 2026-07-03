@@ -100,6 +100,7 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
     private func showSettingsWindowIfNeeded() {
         guard launchIntent == .undecided || launchIntent == .settings else { return }
         if let mainWindow {
+            NSApp.setActivationPolicy(.regular)
             mainWindow.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             return
@@ -110,6 +111,7 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
     }
 
     private func showSettingsWindow() {
+        NSApp.setActivationPolicy(.regular)
         let hostingController = NSHostingController(rootView: MainView())
 
         let window = NSWindow(contentViewController: hostingController)

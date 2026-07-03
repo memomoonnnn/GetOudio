@@ -52,7 +52,17 @@ public final class AudioConversionService {
             defer { access.stopAccessing() }
 
             let outputURL = preset.outputURL(for: access.fileURL)
-            let arguments = preset.ffmpegArguments(inputURL: access.fileURL, outputURL: outputURL)
+            let inputAudioChannelCount: Int?
+            if preset.needsInputAudioChannelCount {
+                inputAudioChannelCount = await probeInputAudioChannelCount(ffmpegPath: ffmpegPath, fileURL: access.fileURL)
+            } else {
+                inputAudioChannelCount = nil
+            }
+            let arguments = preset.ffmpegArguments(
+                inputURL: access.fileURL,
+                outputURL: outputURL,
+                inputAudioChannelCount: inputAudioChannelCount
+            )
 
             do {
                 let result = try await runner.run(executablePath: ffmpegPath, arguments: arguments)
@@ -73,5 +83,50 @@ public final class AudioConversionService {
         }
 
         return ConversionSummary(successCount: successCount, failureCount: failureCount, messages: messages)
+    }
+
+    func probeInputAudioChannelCount(ffmpegPath: String, fileURL: URL) async -> Int? {
+        let result = try? await runner.run(executablePath: ffmpegPath, arguments: ["-hide_banner", "-i", fileURL.path])
+        guard let output = result.map({ $0.standardError + "\n" + $0.standardOutput }) else {
+            return nil
+        }
+
+        return Self.inputAudioChannelCount(from: output)
+    }
+
+    static func inputAudioChannelCount(from probeOutput: String) -> Int? {
+        guard let audioLine = probeOutput
+            .components(separatedBy: .newlines)
+            .first(where: { $0.contains("Audio:") })
+        else {
+            return nil
+        }
+
+        let lowercasedLine = audioLine.lowercased()
+        if lowercasedLine.contains(", mono,") { return 1 }
+        if lowercasedLine.contains(", stereo,") { return 2 }
+
+        let patterns = [
+            #",\s*(\d+)\.(\d)(?:\([^)]+\))?\s*,"#,
+            #",\s*(\d+)\s+channels\s*,"#
+        ]
+        for pattern in patterns {
+            guard let regex = try? NSRegularExpression(pattern: pattern),
+                  let match = regex.firstMatch(in: lowercasedLine, range: NSRange(lowercasedLine.startIndex..., in: lowercasedLine)),
+                  let mainRange = Range(match.range(at: 1), in: lowercasedLine),
+                  let mainChannels = Int(lowercasedLine[mainRange])
+            else {
+                continue
+            }
+
+            if match.numberOfRanges > 2,
+               let subRange = Range(match.range(at: 2), in: lowercasedLine),
+               let subChannels = Int(lowercasedLine[subRange]) {
+                return mainChannels + subChannels
+            }
+            return mainChannels
+        }
+
+        return nil
     }
 }

@@ -71,9 +71,13 @@ final class DefaultOpenWithService {
             ["wav"],
             ["aiff", "aif"],
             ["ogg"],
+            ["opus"],
             ["caf"]
         ].compactMap { fileExtensions in
-            let formats = fileExtensions.compactMap { format(forAudioExtension: $0) }
+            let allowedExtensions = Set(FileCategory.defaultOpenWithAudioExtensions)
+            let formats = fileExtensions
+                .filter { allowedExtensions.contains($0) }
+                .compactMap { format(forAudioExtension: $0) }
             return formats.isEmpty ? nil : DefaultOpenWithFormatGroup(formats: formats)
         }
     }

@@ -36,18 +36,57 @@ cd "ffmpeg-${FFMPEG_VERSION}"
 # ---------- 配置 ----------
 echo "--- 配置编译选项 ---"
 
-# libmp3lame 路径
+# 外部音频编码库路径
 LAME_PREFIX="$(brew --prefix lame 2>/dev/null || echo '/opt/homebrew/opt/lame')"
+OPUS_PREFIX="$(brew --prefix opus 2>/dev/null || echo '/opt/homebrew/opt/opus')"
+VORBIS_PREFIX="$(brew --prefix libvorbis 2>/dev/null || echo '/opt/homebrew/opt/libvorbis')"
+OGG_PREFIX="$(brew --prefix libogg 2>/dev/null || echo '/opt/homebrew/opt/libogg')"
+PKGCONF_PREFIX="$(brew --prefix pkgconf 2>/dev/null || brew --prefix pkg-config 2>/dev/null || echo '/opt/homebrew/opt/pkgconf')"
 
-# 确保 configure 能找到 lame（通过 extra flags 直接指定，不依赖 pkg-config）
-LAME_CFLAGS="-I${LAME_PREFIX}/include"
-LAME_LIBS="-L${LAME_PREFIX}/lib -lmp3lame"
+# 确保 configure 能找到外部编码库，并尽量把第三方编码库静态链接进 ffmpeg。
+EXTERNAL_CFLAGS="-I${LAME_PREFIX}/include -I${OPUS_PREFIX}/include -I${VORBIS_PREFIX}/include -I${OGG_PREFIX}/include"
+EXTERNAL_LDFLAGS="-L${LAME_PREFIX}/lib -Wl,-force_load,${LAME_PREFIX}/lib/libmp3lame.a -Wl,-dead_strip_dylibs"
+STATIC_PKG_CONFIG_DIR="$BUILD_DIR/pkgconfig-static"
+mkdir -p "$STATIC_PKG_CONFIG_DIR"
+cat > "$STATIC_PKG_CONFIG_DIR/opus.pc" <<EOF
+Name: opus
+Description: Opus codec library
+Version: 1
+Cflags: -I${OPUS_PREFIX}/include/opus
+Libs: ${OPUS_PREFIX}/lib/libopus.a -lm
+EOF
+cat > "$STATIC_PKG_CONFIG_DIR/ogg.pc" <<EOF
+Name: ogg
+Description: Ogg bitstream library
+Version: 1
+Cflags: -I${OGG_PREFIX}/include
+Libs: ${OGG_PREFIX}/lib/libogg.a
+EOF
+cat > "$STATIC_PKG_CONFIG_DIR/vorbis.pc" <<EOF
+Name: vorbis
+Description: Vorbis codec library
+Version: 1
+Requires: ogg
+Cflags: -I${VORBIS_PREFIX}/include
+Libs: ${VORBIS_PREFIX}/lib/libvorbis.a -lm
+EOF
+cat > "$STATIC_PKG_CONFIG_DIR/vorbisenc.pc" <<EOF
+Name: vorbisenc
+Description: Vorbis encoder library
+Version: 1
+Requires: vorbis
+Cflags: -I${VORBIS_PREFIX}/include
+Libs: ${VORBIS_PREFIX}/lib/libvorbisenc.a
+EOF
+export PKG_CONFIG="${PKGCONF_PREFIX}/bin/pkg-config"
+export PKG_CONFIG_PATH="$STATIC_PKG_CONFIG_DIR:${PKG_CONFIG_PATH:-}"
 
 ./configure \
     --prefix="$BUILD_DIR/install" \
     --disable-everything \
-    --extra-cflags="$LAME_CFLAGS" \
-    --extra-ldflags="$LAME_LIBS" \
+    --pkg-config-flags="--static" \
+    --extra-cflags="$EXTERNAL_CFLAGS" \
+    --extra-ldflags="$EXTERNAL_LDFLAGS" \
     \
     `# === 核心组件 ===` \
     --enable-avcodec \
@@ -85,6 +124,8 @@ LAME_LIBS="-L${LAME_PREFIX}/lib -lmp3lame"
     --enable-encoder=pcm_s16le,pcm_s16be,pcm_s24le,pcm_s24be,pcm_s32le,pcm_s32be \
     --enable-encoder=pcm_f32le,pcm_f32be \
     --enable-libmp3lame --enable-encoder=libmp3lame \
+    --enable-libvorbis --enable-encoder=libvorbis \
+    --enable-libopus --enable-encoder=libopus \
     \
     `# === 解复用器（读取输入文件）===` \
     --enable-demuxer=mov,m4v,mp3,wav,flac,ogg,aac,ac3,eac3 \

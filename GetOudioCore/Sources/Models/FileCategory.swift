@@ -28,10 +28,6 @@ public enum FileCategory: String, Codable, CaseIterable, Sendable {
             return .ncm
         }
 
-        if Self.unsupportedAudioExtensionSet.contains(ext) {
-            return .unsupported
-        }
-
         if Self.audioExtensionSet.contains(ext) {
             return .audio
         }
@@ -44,6 +40,10 @@ public enum FileCategory: String, Codable, CaseIterable, Sendable {
             return .unsupported
         }
 
+        if type.conforms(to: .audio) {
+            return .audio
+        }
+
         if type.conforms(to: .movie) || type.conforms(to: .audiovisualContent) {
             return .video
         }
@@ -51,8 +51,18 @@ public enum FileCategory: String, Codable, CaseIterable, Sendable {
         return .unsupported
     }
 
+    /// Audio inputs accepted by conversion entry points.
+    /// Keep this aligned with the embedded ffmpeg demuxers plus common extension aliases.
     public static let supportedAudioExtensions: [String] = [
-        "m4a", "aac", "mp3", "alac", "flac", "wav", "aiff", "aif", "ogg", "caf"
+        "aac", "ac3", "aif", "aifc", "aiff", "alac", "amr", "ape", "asf", "ast",
+        "au", "caf", "dts", "dtshd", "eac3", "f32le", "flac", "loas",
+        "m4a", "m4b", "mp2", "mp3", "mpa", "mpga", "ogg", "opus",
+        "s16le", "s24le", "s32le", "shn", "tak", "truehd", "tta", "wav",
+        "wma", "wv"
+    ]
+
+    public static let defaultOpenWithAudioExtensions: [String] = [
+        "m4a", "aac", "mp3", "alac", "flac", "wav", "aiff", "aif", "ogg", "opus", "caf"
     ]
 
     public static let supportedVideoExtensions: [String] = [
@@ -61,5 +71,4 @@ public enum FileCategory: String, Codable, CaseIterable, Sendable {
 
     private static let audioExtensionSet = Set(supportedAudioExtensions)
     private static let videoExtensionSet = Set(supportedVideoExtensions)
-    private static let unsupportedAudioExtensionSet: Set<String> = ["ape", "m4b", "opus", "wma"]
 }

@@ -30,8 +30,8 @@ final class GetOudioCoreTests: XCTestCase {
     func testPresetCatalogCoversPlannedFormats() {
         let extensions = Set(ConversionPreset.allCases.map(\.outputExtension))
 
-        XCTAssertEqual(ConversionPreset.allCases.count, 18)
-        XCTAssertTrue(extensions.isSuperset(of: ["m4a", "mp3", "flac", "wav", "aiff"]))
+        XCTAssertEqual(ConversionPreset.allCases.count, 24)
+        XCTAssertTrue(extensions.isSuperset(of: ["m4a", "mp3", "flac", "wav", "aiff", "ogg", "opus"]))
     }
 
     func testPresetOriginalTitlesUseFinderFriendlySuffix() {
@@ -43,6 +43,8 @@ final class GetOudioCoreTests: XCTestCase {
         XCTAssertEqual(ConversionPreset.flacSource.finderMenuTitle, "FLAC Original")
         XCTAssertEqual(ConversionPreset.pcmSource.finderMenuTitle, "PCM WAV Original")
         XCTAssertEqual(ConversionPreset.pcmAiffSource.finderMenuTitle, "PCM AIFF Original")
+        XCTAssertEqual(ConversionPreset.vorbisQ3.finderMenuTitle, "Vorbis q3")
+        XCTAssertEqual(ConversionPreset.opus64KbpsPerChannel.finderMenuTitle, "Opus 64kbps Per-Ch")
     }
 
     func testSixteenBitPresetsUse44100HzNamingAndArguments() throws {
@@ -110,12 +112,94 @@ final class GetOudioCoreTests: XCTestCase {
         }
     }
 
+    func testVorbisPresetsUseOggContainerAndQualityScale() throws {
+        let input = URL(fileURLWithPath: "/tmp/song.wav")
+        let cases: [(ConversionPreset, String)] = [
+            (.vorbisQ3, "3"),
+            (.vorbisQ6, "6"),
+            (.vorbisQ10, "10")
+        ]
+
+        for (preset, expectedQuality) in cases {
+            let output = preset.outputURL(for: input)
+            let arguments = preset.ffmpegArguments(inputURL: input, outputURL: output)
+
+            XCTAssertEqual(output.pathExtension, "ogg")
+            XCTAssertTrue(arguments.contains("libvorbis"))
+            let qualityIndex = try XCTUnwrap(arguments.firstIndex(of: "-q:a"))
+            XCTAssertEqual(arguments[qualityIndex + 1], expectedQuality)
+            let muxerIndex = try XCTUnwrap(arguments.firstIndex(of: "-f"))
+            XCTAssertEqual(arguments[muxerIndex + 1], "ogg")
+            XCTAssertTrue(arguments.contains("-map_metadata"))
+        }
+    }
+
+    func testOpusPresetsUseOggContainerVBRAndPerChannelBitrate() throws {
+        let input = URL(fileURLWithPath: "/tmp/song.wav")
+        let cases: [(ConversionPreset, String, String)] = [
+            (.opus64KbpsPerChannel, "128k", "Opus 64kbps Per-Ch"),
+            (.opus96KbpsPerChannel, "192k", "Opus 96kbps Per-Ch"),
+            (.opus128KbpsPerChannel, "256k", "Opus 128kbps Per-Ch")
+        ]
+
+        for (preset, expectedStereoBitrate, expectedOutputTitle) in cases {
+            let output = preset.outputURL(for: input)
+            let arguments = preset.ffmpegArguments(inputURL: input, outputURL: output, inputAudioChannelCount: 2)
+
+            XCTAssertEqual(output.path, "/tmp/song [\(expectedOutputTitle)].opus")
+            XCTAssertEqual(output.pathExtension, "opus")
+            XCTAssertTrue(arguments.contains("libopus"))
+            let bitrateIndex = try XCTUnwrap(arguments.firstIndex(of: "-b:a"))
+            XCTAssertEqual(arguments[bitrateIndex + 1], expectedStereoBitrate)
+            let vbrIndex = try XCTUnwrap(arguments.firstIndex(of: "-vbr"))
+            XCTAssertEqual(arguments[vbrIndex + 1], "on")
+            let muxerIndex = try XCTUnwrap(arguments.firstIndex(of: "-f"))
+            XCTAssertEqual(arguments[muxerIndex + 1], "ogg")
+            XCTAssertTrue(arguments.contains("-map_metadata"))
+        }
+
+        let multichannelArguments = ConversionPreset.opus64KbpsPerChannel.ffmpegArguments(
+            inputURL: input,
+            outputURL: ConversionPreset.opus64KbpsPerChannel.outputURL(for: input),
+            inputAudioChannelCount: 6
+        )
+        let bitrateIndex = try XCTUnwrap(multichannelArguments.firstIndex(of: "-b:a"))
+        XCTAssertEqual(multichannelArguments[bitrateIndex + 1], "384k")
+    }
+
+    func testAudioConversionServiceParsesInputAudioChannelCount() {
+        XCTAssertEqual(
+            AudioConversionService.inputAudioChannelCount(from: "Stream #0:0: Audio: flac, 44100 Hz, stereo, s16"),
+            2
+        )
+        XCTAssertEqual(
+            AudioConversionService.inputAudioChannelCount(from: "Stream #0:0: Audio: opus, 48000 Hz, mono, fltp"),
+            1
+        )
+        XCTAssertEqual(
+            AudioConversionService.inputAudioChannelCount(from: "Stream #0:0: Audio: ac3, 48000 Hz, 5.1(side), fltp"),
+            6
+        )
+        XCTAssertEqual(
+            AudioConversionService.inputAudioChannelCount(from: "Stream #0:0: Audio: pcm_s24le, 96000 Hz, 8 channels, s32"),
+            8
+        )
+    }
+
     func testPresetGroupsCoverAllPresets() {
         let groupedPresets = ConversionPresetGroup.allCases.flatMap(\.presets)
 
         XCTAssertEqual(Set(groupedPresets), Set(ConversionPreset.allCases))
         XCTAssertEqual(groupedPresets.count, ConversionPreset.allCases.count)
-        XCTAssertEqual(ConversionPresetGroup.allCases.map(\.displayName), ["AAC", "MP3", "ALAC", "FLAC", "PCM WAV", "PCM AIFF"])
+        XCTAssertEqual(ConversionPresetGroup.allCases.map(\.displayName), ["AAC", "MP3", "Vorbis", "Opus", "ALAC", "FLAC", "PCM WAV", "PCM AIFF"])
+        XCTAssertLessThan(
+            try XCTUnwrap(ConversionPreset.allCases.firstIndex(of: .vorbisQ3)),
+            try XCTUnwrap(ConversionPreset.allCases.firstIndex(of: .alac24Bit48k))
+        )
+        XCTAssertLessThan(
+            try XCTUnwrap(ConversionPreset.allCases.firstIndex(of: .opus64KbpsPerChannel)),
+            try XCTUnwrap(ConversionPreset.allCases.firstIndex(of: .alac24Bit48k))
+        )
     }
 
     func testFileCategoryClassification() {
@@ -123,10 +207,18 @@ final class GetOudioCoreTests: XCTestCase {
         XCTAssertEqual(FileCategory.classify(URL(fileURLWithPath: "/tmp/demo.mp3")), .audio)
         XCTAssertEqual(FileCategory.classify(URL(fileURLWithPath: "/tmp/demo.ogg")), .audio)
         XCTAssertEqual(FileCategory.classify(URL(fileURLWithPath: "/tmp/demo.caf")), .audio)
-        XCTAssertEqual(FileCategory.classify(URL(fileURLWithPath: "/tmp/demo.opus")), .unsupported)
-        XCTAssertEqual(FileCategory.classify(URL(fileURLWithPath: "/tmp/demo.wma")), .unsupported)
+        XCTAssertEqual(FileCategory.classify(URL(fileURLWithPath: "/tmp/demo.opus")), .audio)
+        XCTAssertEqual(FileCategory.classify(URL(fileURLWithPath: "/tmp/demo.wma")), .audio)
+        XCTAssertEqual(FileCategory.classify(URL(fileURLWithPath: "/tmp/demo.mpga")), .audio)
         XCTAssertEqual(FileCategory.classify(URL(fileURLWithPath: "/tmp/demo.mov")), .video)
         XCTAssertEqual(FileCategory.classify(URL(string: "https://music.apple.com/us/album/example/123")!), .appleMusic)
+    }
+
+    func testAudioConversionInputsStayBroaderThanDefaultOpenWithFormats() {
+        XCTAssertTrue(FileCategory.supportedAudioExtensions.contains("mpga"))
+        XCTAssertTrue(FileCategory.supportedAudioExtensions.contains("opus"))
+        XCTAssertTrue(FileCategory.supportedAudioExtensions.contains("wma"))
+        XCTAssertEqual(FileCategory.defaultOpenWithAudioExtensions, ["m4a", "aac", "mp3", "alac", "flac", "wav", "aiff", "aif", "ogg", "opus", "caf"])
     }
 
     func testConversionActionFactoryUsesEnabledPresetsAndDefaultFallback() {

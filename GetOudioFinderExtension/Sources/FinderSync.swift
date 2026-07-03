@@ -127,6 +127,12 @@ private final class FinderActionContext: NSObject {
     @objc private func runPCMAiff24Bit48k(_ sender: NSMenuItem) { runPreset(.pcmAiff24Bit48k) }
     @objc private func runPCMAiff16Bit44_1k(_ sender: NSMenuItem) { runPreset(.pcmAiff16Bit44_1k) }
     @objc private func runPCMAiffSource(_ sender: NSMenuItem) { runPreset(.pcmAiffSource) }
+    @objc private func runVorbisQ3(_ sender: NSMenuItem) { runPreset(.vorbisQ3) }
+    @objc private func runVorbisQ6(_ sender: NSMenuItem) { runPreset(.vorbisQ6) }
+    @objc private func runVorbisQ10(_ sender: NSMenuItem) { runPreset(.vorbisQ10) }
+    @objc private func runOpus64KbpsPerChannel(_ sender: NSMenuItem) { runPreset(.opus64KbpsPerChannel) }
+    @objc private func runOpus96KbpsPerChannel(_ sender: NSMenuItem) { runPreset(.opus96KbpsPerChannel) }
+    @objc private func runOpus128KbpsPerChannel(_ sender: NSMenuItem) { runPreset(.opus128KbpsPerChannel) }
 
     @objc private func extractVideoAudio(_ sender: NSMenuItem) {
         let urls = (sender.representedObject as? FinderActionContext)?.urls ?? FIFinderSyncController.default().selectedItemURLs() ?? []
@@ -257,6 +263,18 @@ private final class FinderActionContext: NSObject {
             return #selector(runPCMAiff16Bit44_1k(_:))
         case .pcmAiffSource:
             return #selector(runPCMAiffSource(_:))
+        case .vorbisQ3:
+            return #selector(runVorbisQ3(_:))
+        case .vorbisQ6:
+            return #selector(runVorbisQ6(_:))
+        case .vorbisQ10:
+            return #selector(runVorbisQ10(_:))
+        case .opus64KbpsPerChannel:
+            return #selector(runOpus64KbpsPerChannel(_:))
+        case .opus96KbpsPerChannel:
+            return #selector(runOpus96KbpsPerChannel(_:))
+        case .opus128KbpsPerChannel:
+            return #selector(runOpus128KbpsPerChannel(_:))
         }
     }
 }

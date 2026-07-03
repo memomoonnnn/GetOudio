@@ -91,6 +91,7 @@ targets:
               - aiff
               - aif
               - ogg
+              - opus
               - caf
             LSItemContentTypes:
               - public.audio

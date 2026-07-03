@@ -7,6 +7,12 @@ public enum ConversionPreset: String, Codable, CaseIterable, Identifiable, Senda
     case mp3128
     case mp3256
     case mp3320
+    case vorbisQ3
+    case vorbisQ6
+    case vorbisQ10
+    case opus64KbpsPerChannel
+    case opus96KbpsPerChannel
+    case opus128KbpsPerChannel
     case alac24Bit48k
     case alac16Bit44_1k = "alac16Bit44_1k"
     case alacSource
@@ -36,6 +42,10 @@ public enum ConversionPreset: String, Codable, CaseIterable, Identifiable, Senda
             return .pcmWav
         case .pcmAiff24Bit48k, .pcmAiff16Bit44_1k, .pcmAiffSource:
             return .pcmAiff
+        case .vorbisQ3, .vorbisQ6, .vorbisQ10:
+            return .vorbis
+        case .opus64KbpsPerChannel, .opus96KbpsPerChannel, .opus128KbpsPerChannel:
+            return .opus
         }
     }
 
@@ -57,6 +67,12 @@ public enum ConversionPreset: String, Codable, CaseIterable, Identifiable, Senda
         case .pcm24Bit48k, .pcmAiff24Bit48k: return "24bit 48kHz"
         case .pcm16Bit44_1k, .pcmAiff16Bit44_1k: return "16bit 44.1kHz"
         case .pcmSource, .pcmAiffSource: return "Original"
+        case .vorbisQ3: return "q3"
+        case .vorbisQ6: return "q6"
+        case .vorbisQ10: return "q10"
+        case .opus64KbpsPerChannel: return "64kbps Per-Ch"
+        case .opus96KbpsPerChannel: return "96kbps Per-Ch"
+        case .opus128KbpsPerChannel: return "128kbps Per-Ch"
         }
     }
 
@@ -72,6 +88,10 @@ public enum ConversionPreset: String, Codable, CaseIterable, Identifiable, Senda
             return "wav"
         case .pcmAiff24Bit48k, .pcmAiff16Bit44_1k, .pcmAiffSource:
             return "aiff"
+        case .vorbisQ3, .vorbisQ6, .vorbisQ10:
+            return "ogg"
+        case .opus64KbpsPerChannel, .opus96KbpsPerChannel, .opus128KbpsPerChannel:
+            return "opus"
         }
     }
 
@@ -96,6 +116,12 @@ public enum ConversionPreset: String, Codable, CaseIterable, Identifiable, Senda
         case .pcmAiff24Bit48k: return "PCM AIFF 24bit 48kHz"
         case .pcmAiff16Bit44_1k: return "PCM AIFF 16bit 44.1kHz"
         case .pcmAiffSource: return "PCM AIFF Original"
+        case .vorbisQ3: return "Vorbis q3"
+        case .vorbisQ6: return "Vorbis q6"
+        case .vorbisQ10: return "Vorbis q10"
+        case .opus64KbpsPerChannel: return "Opus 64kbps Per-Ch"
+        case .opus96KbpsPerChannel: return "Opus 96kbps Per-Ch"
+        case .opus128KbpsPerChannel: return "Opus 128kbps Per-Ch"
         }
     }
 
@@ -119,6 +145,12 @@ public enum ConversionPreset: String, Codable, CaseIterable, Identifiable, Senda
         case .pcmAiff24Bit48k: return "PCM AIFF 24bit 48kHz"
         case .pcmAiff16Bit44_1k: return "PCM AIFF 16bit 44.1kHz"
         case .pcmAiffSource: return "PCM AIFF Original"
+        case .vorbisQ3: return "Vorbis q3"
+        case .vorbisQ6: return "Vorbis q6"
+        case .vorbisQ10: return "Vorbis q10"
+        case .opus64KbpsPerChannel: return "Opus 64kbps Per-Ch"
+        case .opus96KbpsPerChannel: return "Opus 96kbps Per-Ch"
+        case .opus128KbpsPerChannel: return "Opus 128kbps Per-Ch"
         }
     }
 
@@ -132,7 +164,16 @@ public enum ConversionPreset: String, Codable, CaseIterable, Identifiable, Senda
         return inputURL.deletingLastPathComponent().appendingPathComponent(outputName).appendingPathExtension(outputExtension)
     }
 
-    public func ffmpegArguments(inputURL: URL, outputURL: URL) -> [String] {
+    public var needsInputAudioChannelCount: Bool {
+        switch self {
+        case .opus64KbpsPerChannel, .opus96KbpsPerChannel, .opus128KbpsPerChannel:
+            return true
+        default:
+            return false
+        }
+    }
+
+    public func ffmpegArguments(inputURL: URL, outputURL: URL, inputAudioChannelCount: Int? = nil) -> [String] {
         var arguments = ["-i", inputURL.path]
 
         switch self {
@@ -172,6 +213,18 @@ public enum ConversionPreset: String, Codable, CaseIterable, Identifiable, Senda
             arguments += ["-acodec", "pcm_s16be", "-ar", "44100", "-f", "aiff"]
         case .pcmAiffSource:
             arguments += ["-acodec", "pcm_s16be", "-f", "aiff"]
+        case .vorbisQ3:
+            arguments += ["-acodec", "libvorbis", "-q:a", "3", "-f", "ogg"]
+        case .vorbisQ6:
+            arguments += ["-acodec", "libvorbis", "-q:a", "6", "-f", "ogg"]
+        case .vorbisQ10:
+            arguments += ["-acodec", "libvorbis", "-q:a", "10", "-f", "ogg"]
+        case .opus64KbpsPerChannel:
+            arguments += opusArguments(targetKbpsPerChannel: 64, inputAudioChannelCount: inputAudioChannelCount)
+        case .opus96KbpsPerChannel:
+            arguments += opusArguments(targetKbpsPerChannel: 96, inputAudioChannelCount: inputAudioChannelCount)
+        case .opus128KbpsPerChannel:
+            arguments += opusArguments(targetKbpsPerChannel: 128, inputAudioChannelCount: inputAudioChannelCount)
         }
 
         arguments += ["-map", "0:a:0", "-map_metadata", "0:g", "-map_chapters", "0", "-y", "-vn"]
@@ -188,11 +241,19 @@ public enum ConversionPreset: String, Codable, CaseIterable, Identifiable, Senda
         arguments.append(outputURL.path)
         return arguments
     }
+
+    private func opusArguments(targetKbpsPerChannel: Int, inputAudioChannelCount: Int?) -> [String] {
+        let channelCount = max(inputAudioChannelCount ?? 2, 1)
+        let totalBitrateKbps = targetKbpsPerChannel * channelCount
+        return ["-acodec", "libopus", "-b:a", "\(totalBitrateKbps)k", "-vbr", "on", "-application", "audio", "-f", "ogg"]
+    }
 }
 
 public enum ConversionPresetGroup: String, CaseIterable, Identifiable, Sendable {
     case aac
     case mp3
+    case vorbis
+    case opus
     case alac
     case flac
     case pcmWav
@@ -208,6 +269,8 @@ public enum ConversionPresetGroup: String, CaseIterable, Identifiable, Sendable 
         case .flac: return "FLAC"
         case .pcmWav: return "PCM WAV"
         case .pcmAiff: return "PCM AIFF"
+        case .vorbis: return "Vorbis"
+        case .opus: return "Opus"
         }
     }
 
