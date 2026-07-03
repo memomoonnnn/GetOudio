@@ -175,7 +175,7 @@ struct TranscodingSettingsPage: View {
         }
     }
 
-    /// 单个编码格式板块（AAC / MP3 / ALAC / FLAC / PCM）
+    /// 单个编码格式板块（AAC / MP3 / ALAC / FLAC / PCM WAV / PCM AIFF）
     @ViewBuilder
     private func presetGroupBoard(_ group: ConversionPresetGroup) -> some View {
         VStack(alignment: .leading, spacing: 4) {

@@ -30,17 +30,19 @@ final class GetOudioCoreTests: XCTestCase {
     func testPresetCatalogCoversPlannedFormats() {
         let extensions = Set(ConversionPreset.allCases.map(\.outputExtension))
 
-        XCTAssertEqual(ConversionPreset.allCases.count, 15)
-        XCTAssertTrue(extensions.isSuperset(of: ["m4a", "mp3", "flac", "wav"]))
+        XCTAssertEqual(ConversionPreset.allCases.count, 18)
+        XCTAssertTrue(extensions.isSuperset(of: ["m4a", "mp3", "flac", "wav", "aiff"]))
     }
 
     func testPresetOriginalTitlesUseFinderFriendlySuffix() {
         XCTAssertEqual(ConversionPreset.alacSource.title, "Original")
         XCTAssertEqual(ConversionPreset.flacSource.title, "Original")
         XCTAssertEqual(ConversionPreset.pcmSource.title, "Original")
+        XCTAssertEqual(ConversionPreset.pcmAiffSource.title, "Original")
         XCTAssertEqual(ConversionPreset.alacSource.finderMenuTitle, "ALAC Original")
         XCTAssertEqual(ConversionPreset.flacSource.finderMenuTitle, "FLAC Original")
-        XCTAssertEqual(ConversionPreset.pcmSource.finderMenuTitle, "PCM Original")
+        XCTAssertEqual(ConversionPreset.pcmSource.finderMenuTitle, "PCM WAV Original")
+        XCTAssertEqual(ConversionPreset.pcmAiffSource.finderMenuTitle, "PCM AIFF Original")
     }
 
     func testSixteenBitPresetsUse44100HzNamingAndArguments() throws {
@@ -48,7 +50,8 @@ final class GetOudioCoreTests: XCTestCase {
         let cases: [(ConversionPreset, String, String, String, String)] = [
             (.alac16Bit44_1k, "16bit 44.1kHz", "ALAC 16bit 44.1kHz", "m4a", "alac"),
             (.flac16Bit44_1k, "16bit 44.1kHz", "FLAC 16bit 44.1kHz", "flac", "flac"),
-            (.pcm16Bit44_1k, "16bit 44.1kHz", "PCM 16bit 44.1kHz", "wav", "pcm_s16le")
+            (.pcm16Bit44_1k, "16bit 44.1kHz", "PCM WAV 16bit 44.1kHz", "wav", "pcm_s16le"),
+            (.pcmAiff16Bit44_1k, "16bit 44.1kHz", "PCM AIFF 16bit 44.1kHz", "aiff", "pcm_s16be")
         ]
 
         for (preset, expectedTitle, expectedOutputTitle, expectedExtension, expectedCodec) in cases {
@@ -75,8 +78,36 @@ final class GetOudioCoreTests: XCTestCase {
         XCTAssertTrue(rawValues.contains("alac16Bit44_1k"))
         XCTAssertTrue(rawValues.contains("flac16Bit44_1k"))
         XCTAssertTrue(rawValues.contains("pcm16Bit44_1k"))
-        XCTAssertFalse(labels.contains { $0.contains("PCM WAV") })
+        XCTAssertTrue(labels.contains { $0.contains("PCM WAV") })
+        XCTAssertTrue(labels.contains { $0.contains("PCM AIFF") })
         XCTAssertFalse(labels.contains { $0.contains("16bit 48kHz") || $0.contains("16bit 48KHz") })
+    }
+
+    func testPCMAiffPresetsUseAiffContainerCompatibleBigEndianCodecs() throws {
+        let input = URL(fileURLWithPath: "/tmp/song.wav")
+        let cases: [(ConversionPreset, String, String?)] = [
+            (.pcmAiff24Bit48k, "pcm_s24be", "48000"),
+            (.pcmAiff16Bit44_1k, "pcm_s16be", "44100"),
+            (.pcmAiffSource, "pcm_s16be", nil)
+        ]
+
+        for (preset, expectedCodec, expectedSampleRate) in cases {
+            let output = preset.outputURL(for: input)
+            let arguments = preset.ffmpegArguments(inputURL: input, outputURL: output)
+
+            XCTAssertEqual(output.pathExtension, "aiff")
+            XCTAssertTrue(arguments.contains(expectedCodec))
+            let muxerIndex = try XCTUnwrap(arguments.firstIndex(of: "-f"))
+            XCTAssertEqual(arguments[muxerIndex + 1], "aiff")
+            XCTAssertFalse(arguments.contains("pcm_s16le"))
+            XCTAssertFalse(arguments.contains("pcm_s24le"))
+            if let expectedSampleRate = expectedSampleRate {
+                let sampleRateIndex = try XCTUnwrap(arguments.firstIndex(of: "-ar"))
+                XCTAssertEqual(arguments[sampleRateIndex + 1], expectedSampleRate)
+            } else {
+                XCTAssertFalse(arguments.contains("-ar"))
+            }
+        }
     }
 
     func testPresetGroupsCoverAllPresets() {
@@ -84,7 +115,7 @@ final class GetOudioCoreTests: XCTestCase {
 
         XCTAssertEqual(Set(groupedPresets), Set(ConversionPreset.allCases))
         XCTAssertEqual(groupedPresets.count, ConversionPreset.allCases.count)
-        XCTAssertEqual(ConversionPresetGroup.allCases.map(\.displayName), ["AAC", "MP3", "ALAC", "FLAC", "PCM"])
+        XCTAssertEqual(ConversionPresetGroup.allCases.map(\.displayName), ["AAC", "MP3", "ALAC", "FLAC", "PCM WAV", "PCM AIFF"])
     }
 
     func testFileCategoryClassification() {

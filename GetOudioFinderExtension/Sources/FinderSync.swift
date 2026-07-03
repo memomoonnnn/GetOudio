@@ -52,10 +52,7 @@ private final class FinderActionContext: NSObject {
             )
 
             if audioURLs.isEmpty && videoURLs.isEmpty && ncmURLs.isEmpty {
-                let disabledItem = NSMenuItem(title: "没有可处理的文件", action: nil, keyEquivalent: "")
-                disabledItem.isEnabled = false
-                menu.addItem(disabledItem)
-                return menu
+                return nil
             }
 
             if !audioURLs.isEmpty || [videoURLs.isEmpty, ncmURLs.isEmpty].filter({ !$0 }).count > 1 {
@@ -105,9 +102,7 @@ private final class FinderActionContext: NSObject {
             }
 
         default:
-            let item = NSMenuItem(title: "打开 Get Oudio", action: #selector(openContainingApp), keyEquivalent: "")
-            item.target = self
-            menu.addItem(item)
+            return nil
         }
 
         return menu
@@ -128,6 +123,9 @@ private final class FinderActionContext: NSObject {
     @objc private func runPCM24Bit48k(_ sender: NSMenuItem) { runPreset(.pcm24Bit48k) }
     @objc private func runPCM16Bit44_1k(_ sender: NSMenuItem) { runPreset(.pcm16Bit44_1k) }
     @objc private func runPCMSource(_ sender: NSMenuItem) { runPreset(.pcmSource) }
+    @objc private func runPCMAiff24Bit48k(_ sender: NSMenuItem) { runPreset(.pcmAiff24Bit48k) }
+    @objc private func runPCMAiff16Bit44_1k(_ sender: NSMenuItem) { runPreset(.pcmAiff16Bit44_1k) }
+    @objc private func runPCMAiffSource(_ sender: NSMenuItem) { runPreset(.pcmAiffSource) }
 
     @objc private func extractVideoAudio(_ sender: NSMenuItem) {
         let urls = (sender.representedObject as? FinderActionContext)?.urls ?? FIFinderSyncController.default().selectedItemURLs() ?? []
@@ -257,6 +255,12 @@ private final class FinderActionContext: NSObject {
             return #selector(runPCM16Bit44_1k(_:))
         case .pcmSource:
             return #selector(runPCMSource(_:))
+        case .pcmAiff24Bit48k:
+            return #selector(runPCMAiff24Bit48k(_:))
+        case .pcmAiff16Bit44_1k:
+            return #selector(runPCMAiff16Bit44_1k(_:))
+        case .pcmAiffSource:
+            return #selector(runPCMAiffSource(_:))
         }
     }
 }

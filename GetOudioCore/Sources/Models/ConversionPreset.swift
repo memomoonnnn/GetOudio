@@ -16,6 +16,9 @@ public enum ConversionPreset: String, Codable, CaseIterable, Identifiable, Senda
     case pcm24Bit48k
     case pcm16Bit44_1k = "pcm16Bit44_1k"
     case pcmSource
+    case pcmAiff24Bit48k
+    case pcmAiff16Bit44_1k = "pcmAiff16Bit44_1k"
+    case pcmAiffSource
 
     public var id: String { rawValue }
 
@@ -30,7 +33,9 @@ public enum ConversionPreset: String, Codable, CaseIterable, Identifiable, Senda
         case .flac24Bit48k, .flac16Bit44_1k, .flacSource:
             return .flac
         case .pcm24Bit48k, .pcm16Bit44_1k, .pcmSource:
-            return .pcm
+            return .pcmWav
+        case .pcmAiff24Bit48k, .pcmAiff16Bit44_1k, .pcmAiffSource:
+            return .pcmAiff
         }
     }
 
@@ -49,9 +54,9 @@ public enum ConversionPreset: String, Codable, CaseIterable, Identifiable, Senda
         case .flac24Bit48k: return "24bit 48kHz"
         case .flac16Bit44_1k: return "16bit 44.1kHz"
         case .flacSource: return "Original"
-        case .pcm24Bit48k: return "24bit 48kHz"
-        case .pcm16Bit44_1k: return "16bit 44.1kHz"
-        case .pcmSource: return "Original"
+        case .pcm24Bit48k, .pcmAiff24Bit48k: return "24bit 48kHz"
+        case .pcm16Bit44_1k, .pcmAiff16Bit44_1k: return "16bit 44.1kHz"
+        case .pcmSource, .pcmAiffSource: return "Original"
         }
     }
 
@@ -65,6 +70,8 @@ public enum ConversionPreset: String, Codable, CaseIterable, Identifiable, Senda
             return "flac"
         case .pcm24Bit48k, .pcm16Bit44_1k, .pcmSource:
             return "wav"
+        case .pcmAiff24Bit48k, .pcmAiff16Bit44_1k, .pcmAiffSource:
+            return "aiff"
         }
     }
 
@@ -83,9 +90,12 @@ public enum ConversionPreset: String, Codable, CaseIterable, Identifiable, Senda
         case .flac24Bit48k: return "FLAC 24bit 48kHz"
         case .flac16Bit44_1k: return "FLAC 16bit 44.1kHz"
         case .flacSource: return "FLAC Original"
-        case .pcm24Bit48k: return "PCM 24bit 48kHz"
-        case .pcm16Bit44_1k: return "PCM 16bit 44.1kHz"
-        case .pcmSource: return "PCM Original"
+        case .pcm24Bit48k: return "PCM WAV 24bit 48kHz"
+        case .pcm16Bit44_1k: return "PCM WAV 16bit 44.1kHz"
+        case .pcmSource: return "PCM WAV Original"
+        case .pcmAiff24Bit48k: return "PCM AIFF 24bit 48kHz"
+        case .pcmAiff16Bit44_1k: return "PCM AIFF 16bit 44.1kHz"
+        case .pcmAiffSource: return "PCM AIFF Original"
         }
     }
 
@@ -103,9 +113,12 @@ public enum ConversionPreset: String, Codable, CaseIterable, Identifiable, Senda
         case .flac24Bit48k: return "FLAC 24bit 48kHz"
         case .flac16Bit44_1k: return "FLAC 16bit 44.1kHz"
         case .flacSource: return "FLAC Original"
-        case .pcm24Bit48k: return "PCM 24bit 48kHz"
-        case .pcm16Bit44_1k: return "PCM 16bit 44.1kHz"
-        case .pcmSource: return "PCM Original"
+        case .pcm24Bit48k: return "PCM WAV 24bit 48kHz"
+        case .pcm16Bit44_1k: return "PCM WAV 16bit 44.1kHz"
+        case .pcmSource: return "PCM WAV Original"
+        case .pcmAiff24Bit48k: return "PCM AIFF 24bit 48kHz"
+        case .pcmAiff16Bit44_1k: return "PCM AIFF 16bit 44.1kHz"
+        case .pcmAiffSource: return "PCM AIFF Original"
         }
     }
 
@@ -153,6 +166,12 @@ public enum ConversionPreset: String, Codable, CaseIterable, Identifiable, Senda
             arguments += ["-acodec", "pcm_s16le", "-ar", "44100"]
         case .pcmSource:
             arguments += ["-acodec", "pcm_s16le"]
+        case .pcmAiff24Bit48k:
+            arguments += ["-acodec", "pcm_s24be", "-ar", "48000", "-f", "aiff"]
+        case .pcmAiff16Bit44_1k:
+            arguments += ["-acodec", "pcm_s16be", "-ar", "44100", "-f", "aiff"]
+        case .pcmAiffSource:
+            arguments += ["-acodec", "pcm_s16be", "-f", "aiff"]
         }
 
         arguments += ["-map", "0:a:0", "-map_metadata", "0:g", "-map_chapters", "0", "-y", "-vn"]
@@ -176,7 +195,8 @@ public enum ConversionPresetGroup: String, CaseIterable, Identifiable, Sendable 
     case mp3
     case alac
     case flac
-    case pcm
+    case pcmWav
+    case pcmAiff
 
     public var id: String { rawValue }
 
@@ -186,7 +206,8 @@ public enum ConversionPresetGroup: String, CaseIterable, Identifiable, Sendable 
         case .mp3: return "MP3"
         case .alac: return "ALAC"
         case .flac: return "FLAC"
-        case .pcm: return "PCM"
+        case .pcmWav: return "PCM WAV"
+        case .pcmAiff: return "PCM AIFF"
         }
     }
 
