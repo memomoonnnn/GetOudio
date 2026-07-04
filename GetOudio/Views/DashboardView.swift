@@ -12,7 +12,7 @@ struct DashboardView: View {
                         .frame(width: 72, height: 72)
 
                     VStack(alignment: .leading, spacing: 5) {
-                        Text("Get Oudio")
+                        Text("Get! OOOOOOOOOudio")
                             .font(.title2.weight(.semibold))
 
                         if let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String,
