@@ -1,6 +1,60 @@
 import GetOudioCore
 import SwiftUI
 
+private enum SettingsMetrics {
+    static let sectionCornerRadius: CGFloat = 10
+    static let rowCornerRadius: CGFloat = 8
+    static let sectionPadding: CGFloat = 12
+    static let sectionTitleFont = Font.system(size: 12, weight: .semibold)
+    static let sectionTitleKerning: CGFloat = 0.5
+    static let groupTitleFont = Font.system(size: 12.5, weight: .semibold)
+}
+
+private enum SettingsSurface {
+    static func cardFill(for scheme: ColorScheme) -> Color {
+        scheme == .light ? Color.black.opacity(0.045) : Color.white.opacity(0.085)
+    }
+
+    static func controlFill(for scheme: ColorScheme) -> Color {
+        scheme == .light ? Color.black.opacity(0.065) : Color.white.opacity(0.11)
+    }
+
+    static func border(for scheme: ColorScheme) -> Color {
+        scheme == .light ? Color.black.opacity(0.09) : Color.white.opacity(0.11)
+    }
+}
+
+private struct SettingsCardBackground: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: SettingsMetrics.sectionCornerRadius, style: .continuous)
+            .fill(SettingsSurface.cardFill(for: colorScheme))
+            .overlay(
+                RoundedRectangle(cornerRadius: SettingsMetrics.sectionCornerRadius, style: .continuous)
+                    .strokeBorder(SettingsSurface.border(for: colorScheme), lineWidth: 0.7)
+            )
+    }
+}
+
+private struct SettingsGroupedRowBackgroundModifier: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
+
+    func body(content: Content) -> some View {
+        content
+            .background(
+                RoundedRectangle(cornerRadius: SettingsMetrics.rowCornerRadius, style: .continuous)
+                    .fill(SettingsSurface.controlFill(for: colorScheme))
+            )
+    }
+}
+
+private extension View {
+    func settingsGroupedRowBackground() -> some View {
+        modifier(SettingsGroupedRowBackgroundModifier())
+    }
+}
+
 // MARK: - SettingsSection (Reusable Card Component)
 
 struct SettingsSection<Content: View, Footer: View>: View {
@@ -22,38 +76,39 @@ struct SettingsSection<Content: View, Footer: View>: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Header
-            Label(title, systemImage: systemImage)
-                .font(.headline)
-                .foregroundStyle(.primary)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-
-            Divider()
-
-            // Content
-            VStack(alignment: .leading, spacing: 0) {
-                content
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 6) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 12, weight: .semibold))
+                    .frame(width: 15, alignment: .center)
+                Text(title)
+                    .font(SettingsMetrics.sectionTitleFont)
+                    .kerning(SettingsMetrics.sectionTitleKerning)
             }
-            .padding(12)
-
-            if !(footer is EmptyView) {
-                Divider()
-                VStack(alignment: .leading, spacing: 4) {
-                    footer
-                }
-                .font(.caption)
                 .foregroundStyle(.secondary)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
+                .padding(.horizontal, 4)
+
+            VStack(alignment: .leading, spacing: 0) {
+                VStack(alignment: .leading, spacing: 0) {
+                    content
+                }
+                .padding(SettingsMetrics.sectionPadding)
+
+                if !(footer is EmptyView) {
+                    Divider()
+                    VStack(alignment: .leading, spacing: 4) {
+                        footer
+                    }
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, SettingsMetrics.sectionPadding)
+                    .padding(.vertical, 8)
+                }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(SettingsCardBackground())
         }
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(.quaternary, lineWidth: 0.5)
-        )
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -63,7 +118,7 @@ struct SettingsForm<Content: View>: View {
     let spacing: CGFloat
     let content: Content
 
-    init(spacing: CGFloat = 20, @ViewBuilder content: () -> Content) {
+    init(spacing: CGFloat = 30, @ViewBuilder content: () -> Content) {
         self.spacing = spacing
         self.content = content()
     }
@@ -73,6 +128,7 @@ struct SettingsForm<Content: View>: View {
             VStack(alignment: .leading, spacing: spacing) {
                 content
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(24)
         }
         .background(.windowBackground)
@@ -86,29 +142,10 @@ struct TranscodingSettingsPage: View {
 
     var body: some View {
         SettingsForm {
-            // 系统拓展板块
-            SettingsSection("系统拓展", systemImage: "switch.2") {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("若Finder Sync 与共享拓展没有被启用。请在系统设置的拓展页面手动打开 Get Oudio 的“共享”和“文件提供程序”。")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    Button {
-                        viewModel.openExtensionSettings()
-                    } label: {
-                        Label("打开拓展设置", systemImage: "switch.2")
-                    }
-                }
-            }
+            MarkdownDocumentView(.transcoding)
 
             SettingsSection("默认打开方式", systemImage: "doc.badge.gearshape") {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("打开某个格式的开关后，Finder 双击该格式音频文件会触发 Get Oudio 的 Open With 预设菜单；关闭开关后，该格式会恢复为下方指定播放器。支持格式包括 \(viewModel.supportedAudioDefaultOpenWithExtensions)。")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-
                     HStack(spacing: 8) {
                         Text("关闭时使用")
                             .foregroundStyle(.secondary)
@@ -170,7 +207,7 @@ struct TranscodingSettingsPage: View {
                             }
                         }
                     }
-                    .background(.quinary, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .settingsGroupedRowBackground()
 
                     Label(
                         viewModel.audioDefaultOpenWithMessage,
@@ -182,71 +219,8 @@ struct TranscodingSettingsPage: View {
                 }
             }
 
-            // 监听目录板块
-            SettingsSection("监听目录", systemImage: "folder") {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("由于 MacOS 的限制，右键拓展仅在以下设定的目录中生效。不推荐将外置硬盘置入监听目录中，因为受限于Finder的规矩，这会让硬盘图标变为「Get Oudio」的图标，非常丑陋。")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-
-                    List {
-                        ForEach(viewModel.finderDirectories, id: \.self) { url in
-                            HStack(spacing: 10) {
-                                Label(url.path, systemImage: "folder")
-                                    .lineLimit(1)
-
-                                Spacer()
-
-                                Button {
-                                    viewModel.revealFinderDirectory(url)
-                                } label: {
-                                    Image(systemName: "arrow.up.forward.square")
-                                }
-                                .buttonStyle(.borderless)
-                                .help("在 Finder 中显示")
-
-                                Button {
-                                    viewModel.removeFinderDirectory(url)
-                                } label: {
-                                    Image(systemName: "minus.circle")
-                                }
-                                .buttonStyle(.borderless)
-                                .help("移除")
-                            }
-                        }
-                        .onDelete(perform: viewModel.removeFinderDirectories)
-                    }
-                    .frame(minHeight: 120)
-
-                    HStack {
-                        Button {
-                            viewModel.addFinderDirectory()
-                        } label: {
-                            Label("添加目录", systemImage: "plus")
-                        }
-
-                        Button {
-                            viewModel.restoreDefaultFinderDirectories()
-                        } label: {
-                            Label("恢复默认", systemImage: "arrow.counterclockwise")
-                        }
-
-                        Spacer()
-                    }
-                }
-            } footer: {
-                if !viewModel.finderDirectoryMessage.isEmpty {
-                    Text(viewModel.finderDirectoryMessage)
-                }
-            }
-
-            // 重编码预设板块 — 每个编码格式独立一块
             SettingsSection("Re-Encoding预设", systemImage: "slider.horizontal.3") {
                 VStack(alignment: .leading, spacing: 16) {
-                    Text("在右键菜单中启用的预设，至少保留一项。")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-
                     ForEach(ConversionPresetGroup.allCases) { group in
                         presetGroupBoard(group)
                     }
@@ -260,7 +234,7 @@ struct TranscodingSettingsPage: View {
     private func presetGroupBoard(_ group: ConversionPresetGroup) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(group.displayName)
-                .font(.subheadline.weight(.semibold))
+                .font(SettingsMetrics.groupTitleFont)
                 .foregroundStyle(.secondary)
                 .padding(.leading, 4)
 
@@ -285,7 +259,7 @@ struct TranscodingSettingsPage: View {
                     }
                 }
             }
-            .background(.quinary, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .settingsGroupedRowBackground()
         }
     }
 }
@@ -297,12 +271,10 @@ struct NCMSettingsPage: View {
 
     var body: some View {
         SettingsForm {
+            MarkdownDocumentView(.ncm)
+
             SettingsSection("输出设置", systemImage: "music.note") {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("设定 NCM 转码后的输出位置。")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-
                     Picker("输出到", selection: Binding(
                         get: { viewModel.ncmOutputMode },
                         set: { viewModel.setNCMOutputMode($0) }
@@ -328,11 +300,6 @@ struct NCMSettingsPage: View {
 
             SettingsSection("默认打开方式", systemImage: "doc.badge.gearshape") {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("将 .ncm 文件默认交给 Get Oudio 打开，之后在 Finder 中双击 .ncm 文件会直接写入 NCM 转码队列。")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-
                     HStack(spacing: 10) {
                         Button {
                             Task {
@@ -382,6 +349,8 @@ struct AppleMusicSettingsPage: View {
 
     var body: some View {
         SettingsForm {
+            MarkdownDocumentView(.appleMusic)
+
             SettingsSection("Apple Music 下载", systemImage: "arrow.down.circle") {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(spacing: 12) {
@@ -474,10 +443,6 @@ struct AppleMusicSettingsPage: View {
         VStack(alignment: .leading, spacing: 20) {
             SettingsSection("初始化", systemImage: "person.badge.key") {
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("输入 Apple ID 凭据以初始化 Apple Music 下载功能。凭据将安全存储在 Keychain 中。")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-
                     LabeledContent("Apple ID") {
                         TextField("example@icloud.com", text: $username)
                             .textFieldStyle(.roundedBorder)

@@ -45,6 +45,11 @@ targets:
       - path: GetOudio/Resources/AppIcon.icon
         type: folder
         buildPhase: resources
+      - path: GetOudio/Resources/NCMFileIcon.icns
+        buildPhase: resources
+      - path: GetOudio/Resources/Documentation
+        type: folder
+        buildPhase: resources
       - path: GetOudio/Resources/ThirdParty/ffmpeg
         type: folder
         buildPhase: resources
@@ -75,6 +80,7 @@ targets:
         CFBundleDocumentTypes:
           - CFBundleTypeName: NCM File
             CFBundleTypeRole: Editor
+            CFBundleTypeIconFile: NCMFileIcon.icns
             LSHandlerRank: Owner
             LSItemContentTypes:
               - com.shengjiacheng.getoudio.ncm
@@ -98,6 +104,7 @@ targets:
         UTExportedTypeDeclarations:
           - UTTypeIdentifier: com.shengjiacheng.getoudio.ncm
             UTTypeDescription: NCM File
+            UTTypeIconFile: NCMFileIcon.icns
             UTTypeConformsTo:
               - public.data
             UTTypeTagSpecification:

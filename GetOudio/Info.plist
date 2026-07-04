@@ -7,6 +7,8 @@
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
+			<key>CFBundleTypeIconFile</key>
+			<string>NCMFileIcon.icns</string>
 			<key>CFBundleTypeName</key>
 			<string>NCM File</string>
 			<key>CFBundleTypeRole</key>
@@ -83,6 +85,8 @@
 			</array>
 			<key>UTTypeDescription</key>
 			<string>NCM File</string>
+			<key>UTTypeIconFile</key>
+			<string>NCMFileIcon.icns</string>
 			<key>UTTypeIdentifier</key>
 			<string>com.shengjiacheng.getoudio.ncm</string>
 			<key>UTTypeTagSpecification</key>

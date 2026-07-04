@@ -24,7 +24,7 @@ struct MainView: View {
     private var detailView: some View {
         switch selection ?? .overview {
         case .overview:
-            DashboardView()
+            DashboardView(viewModel: settingsViewModel)
         case .transcoding:
             TranscodingSettingsPage(viewModel: settingsViewModel)
         case .ncm:

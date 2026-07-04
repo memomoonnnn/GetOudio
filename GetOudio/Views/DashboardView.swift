@@ -1,73 +1,93 @@
 import SwiftUI
 
 struct DashboardView: View {
+    @ObservedObject var viewModel: SettingsViewModel
+
     var body: some View {
         SettingsForm {
-            // 应用信息
             SettingsSection("关于 Get Oudio", systemImage: "info.circle") {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 16) {
-                        Image(nsImage: NSApp.applicationIconImage)
-                            .resizable()
-                            .frame(width: 64, height: 64)
+                HStack(alignment: .center, spacing: 18) {
+                    Image(nsImage: NSApp.applicationIconImage)
+                        .resizable()
+                        .frame(width: 88, height: 88)
 
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Get! OOOOOOOOOOOOOOOOOudio")
-                                .font(.title.weight(.bold))
-                            if let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String,
-                               let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String {
-                                Text("版本 \(version) (\(build))")
-                                    .font(.callout)
-                                    .foregroundStyle(.secondary)
-                            }
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("Get! OOOOOOOOOOOOOOOOOudio")
+                            .font(.title.weight(.bold))
+
+                        if let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String,
+                           let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String {
+                            Text("版本 \(version) (\(build))")
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
                         }
                     }
+                    Spacer(minLength: 0)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
 
-                    Text("包装了几个开源项目的脚本执行器。")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+            MarkdownDocumentView(.overview)
+
+            SettingsSection("系统拓展", systemImage: "switch.2") {
+                Button {
+                    viewModel.openExtensionSettings()
+                } label: {
+                    Label("打开拓展设置", systemImage: "switch.2")
                 }
             }
 
-            // 快速开始
-            SettingsSection("快速开始", systemImage: "arrow.forward.circle") {
+            SettingsSection("监听目录", systemImage: "folder") {
                 VStack(alignment: .leading, spacing: 8) {
-                    quickStartRow(
-                        icon: "music.note",
-                        title: "Transcode NCM",
-                        description: "对 .ncm 文件在 Finder 右键菜单中选择「Get Oudio」，或使用打开方式选择 Get Oudio。"
-                    )
-                    Divider()
-                    quickStartRow(
-                        icon: "slider.horizontal.3",
-                        title: "Re-Encoding",
-                        description: "对音频文件在 Finder 右键菜单中选择「Get Oudio」预设，还可以提取视频中的音频轨。"
-                    )
-                    Divider()
-                    quickStartRow(
-                        icon: "arrow.down.circle",
-                        title: "从 Apple Music 下载",
-                        description: "在设置中启用并初始化，随后在Apple Music中分享至「Get Oudio」。"
-                    )
+                    List {
+                        ForEach(viewModel.finderDirectories, id: \.self) { url in
+                            HStack(spacing: 10) {
+                                Label(url.path, systemImage: "folder")
+                                    .lineLimit(1)
+
+                                Spacer()
+
+                                Button {
+                                    viewModel.revealFinderDirectory(url)
+                                } label: {
+                                    Image(systemName: "arrow.up.forward.square")
+                                }
+                                .buttonStyle(.borderless)
+                                .help("在 Finder 中显示")
+
+                                Button {
+                                    viewModel.removeFinderDirectory(url)
+                                } label: {
+                                    Image(systemName: "minus.circle")
+                                }
+                                .buttonStyle(.borderless)
+                                .help("移除")
+                            }
+                        }
+                        .onDelete(perform: viewModel.removeFinderDirectories)
+                    }
+                    .frame(minHeight: 120)
+
+                    HStack {
+                        Button {
+                            viewModel.addFinderDirectory()
+                        } label: {
+                            Label("添加目录", systemImage: "plus")
+                        }
+
+                        Button {
+                            viewModel.restoreDefaultFinderDirectories()
+                        } label: {
+                            Label("恢复默认", systemImage: "arrow.counterclockwise")
+                        }
+
+                        Spacer()
+                    }
                 }
-            }
-        }
-    }
-
-    private func quickStartRow(icon: String, title: String, description: String) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.title3)
-                .foregroundStyle(.secondary)
-                .frame(width: 28)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.callout.weight(.medium))
-                Text(description)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            } footer: {
+                if !viewModel.finderDirectoryMessage.isEmpty {
+                    Text(viewModel.finderDirectoryMessage)
+                }
             }
         }
     }
