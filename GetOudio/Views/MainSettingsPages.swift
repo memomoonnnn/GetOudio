@@ -2,25 +2,45 @@ import GetOudioCore
 import SwiftUI
 
 private enum SettingsMetrics {
-    static let sectionCornerRadius: CGFloat = 10
-    static let rowCornerRadius: CGFloat = 8
-    static let sectionPadding: CGFloat = 12
+    static let sectionCornerRadius: CGFloat = 20
+    static let rowCornerRadius: CGFloat = 14
+    static let sectionPadding: CGFloat = 16
+    static let contentMaxWidth: CGFloat = 760
+    static let contentTopInset: CGFloat = 54
+    static let contentBottomInset: CGFloat = 96
     static let sectionTitleFont = Font.system(size: 12, weight: .semibold)
-    static let sectionTitleKerning: CGFloat = 0.5
     static let groupTitleFont = Font.system(size: 12.5, weight: .semibold)
 }
 
 private enum SettingsSurface {
+    static func pageTint(for scheme: ColorScheme) -> Color {
+        scheme == .light ? Color.black.opacity(0.025) : Color.white.opacity(0.035)
+    }
+
     static func cardFill(for scheme: ColorScheme) -> Color {
-        scheme == .light ? Color.black.opacity(0.045) : Color.white.opacity(0.085)
+        scheme == .light ? Color.white.opacity(0.72) : Color.white.opacity(0.075)
     }
 
     static func controlFill(for scheme: ColorScheme) -> Color {
-        scheme == .light ? Color.black.opacity(0.065) : Color.white.opacity(0.11)
+        scheme == .light ? Color.black.opacity(0.045) : Color.white.opacity(0.07)
     }
 
     static func border(for scheme: ColorScheme) -> Color {
-        scheme == .light ? Color.black.opacity(0.09) : Color.white.opacity(0.11)
+        scheme == .light ? Color.black.opacity(0.095) : Color.white.opacity(0.105)
+    }
+}
+
+struct SettingsRootBackground: View {
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        ZStack {
+            Rectangle()
+                .fill(.thinMaterial)
+            Rectangle()
+                .fill(SettingsSurface.pageTint(for: colorScheme))
+        }
+        .ignoresSafeArea()
     }
 }
 
@@ -29,11 +49,16 @@ private struct SettingsCardBackground: View {
 
     var body: some View {
         RoundedRectangle(cornerRadius: SettingsMetrics.sectionCornerRadius, style: .continuous)
-            .fill(SettingsSurface.cardFill(for: colorScheme))
+            .fill(.regularMaterial)
+            .overlay {
+                RoundedRectangle(cornerRadius: SettingsMetrics.sectionCornerRadius, style: .continuous)
+                    .fill(SettingsSurface.cardFill(for: colorScheme))
+            }
             .overlay(
                 RoundedRectangle(cornerRadius: SettingsMetrics.sectionCornerRadius, style: .continuous)
                     .strokeBorder(SettingsSurface.border(for: colorScheme), lineWidth: 0.7)
             )
+            .shadow(color: .black.opacity(colorScheme == .light ? 0.05 : 0.18), radius: 16, x: 0, y: 8)
     }
 }
 
@@ -42,14 +67,19 @@ private struct SettingsGroupedRowBackgroundModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .background(
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: SettingsMetrics.rowCornerRadius, style: .continuous))
+            .overlay(
                 RoundedRectangle(cornerRadius: SettingsMetrics.rowCornerRadius, style: .continuous)
                     .fill(SettingsSurface.controlFill(for: colorScheme))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: SettingsMetrics.rowCornerRadius, style: .continuous)
+                    .strokeBorder(SettingsSurface.border(for: colorScheme), lineWidth: 0.6)
             )
     }
 }
 
-private extension View {
+extension View {
     func settingsGroupedRowBackground() -> some View {
         modifier(SettingsGroupedRowBackgroundModifier())
     }
@@ -83,10 +113,9 @@ struct SettingsSection<Content: View, Footer: View>: View {
                     .frame(width: 15, alignment: .center)
                 Text(title)
                     .font(SettingsMetrics.sectionTitleFont)
-                    .kerning(SettingsMetrics.sectionTitleKerning)
             }
                 .foregroundStyle(.secondary)
-                .padding(.horizontal, 4)
+                .padding(.horizontal, 6)
 
             VStack(alignment: .leading, spacing: 0) {
                 VStack(alignment: .leading, spacing: 0) {
@@ -125,13 +154,22 @@ struct SettingsForm<Content: View>: View {
 
     var body: some View {
         ScrollView(.vertical) {
-            VStack(alignment: .leading, spacing: spacing) {
-                content
+            VStack(alignment: .leading, spacing: 0) {
+                Color.clear
+                    .frame(height: SettingsMetrics.contentTopInset)
+
+                VStack(alignment: .leading, spacing: spacing) {
+                    content
+                }
+                .frame(maxWidth: SettingsMetrics.contentMaxWidth, alignment: .leading)
+
+                Color.clear
+                    .frame(height: SettingsMetrics.contentBottomInset)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(24)
         }
-        .background(.windowBackground)
+        .scrollClipDisabled()
+        .scrollContentBackground(.hidden)
     }
 }
 
@@ -523,7 +561,7 @@ struct AppleMusicSettingsPage: View {
             .overlay {
                 if viewModel.appleMusicWrapperLoginStatus.isAuthenticated {
                     ZStack {
-                        RoundedRectangle(cornerRadius: 8)
+                        RoundedRectangle(cornerRadius: SettingsMetrics.sectionCornerRadius, style: .continuous)
                             .fill(.regularMaterial)
                         Label("初始化已完成", systemImage: "checkmark.circle.fill")
                             .font(.title3.weight(.semibold))

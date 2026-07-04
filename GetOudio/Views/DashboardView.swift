@@ -6,14 +6,14 @@ struct DashboardView: View {
     var body: some View {
         SettingsForm {
             SettingsSection("关于 Get Oudio", systemImage: "info.circle") {
-                HStack(alignment: .center, spacing: 18) {
+                HStack(alignment: .center, spacing: 16) {
                     Image(nsImage: NSApp.applicationIconImage)
                         .resizable()
-                        .frame(width: 88, height: 88)
+                        .frame(width: 72, height: 72)
 
                     VStack(alignment: .leading, spacing: 5) {
-                        Text("Get! OOOOOOOOOOOOOOOOOudio")
-                            .font(.title.weight(.bold))
+                        Text("Get Oudio")
+                            .font(.title2.weight(.semibold))
 
                         if let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String,
                            let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String {
@@ -42,7 +42,13 @@ struct DashboardView: View {
                     List {
                         ForEach(viewModel.finderDirectories, id: \.self) { url in
                             HStack(spacing: 10) {
-                                Label(url.path, systemImage: "folder")
+                                Label {
+                                    Text(url.path)
+                                        .lineLimit(1)
+                                        .truncationMode(.middle)
+                                } icon: {
+                                    Image(systemName: "folder")
+                                }
                                     .lineLimit(1)
 
                                 Spacer()
@@ -67,6 +73,9 @@ struct DashboardView: View {
                         .onDelete(perform: viewModel.removeFinderDirectories)
                     }
                     .frame(minHeight: 120)
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                    .settingsGroupedRowBackground()
 
                     HStack {
                         Button {

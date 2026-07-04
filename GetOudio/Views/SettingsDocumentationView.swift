@@ -248,12 +248,12 @@ private struct SettingsMarkdownImage: View {
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(maxWidth: preferredWidth ?? 520)
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                     .overlay {
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
                             .stroke(.quaternary, lineWidth: 0.5)
                     }
-                    .shadow(color: .black.opacity(0.10), radius: 3, x: 0, y: 2)
+                    .shadow(color: .black.opacity(0.12), radius: 10, x: 0, y: 6)
                 Spacer(minLength: 0)
             }
             .frame(maxWidth: .infinity)
@@ -348,8 +348,7 @@ private struct MarkdownTextView: NSViewRepresentable {
             [
                 .font: NSFont.systemFont(ofSize: MarkdownTypography.bodyFontSize),
                 .foregroundColor: NSColor.labelColor,
-                .paragraphStyle: paragraphStyle,
-                .kern: 0.6
+                .paragraphStyle: paragraphStyle
             ],
             range: fullRange
         )

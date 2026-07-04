@@ -6,6 +6,17 @@ import UserNotifications
 /// Handles direct settings-window launches and transient Open With interactions.
 /// Background conversion is delegated to HeadlessRunner through JobQueue.
 final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
+    private enum SettingsWindowMetrics {
+        static let outerMargin: CGFloat = 22
+        static let sidebarWidth: CGFloat = 272
+        static let settingsContentMaxWidth: CGFloat = 760
+        static let contentMaxWidth: CGFloat = outerMargin + sidebarWidth + outerMargin + settingsContentMaxWidth + outerMargin
+        static let contentMinWidth: CGFloat = 900
+        static let contentMinHeight: CGFloat = 560
+        static let contentInitialHeight: CGFloat = 660
+        static let windowCornerRadius: CGFloat = 28
+    }
+
     private enum LaunchIntent {
         case undecided
         case settings
@@ -115,9 +126,29 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
         let hostingController = NSHostingController(rootView: MainView())
 
         let window = NSWindow(contentViewController: hostingController)
-        window.title = "Get Oudio"
-        window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
-        window.setContentSize(NSSize(width: 820, height: 600))
+        window.title = ""
+        window.setAccessibilityTitle("Get Oudio")
+        window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.isMovableByWindowBackground = true
+        window.isOpaque = false
+        window.backgroundColor = .clear
+        window.contentView?.wantsLayer = true
+        window.contentView?.layer?.cornerRadius = SettingsWindowMetrics.windowCornerRadius
+        window.contentView?.layer?.masksToBounds = true
+        window.contentMinSize = NSSize(
+            width: SettingsWindowMetrics.contentMinWidth,
+            height: SettingsWindowMetrics.contentMinHeight
+        )
+        window.contentMaxSize = NSSize(
+            width: SettingsWindowMetrics.contentMaxWidth,
+            height: 10_000
+        )
+        window.setContentSize(NSSize(
+            width: SettingsWindowMetrics.contentMaxWidth,
+            height: SettingsWindowMetrics.contentInitialHeight
+        ))
         window.isReleasedWhenClosed = false
         window.level = .floating
         window.collectionBehavior = [
@@ -129,9 +160,20 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
 
         window.center()
         window.makeKeyAndOrderFront(nil)
+        hideStandardWindowControls(in: window)
         mainWindow = window
 
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private func hideStandardWindowControls(in window: NSWindow) {
+        DispatchQueue.main.async {
+            let buttonTypes: [NSWindow.ButtonType] = [.closeButton, .miniaturizeButton, .zoomButton]
+            for buttonType in buttonTypes {
+                guard let button = window.standardWindowButton(buttonType) else { continue }
+                button.isHidden = true
+            }
+        }
     }
 
     // MARK: - URL Scheme (getoudio://)
