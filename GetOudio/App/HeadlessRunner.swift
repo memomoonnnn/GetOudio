@@ -149,25 +149,24 @@ final class HeadlessRunner: NSObject, NSApplicationDelegate, UNUserNotificationC
 
     private func processAndNotify() async {
         // Clear extension launch markers so a subsequent direct launch isn't misidentified
-        if let defaults = UserDefaults(suiteName: AppConstants.appGroupIdentifier) {
-            defaults.removeObject(forKey: AppConstants.extensionLaunchSourceKey)
-            defaults.removeObject(forKey: AppConstants.extensionLaunchTimestampKey)
-            defaults.synchronize()
-        }
+        LaunchMarkerStore().clear()
 
         await notificationService.dispatchPendingNotificationEvents()
 
         let shareEvents: [ShareEvent]
         let jobs: [JobRequest]
+        let queue: JobQueue
+        let claimedJobs: ClaimedJobBatch?
         do {
             let eventQueue = try ShareEventQueue()
             shareEvents = try eventQueue.drain()
             await appleMusicShareCoordinator.notifyShareEvents(shareEvents)
 
-            let queue = try JobQueue()
-            jobs = try queue.drain()
+            queue = try JobQueue()
+            claimedJobs = try queue.claimPending()
+            jobs = claimedJobs?.jobs ?? []
         } catch {
-            DiagnosticLog.append("headless queue drain failed: \(error.localizedDescription)")
+            DiagnosticLog.append("headless queue claim failed: \(error.localizedDescription)")
             return
         }
 
@@ -178,6 +177,7 @@ final class HeadlessRunner: NSObject, NSApplicationDelegate, UNUserNotificationC
         }
         guard !remainingJobs.isEmpty else {
             DiagnosticLog.append("headless processed share Apple Music jobs")
+            acknowledge(claimedJobs, queue: queue)
             return
         }
 
@@ -189,6 +189,19 @@ final class HeadlessRunner: NSObject, NSApplicationDelegate, UNUserNotificationC
         writeConversionLog(summary: summary, jobs: remainingJobs)
 
         await notificationService.enqueueAndDispatchConversionFinished(summary: summary, jobs: remainingJobs)
+        acknowledge(claimedJobs, queue: queue)
+    }
+
+    private func acknowledge(_ claimedJobs: ClaimedJobBatch?, queue: JobQueue) {
+        guard let claimedJobs else {
+            return
+        }
+
+        do {
+            try queue.acknowledge(claimedJobs)
+        } catch {
+            DiagnosticLog.append("headless queue acknowledge failed: \(error.localizedDescription)")
+        }
     }
 
     // MARK: - Job execution

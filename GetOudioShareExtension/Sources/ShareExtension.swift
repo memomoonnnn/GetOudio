@@ -97,8 +97,8 @@ final class ShareExtension: NSViewController {
 
         do {
             if !jobs.isEmpty {
-                let queue = try JobQueue()
-                try queue.enqueue(jobs)
+                let intake = try JobIntake()
+                try intake.enqueue(jobs, launchSource: .shareExtension)
             }
             if !urls.isEmpty, supportedURLs.isEmpty {
                 let eventQueue = try ShareEventQueue()
@@ -112,11 +112,7 @@ final class ShareExtension: NSViewController {
     }
 
     private func openContainingApp() {
-        if let sharedDefaults = UserDefaults(suiteName: AppConstants.appGroupIdentifier) {
-            sharedDefaults.set(LaunchSource.shareExtension.rawValue, forKey: AppConstants.extensionLaunchSourceKey)
-            sharedDefaults.set(Date().timeIntervalSince1970, forKey: AppConstants.extensionLaunchTimestampKey)
-            sharedDefaults.synchronize()
-        }
+        LaunchMarkerStore().mark(.shareExtension)
 
         guard let runQueuedURL = URL(string: "\(AppConstants.appURLScheme)://run-queued") else {
             return

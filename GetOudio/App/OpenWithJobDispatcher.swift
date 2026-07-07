@@ -63,25 +63,13 @@ final class OpenWithJobDispatcher {
     private func enqueue(_ jobs: [JobRequest], launchSource: LaunchSource) -> Bool {
         do {
             DiagnosticLog.append("open with enqueue start source=\(launchSource.rawValue) count=\(jobs.count)")
-            let queue = try JobQueue()
-            try queue.enqueue(jobs)
-            setLaunchMarker(launchSource)
+            let intake = try JobIntake()
+            try intake.enqueue(jobs, launchSource: launchSource)
             launchHeadlessProcessor()
             return true
         } catch {
             DiagnosticLog.append("open with enqueue failed \(error.localizedDescription)")
             return false
         }
-    }
-
-    private func setLaunchMarker(_ source: LaunchSource) {
-        guard let defaults = UserDefaults(suiteName: AppConstants.appGroupIdentifier) else {
-            DiagnosticLog.append("open with launch marker unavailable")
-            return
-        }
-
-        defaults.set(source.rawValue, forKey: AppConstants.extensionLaunchSourceKey)
-        defaults.set(Date().timeIntervalSince1970, forKey: AppConstants.extensionLaunchTimestampKey)
-        defaults.synchronize()
     }
 }

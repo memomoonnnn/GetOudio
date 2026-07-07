@@ -266,6 +266,8 @@ final class GetOudioCoreTests: XCTestCase {
         let queueURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
             .appendingPathComponent("queued-jobs.json")
+        defer { try? FileManager.default.removeItem(at: queueURL.deletingLastPathComponent()) }
+
         let queue = try JobQueue(fileURL: queueURL)
         let job = JobRequest(
             fileURL: URL(fileURLWithPath: "/tmp/song.wav"),
@@ -278,6 +280,81 @@ final class GetOudioCoreTests: XCTestCase {
         XCTAssertEqual(try queue.read(), [job])
         XCTAssertEqual(try queue.drain(), [job])
         XCTAssertEqual(try queue.read(), [])
+    }
+
+    func testJobQueueClaimsAndAcknowledgesJobs() throws {
+        let queueURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathComponent("queued-jobs.json")
+        defer { try? FileManager.default.removeItem(at: queueURL.deletingLastPathComponent()) }
+
+        let queue = try JobQueue(fileURL: queueURL)
+        let job = JobRequest(
+            fileURL: URL(fileURLWithPath: "/tmp/song.wav"),
+            category: .audio,
+            operation: .transcode(.mp3320),
+            source: .finderSync
+        )
+
+        try queue.enqueue([job])
+        let claim = try XCTUnwrap(try queue.claimPending())
+
+        XCTAssertEqual(claim.jobs, [job])
+        XCTAssertEqual(try queue.read(), [])
+        XCTAssertNil(try queue.claimPending())
+
+        try queue.acknowledge(claim)
+        XCTAssertNil(try queue.claimPending())
+    }
+
+    func testJobQueueRequeuesStaleClaim() throws {
+        let queueURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathComponent("queued-jobs.json")
+        defer { try? FileManager.default.removeItem(at: queueURL.deletingLastPathComponent()) }
+
+        let queue = try JobQueue(fileURL: queueURL)
+        let job = JobRequest(
+            fileURL: URL(fileURLWithPath: "/tmp/song.wav"),
+            category: .audio,
+            operation: .transcode(.mp3320),
+            source: .finderSync
+        )
+
+        try queue.enqueue([job])
+        XCTAssertEqual(try XCTUnwrap(try queue.claimPending()).jobs, [job])
+
+        let reclaimed = try XCTUnwrap(try queue.claimPending(staleClaimMaxAge: -1))
+        XCTAssertEqual(reclaimed.jobs, [job])
+        try queue.acknowledge(reclaimed)
+        XCTAssertNil(try queue.claimPending())
+    }
+
+    func testJobIntakeEnqueuesJobsAndMarksLaunchSource() throws {
+        let queueURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathComponent("queued-jobs.json")
+        defer { try? FileManager.default.removeItem(at: queueURL.deletingLastPathComponent()) }
+
+        let suiteName = "GetOudioCoreTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let queue = try JobQueue(fileURL: queueURL)
+        let markerStore = LaunchMarkerStore(defaults: defaults)
+        let intake = JobIntake(queue: queue, markerStore: markerStore)
+        let job = JobRequest(
+            fileURL: URL(fileURLWithPath: "/tmp/song.wav"),
+            category: .audio,
+            operation: .transcode(.mp3320),
+            source: .openWith
+        )
+
+        try intake.enqueue([job], launchSource: .openWithAudio)
+
+        XCTAssertEqual(try queue.read(), [job])
+        XCTAssertEqual(markerStore.activeSource(), .openWithAudio)
     }
 
     func testNotificationEventQueueClaimsAndAcknowledgesEvents() throws {

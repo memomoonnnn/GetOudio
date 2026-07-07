@@ -157,12 +157,7 @@ final class AppleMusicShareDownloadCoordinator {
     }
 
     private func markShareExtensionHeadlessLaunch() {
-        guard let defaults = UserDefaults(suiteName: AppConstants.appGroupIdentifier) else {
-            return
-        }
-        defaults.set(LaunchSource.shareExtension.rawValue, forKey: AppConstants.extensionLaunchSourceKey)
-        defaults.set(Date().timeIntervalSince1970, forKey: AppConstants.extensionLaunchTimestampKey)
-        defaults.synchronize()
+        LaunchMarkerStore().mark(.shareExtension)
     }
 }
 
