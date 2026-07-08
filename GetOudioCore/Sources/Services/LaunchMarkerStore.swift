@@ -5,7 +5,7 @@ public struct LaunchMarkerStore {
 
     private let defaults: UserDefaults?
 
-    public init(defaults: UserDefaults? = UserDefaults(suiteName: AppConstants.appGroupIdentifier)) {
+    public init(defaults: UserDefaults? = SharedContainer.appGroupDefaults()) {
         self.defaults = defaults
     }
 

@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct DashboardView: View {
-    @ObservedObject var viewModel: SettingsViewModel
+    @ObservedObject var viewModel: FinderDirectorySettingsModel
 
     var body: some View {
         SettingsForm {

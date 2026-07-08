@@ -85,13 +85,19 @@ struct MainView: View {
     private var detailView: some View {
         switch selection ?? .overview {
         case .overview:
-            DashboardView(viewModel: settingsViewModel)
+            DashboardView(viewModel: settingsViewModel.finderSettings)
         case .transcoding:
-            TranscodingSettingsPage(viewModel: settingsViewModel)
+            TranscodingSettingsPage(
+                presetSettings: settingsViewModel.presetSettings,
+                defaultOpenWithSettings: settingsViewModel.defaultOpenWithSettings
+            )
         case .ncm:
-            NCMSettingsPage(viewModel: settingsViewModel)
+            NCMSettingsPage(
+                ncmSettings: settingsViewModel.ncmSettings,
+                defaultOpenWithSettings: settingsViewModel.defaultOpenWithSettings
+            )
         case .appleMusic:
-            AppleMusicSettingsPage(viewModel: settingsViewModel)
+            AppleMusicSettingsPage(viewModel: settingsViewModel.appleMusicSettings)
         }
     }
 }

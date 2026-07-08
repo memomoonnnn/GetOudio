@@ -176,7 +176,8 @@ struct SettingsForm<Content: View>: View {
 // MARK: - TranscodingSettingsPage
 
 struct TranscodingSettingsPage: View {
-    @ObservedObject var viewModel: SettingsViewModel
+    @ObservedObject var presetSettings: PresetSettingsModel
+    @ObservedObject var defaultOpenWithSettings: DefaultOpenWithSettingsModel
 
     var body: some View {
         SettingsForm {
@@ -189,14 +190,14 @@ struct TranscodingSettingsPage: View {
                             .foregroundStyle(.secondary)
                         Spacer()
                         Menu {
-                            if viewModel.defaultAudioPlayerOptions.isEmpty {
+                            if defaultOpenWithSettings.defaultAudioPlayerOptions.isEmpty {
                                 Text("没有找到可打开 .wav 的应用")
                             } else {
-                                ForEach(viewModel.defaultAudioPlayerOptions) { option in
+                                ForEach(defaultOpenWithSettings.defaultAudioPlayerOptions) { option in
                                     Button {
-                                        viewModel.selectDefaultAudioPlayer(option)
+                                        defaultOpenWithSettings.selectDefaultAudioPlayer(option)
                                     } label: {
-                                        if option.url == viewModel.defaultAudioPlayerURL {
+                                        if option.url == defaultOpenWithSettings.defaultAudioPlayerURL {
                                             Label(option.displayName, systemImage: "checkmark")
                                         } else {
                                             Text(option.displayName)
@@ -205,13 +206,13 @@ struct TranscodingSettingsPage: View {
                                 }
                             }
                         } label: {
-                            Label(viewModel.defaultAudioPlayerName, systemImage: "play.rectangle")
+                            Label(defaultOpenWithSettings.defaultAudioPlayerName, systemImage: "play.rectangle")
                         }
-                        .disabled(viewModel.defaultAudioPlayerOptions.isEmpty)
+                        .disabled(defaultOpenWithSettings.defaultAudioPlayerOptions.isEmpty)
                     }
 
                     VStack(spacing: 0) {
-                        ForEach(viewModel.audioDefaultOpenWithRows) { row in
+                        ForEach(defaultOpenWithSettings.audioDefaultOpenWithRows) { row in
                             HStack(spacing: 10) {
                                 Text(row.group.displayName)
                                     .font(.body.monospaced())
@@ -219,7 +220,7 @@ struct TranscodingSettingsPage: View {
 
                                 Spacer()
 
-                                if viewModel.audioDefaultOpenWithBusyGroupIDs.contains(row.group.id) {
+                                if defaultOpenWithSettings.audioDefaultOpenWithBusyGroupIDs.contains(row.group.id) {
                                     ProgressView()
                                         .controlSize(.small)
                                 }
@@ -228,18 +229,18 @@ struct TranscodingSettingsPage: View {
                                     get: { row.isGetOudioDefault },
                                     set: { isEnabled in
                                         Task {
-                                            await viewModel.setAudioDefaultOpenWith(row, isEnabled: isEnabled)
+                                            await defaultOpenWithSettings.setAudioDefaultOpenWith(row, isEnabled: isEnabled)
                                         }
                                     }
                                 ))
                                 .toggleStyle(.switch)
                                 .labelsHidden()
-                                .disabled(viewModel.audioDefaultOpenWithBusyGroupIDs.contains(row.group.id))
+                                .disabled(defaultOpenWithSettings.audioDefaultOpenWithBusyGroupIDs.contains(row.group.id))
                             }
                             .padding(.horizontal, 12)
                             .padding(.vertical, 7)
 
-                            if row.id != viewModel.audioDefaultOpenWithRows.last?.id {
+                            if row.id != defaultOpenWithSettings.audioDefaultOpenWithRows.last?.id {
                                 Divider()
                                     .padding(.leading, 12)
                             }
@@ -248,11 +249,11 @@ struct TranscodingSettingsPage: View {
                     .settingsGroupedRowBackground()
 
                     Label(
-                        viewModel.audioDefaultOpenWithMessage,
-                        systemImage: viewModel.audioDefaultOpenWithStatus.isFullyConfigured ? "checkmark.circle.fill" : "circle"
+                        defaultOpenWithSettings.audioDefaultOpenWithMessage,
+                        systemImage: defaultOpenWithSettings.audioDefaultOpenWithStatus.isFullyConfigured ? "checkmark.circle.fill" : "circle"
                     )
                     .font(.caption)
-                    .foregroundStyle(viewModel.audioDefaultOpenWithStatus.isFullyConfigured ? .green : .secondary)
+                    .foregroundStyle(defaultOpenWithSettings.audioDefaultOpenWithStatus.isFullyConfigured ? .green : .secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -282,8 +283,8 @@ struct TranscodingSettingsPage: View {
                         Text(preset.title)
                         Spacer()
                         Toggle("", isOn: Binding(
-                            get: { viewModel.enabledPresets.contains(preset) },
-                            set: { viewModel.toggle(preset, isEnabled: $0) }
+                            get: { presetSettings.enabledPresets.contains(preset) },
+                            set: { presetSettings.toggle(preset, isEnabled: $0) }
                         ))
                         .toggleStyle(.switch)
                         .labelsHidden()
@@ -305,7 +306,8 @@ struct TranscodingSettingsPage: View {
 // MARK: - NCMSettingsPage
 
 struct NCMSettingsPage: View {
-    @ObservedObject var viewModel: SettingsViewModel
+    @ObservedObject var ncmSettings: NCMSettingsModel
+    @ObservedObject var defaultOpenWithSettings: DefaultOpenWithSettingsModel
 
     var body: some View {
         SettingsForm {
@@ -314,8 +316,8 @@ struct NCMSettingsPage: View {
             SettingsSection("输出设置", systemImage: "music.note") {
                 VStack(alignment: .leading, spacing: 12) {
                     Picker("输出到", selection: Binding(
-                        get: { viewModel.ncmOutputMode },
-                        set: { viewModel.setNCMOutputMode($0) }
+                        get: { ncmSettings.ncmOutputMode },
+                        set: { ncmSettings.setNCMOutputMode($0) }
                     )) {
                         Text("源文件所在目录").tag("sourceDirectory")
                         Text("指定目录").tag("customDirectory")
@@ -323,12 +325,12 @@ struct NCMSettingsPage: View {
                     .pickerStyle(.radioGroup)
 
                     HStack {
-                        Text(viewModel.ncmCustomOutputURL?.path ?? "未选择指定目录")
+                        Text(ncmSettings.ncmCustomOutputURL?.path ?? "未选择指定目录")
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                         Spacer()
                         Button {
-                            viewModel.chooseNCMOutputDirectory()
+                            ncmSettings.chooseNCMOutputDirectory()
                         } label: {
                             Label("选择目录", systemImage: "folder")
                         }
@@ -341,33 +343,33 @@ struct NCMSettingsPage: View {
                     HStack(spacing: 10) {
                         Button {
                             Task {
-                                await viewModel.setNCMDefaultOpenWith()
+                                await defaultOpenWithSettings.setNCMDefaultOpenWith()
                             }
                         } label: {
-                            if viewModel.isSettingNCMDefaultOpenWith {
+                            if defaultOpenWithSettings.isSettingNCMDefaultOpenWith {
                                 Label("正在设置", systemImage: "hourglass")
                             } else {
                                 Label("设为默认打开方式", systemImage: "doc.badge.gearshape")
                             }
                         }
-                        .disabled(viewModel.isSettingNCMDefaultOpenWith)
+                        .disabled(defaultOpenWithSettings.isSettingNCMDefaultOpenWith)
 
                         Button {
-                            viewModel.refreshDefaultOpenWithStatus()
+                            defaultOpenWithSettings.refreshDefaultOpenWithStatus()
                         } label: {
                             Label("刷新状态", systemImage: "arrow.clockwise")
                         }
-                        .disabled(viewModel.isSettingNCMDefaultOpenWith)
+                        .disabled(defaultOpenWithSettings.isSettingNCMDefaultOpenWith)
 
                         Spacer()
                     }
 
                     Label(
-                        viewModel.ncmDefaultOpenWithMessage,
-                        systemImage: viewModel.ncmDefaultOpenWithStatus.isFullyConfigured ? "checkmark.circle.fill" : "circle"
+                        defaultOpenWithSettings.ncmDefaultOpenWithMessage,
+                        systemImage: defaultOpenWithSettings.ncmDefaultOpenWithStatus.isFullyConfigured ? "checkmark.circle.fill" : "circle"
                     )
                     .font(.caption)
-                    .foregroundStyle(viewModel.ncmDefaultOpenWithStatus.isFullyConfigured ? .green : .secondary)
+                    .foregroundStyle(defaultOpenWithSettings.ncmDefaultOpenWithStatus.isFullyConfigured ? .green : .secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -378,7 +380,7 @@ struct NCMSettingsPage: View {
 // MARK: - AppleMusicSettingsPage
 
 struct AppleMusicSettingsPage: View {
-    @ObservedObject var viewModel: SettingsViewModel
+    @ObservedObject var viewModel: AppleMusicSettingsModel
     @State private var username = ""
     @State private var password = ""
     @State private var verificationCode = ""

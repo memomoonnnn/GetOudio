@@ -412,6 +412,22 @@ final class GetOudioCoreTests: XCTestCase {
         XCTAssertEqual(store.enabledPresets, ConversionPreset.defaultEnabled)
     }
 
+    func testSharedContainerDirectoryFallbackIsExplicit() throws {
+        let fallbackRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: fallbackRoot) }
+
+        let resolution = try SharedContainer.resolvedDirectory(
+            containerURL: nil,
+            groupIdentifier: "group.test",
+            fallbackBaseURL: fallbackRoot
+        )
+
+        XCTAssertEqual(resolution.url, fallbackRoot.appendingPathComponent("Get Oudio", isDirectory: true))
+        XCTAssertEqual(resolution.accessMode, .diagnosticFallback("Application Support"))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: resolution.url.path))
+    }
+
     func testSettingsStoreResolvesFinderDirectoryAliases() throws {
         let suiteName = "GetOudioCoreTests-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
