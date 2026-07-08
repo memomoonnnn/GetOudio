@@ -171,8 +171,8 @@ private final class FinderActionContext: NSObject {
 
         do {
             DiagnosticLog.append("finder enqueue start count=\(jobs.count) operations=\(jobs.map { operationDescription($0.operation) }.joined(separator: ","))")
-            let queue = try JobQueue()
-            try queue.enqueue(jobs)
+            let intake = try JobIntake()
+            try intake.enqueue(jobs, launchSource: .finderSync)
             openContainingApp()
         } catch {
             DiagnosticLog.append("finder enqueue failed \(error.localizedDescription)")
@@ -183,13 +183,6 @@ private final class FinderActionContext: NSObject {
     @objc private func openContainingApp() {
         guard let url = URL(string: "\(AppConstants.appURLScheme)://run-queued") else {
             return
-        }
-
-        // Signal launch source before opening app
-        if let sharedDefaults = UserDefaults(suiteName: AppConstants.appGroupIdentifier) {
-            sharedDefaults.set(LaunchSource.finderSync.rawValue, forKey: AppConstants.extensionLaunchSourceKey)
-            sharedDefaults.set(Date().timeIntervalSince1970, forKey: AppConstants.extensionLaunchTimestampKey)
-            sharedDefaults.synchronize()
         }
 
         DiagnosticLog.append("finder open url \(url.absoluteString)")

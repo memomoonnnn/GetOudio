@@ -59,6 +59,28 @@ verify_embedded_agent() {
   fi
 }
 
+sign_if_exists() {
+  local path="$1"
+  if [[ -e "$path" ]]; then
+    /usr/bin/codesign --force --sign - --timestamp=none "$path"
+  fi
+}
+
+sign_for_unsigned_distribution() {
+  sign_if_exists "$APP_BUNDLE/Contents/Resources/ffmpeg/libmp3lame.0.dylib"
+  sign_if_exists "$APP_BUNDLE/Contents/Resources/ffmpeg/ffmpeg"
+  sign_if_exists "$APP_BUNDLE/Contents/Resources/ncmdump/bin/libtag.2.dylib"
+  sign_if_exists "$APP_BUNDLE/Contents/Resources/ncmdump/bin/ncmdump"
+  sign_if_exists "$APP_BUNDLE/Contents/Resources/apple-music-downloader/apple-music-downloader"
+  sign_if_exists "$APP_BUNDLE/Contents/Frameworks/GetOudioCore.framework"
+  sign_if_exists "$APP_BUNDLE/Contents/PlugIns/GetOudioFinderExtension.appex"
+  sign_if_exists "$APP_BUNDLE/Contents/PlugIns/GetOudioShareExtension.appex"
+  sign_if_exists "$APP_BUNDLE/Contents/Library/LoginItems/$AGENT_NAME.app/Contents/Frameworks/GetOudioCore.framework"
+  sign_if_exists "$APP_BUNDLE/Contents/Library/LoginItems/$AGENT_NAME.app"
+  sign_if_exists "$APP_BUNDLE"
+  /usr/bin/codesign --verify --strict --deep --verbose=2 "$APP_BUNDLE"
+}
+
 create_dmg() {
   rm -rf "$DMG_WORK_DIR"
   mkdir -p "$DMG_ROOT"
@@ -76,8 +98,9 @@ create_dmg() {
 
 build_app
 verify_embedded_agent
+sign_for_unsigned_distribution
 create_dmg
 
 echo "DMG written to: $DMG_OUTPUT"
-echo "This DMG is not notarized. Recipients may need to right-click Open or remove Gatekeeper quarantine:"
+echo "This DMG is ad hoc signed and not notarized. Recipients may need to right-click Open or remove Gatekeeper quarantine:"
 echo "  xattr -dr com.apple.quarantine \"/Applications/$APP_NAME.app\""

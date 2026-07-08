@@ -234,13 +234,7 @@ enum GetOudioAMRuntimeAgent {
     }
 
     private static func wakeMainAppForNotificationDispatch() {
-        guard let defaults = UserDefaults(suiteName: AppConstants.appGroupIdentifier) else {
-            DiagnosticLog.append("[Agent] notification dispatch marker unavailable")
-            return
-        }
-        defaults.set(LaunchSource.notificationDispatch.rawValue, forKey: AppConstants.extensionLaunchSourceKey)
-        defaults.set(Date().timeIntervalSince1970, forKey: AppConstants.extensionLaunchTimestampKey)
-        defaults.synchronize()
+        LaunchMarkerStore().mark(.notificationDispatch)
 
         guard let url = URL(string: "\(AppConstants.appURLScheme)://run-queued") else {
             return
