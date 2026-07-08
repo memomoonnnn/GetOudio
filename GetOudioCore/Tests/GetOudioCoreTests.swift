@@ -406,7 +406,7 @@ final class GetOudioCoreTests: XCTestCase {
 
     func testAppleMusicDownloadFormatArguments() {
         XCTAssertEqual(AppleMusicDownloadFormat.alac.downloaderArguments, [])
-        XCTAssertEqual(AppleMusicDownloadFormat.aac.downloaderArguments, ["--aac"])
+        XCTAssertEqual(AppleMusicDownloadFormat.aac.downloaderArguments, ["--aac", "--aac-type", "aac"])
         XCTAssertEqual(AppleMusicDownloadFormat.atmos.downloaderArguments, ["--atmos"])
     }
 
@@ -420,7 +420,7 @@ final class GetOudioCoreTests: XCTestCase {
 
         let arguments = AppleMusicDownloadService.downloaderArguments(for: job, format: .aac)
 
-        XCTAssertEqual(arguments, ["--aac", "--song", job.fileURL.absoluteString])
+        XCTAssertEqual(arguments, ["--aac", "--aac-type", "aac", "--song", job.fileURL.absoluteString])
     }
 
     func testAppleMusicDownloaderArgumentsDoNotUseSongFlagForAlbumURL() {

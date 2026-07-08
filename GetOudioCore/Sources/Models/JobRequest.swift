@@ -82,7 +82,7 @@ public enum AppleMusicDownloadFormat: String, Codable, CaseIterable, Identifiabl
         case .askEveryTime, .alac:
             return []
         case .aac:
-            return ["--aac"]
+            return ["--aac", "--aac-type", "aac"]
         case .atmos:
             return ["--atmos"]
         }
