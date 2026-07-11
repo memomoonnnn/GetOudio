@@ -11,11 +11,12 @@ final class SettingsViewModel: ObservableObject {
     let defaultOpenWithSettings: DefaultOpenWithSettingsModel
     let appleMusicSettings: AppleMusicSettingsModel
 
-    init(store: SettingsStore = SettingsStore()) {
+    init(container: SharedContainer) {
+        let store = SettingsStore(container: container)
         presetSettings = PresetSettingsModel(store: store)
         finderSettings = FinderDirectorySettingsModel(store: store)
         ncmSettings = NCMSettingsModel(store: store)
         defaultOpenWithSettings = DefaultOpenWithSettingsModel(store: store)
-        appleMusicSettings = AppleMusicSettingsModel(store: store)
+        appleMusicSettings = AppleMusicSettingsModel(container: container, store: store)
     }
 }

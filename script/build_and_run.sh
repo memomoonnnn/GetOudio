@@ -10,6 +10,7 @@ FINDER_EXTENSION_ID="com.shengjiacheng.GetOudio.FinderExtension"
 FINDER_EXTENSION_POINT_ID="com.apple.FinderSync"
 SHARE_EXTENSION_POINT_ID="com.apple.share-services"
 APP_GROUP_ID="group.com.shengjiacheng.GetOudio"
+DIAGNOSTIC_SHARED_CONTAINER_KEY="GET_OUDIO_DIAGNOSTIC_SHARED_CONTAINER_ROOT"
 SHARE_EXTENSION_ID="com.shengjiacheng.GetOudio.ShareExtension"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DERIVED_DATA="$ROOT_DIR/build/DerivedData"
@@ -96,7 +97,9 @@ build_signed() {
 }
 
 open_app() {
-  /usr/bin/open -n "$DEBUG_APP_BUNDLE"
+  /usr/bin/open -n \
+    --env "$DIAGNOSTIC_SHARED_CONTAINER_KEY=$ROOT_DIR/build/DiagnosticSharedContainer" \
+    "$DEBUG_APP_BUNDLE"
 }
 
 verify_entitlements() {

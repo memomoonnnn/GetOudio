@@ -39,14 +39,18 @@ public final class NotificationEventQueue {
     private let decoder = JSONDecoder()
     private let fileManager: FileManager
 
-    public init(rootURL: URL? = nil, fileManager: FileManager = .default) throws {
+    public init(rootURL: URL, fileManager: FileManager = .default) throws {
         self.fileManager = fileManager
-        self.rootURL = try rootURL ?? SharedContainer.notificationEventsDirectoryURL()
+        self.rootURL = rootURL
         pendingURL = self.rootURL.appendingPathComponent("pending", isDirectory: true)
         processingURL = self.rootURL.appendingPathComponent("processing", isDirectory: true)
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         try fileManager.createDirectory(at: pendingURL, withIntermediateDirectories: true)
         try fileManager.createDirectory(at: processingURL, withIntermediateDirectories: true)
+    }
+
+    public convenience init(container: SharedContainer, fileManager: FileManager = .default) throws {
+        try self.init(rootURL: container.url(for: .notificationEvents), fileManager: fileManager)
     }
 
     public func enqueue(_ event: NotificationEvent) throws {

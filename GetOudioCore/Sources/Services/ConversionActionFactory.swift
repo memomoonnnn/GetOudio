@@ -3,8 +3,12 @@ import Foundation
 public struct ConversionActionFactory {
     private let settingsStore: SettingsStore
 
-    public init(settingsStore: SettingsStore = SettingsStore()) {
+    public init(settingsStore: SettingsStore) {
         self.settingsStore = settingsStore
+    }
+
+    public init(container: SharedContainer) {
+        self.init(settingsStore: SettingsStore(container: container))
     }
 
     public func enabledPresets() -> [ConversionPreset] {

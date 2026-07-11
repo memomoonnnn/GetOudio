@@ -8,7 +8,7 @@ final class PresetSettingsModel: ObservableObject {
 
     private let store: SettingsStore
 
-    init(store: SettingsStore = SettingsStore()) {
+    init(store: SettingsStore) {
         self.store = store
         enabledPresets = store.enabledPresets
     }

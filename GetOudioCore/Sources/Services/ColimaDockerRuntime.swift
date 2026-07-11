@@ -28,7 +28,7 @@ public final class ColimaDockerRuntime {
 
     public init(
         runner: ProcessRunner = ProcessRunner(),
-        runtimeManager: AppleMusicRuntimeManager = AppleMusicRuntimeManager()
+        runtimeManager: AppleMusicRuntimeManager
     ) {
         self.runner = runner
         self.runtimeManager = runtimeManager

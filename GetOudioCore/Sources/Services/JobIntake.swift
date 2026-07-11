@@ -4,13 +4,16 @@ public final class JobIntake {
     private let queue: JobQueue
     private let markerStore: LaunchMarkerStore
 
-    public init(queue: JobQueue, markerStore: LaunchMarkerStore = LaunchMarkerStore()) {
+    public init(queue: JobQueue, markerStore: LaunchMarkerStore) {
         self.queue = queue
         self.markerStore = markerStore
     }
 
-    public convenience init(markerStore: LaunchMarkerStore = LaunchMarkerStore()) throws {
-        try self.init(queue: JobQueue(), markerStore: markerStore)
+    public convenience init(container: SharedContainer) throws {
+        try self.init(
+            queue: JobQueue(container: container),
+            markerStore: LaunchMarkerStore(container: container)
+        )
     }
 
     public func enqueue(_ jobs: [JobRequest], launchSource: LaunchSource) throws {

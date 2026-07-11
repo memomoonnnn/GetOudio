@@ -12,7 +12,11 @@ public final class NotificationService {
         public static let copyInfoUserInfoKey = "copyInfo"
     }
 
-    public init() {}
+    private let container: SharedContainer
+
+    public init(container: SharedContainer) {
+        self.container = container
+    }
 
     public func requestAuthorization() async {
         registerAppleMusicNotificationCategories()
@@ -121,7 +125,7 @@ public final class NotificationService {
     @discardableResult
     public func dispatchPendingNotificationEvents(limit: Int = 20) async -> Int {
         do {
-            let queue = try NotificationEventQueue()
+            let queue = try NotificationEventQueue(container: container)
             let claimedEvents = try queue.claimPending(limit: limit)
             for claimed in claimedEvents {
                 switch claimed.event.kind {
@@ -139,7 +143,7 @@ public final class NotificationService {
 
     public func enqueueAndDispatchConversionFinished(summary: ConversionSummary, jobs: [JobRequest]) async {
         do {
-            try NotificationEventQueue().enqueueConversionFinished(summary: summary, jobs: jobs)
+            try NotificationEventQueue(container: container).enqueueConversionFinished(summary: summary, jobs: jobs)
             await dispatchPendingNotificationEvents()
         } catch {
             DiagnosticLog.append("notification event enqueue failed: \(error.localizedDescription)")

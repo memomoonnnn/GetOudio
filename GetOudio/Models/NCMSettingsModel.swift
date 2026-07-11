@@ -9,7 +9,7 @@ final class NCMSettingsModel: ObservableObject {
 
     private let store: SettingsStore
 
-    init(store: SettingsStore = SettingsStore()) {
+    init(store: SettingsStore) {
         self.store = store
         ncmOutputMode = store.ncmOutputMode
         ncmCustomOutputURL = store.ncmCustomOutputURL

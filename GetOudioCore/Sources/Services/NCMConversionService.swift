@@ -8,11 +8,15 @@ public final class NCMConversionService {
     public init(
         runner: ProcessRunner = ProcessRunner(),
         componentManager: BundledComponentManager = BundledComponentManager(),
-        settingsStore: SettingsStore = SettingsStore()
+        settingsStore: SettingsStore
     ) {
         self.runner = runner
         self.componentManager = componentManager
         self.settingsStore = settingsStore
+    }
+
+    public convenience init(container: SharedContainer) {
+        self.init(settingsStore: SettingsStore(container: container))
     }
 
     public func convert(

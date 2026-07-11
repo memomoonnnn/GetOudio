@@ -1,127 +1,112 @@
 import Foundation
 
-public enum SharedContainer {
+public struct SharedContainer {
+    public static let diagnosticRootEnvironmentKey = "GET_OUDIO_DIAGNOSTIC_SHARED_CONTAINER_ROOT"
+    public static let diagnosticDefaultsSuiteName = "com.shengjiacheng.GetOudio.Diagnostic"
+
     public enum AccessMode: Equatable {
         case appGroup
-        case diagnosticFallback(String)
+        case diagnostic
     }
 
-    public struct DefaultsResolution {
-        public let defaults: UserDefaults
-        public let accessMode: AccessMode
-    }
-
-    public struct DirectoryResolution {
-        public let url: URL
-        public let accessMode: AccessMode
+    public enum Resource {
+        case jobQueue
+        case shareEvents
+        case pendingAppleMusicDownloads
+        case notificationEvents
+        case conversionLog
+        case appleMusicRuntime
+        case appleMusicRuntimeIPC
     }
 
     public enum AccessError: LocalizedError {
+        case appGroupDirectoryUnavailable(String)
         case appGroupDefaultsUnavailable(String)
+        case diagnosticDefaultsUnavailable(String)
 
         public var errorDescription: String? {
             switch self {
+            case .appGroupDirectoryUnavailable(let groupIdentifier):
+                return "App Group directory unavailable for \(groupIdentifier)"
             case .appGroupDefaultsUnavailable(let suiteName):
                 return "App Group defaults unavailable for \(suiteName)"
+            case .diagnosticDefaultsUnavailable(let suiteName):
+                return "Diagnostic defaults unavailable for \(suiteName)"
             }
         }
     }
 
-    public static func defaults(suiteName: String = AppConstants.appGroupIdentifier) -> UserDefaults {
-        resolvedDefaults(suiteName: suiteName).defaults
+    public let directoryURL: URL
+    public let defaults: UserDefaults
+    public let accessMode: AccessMode
+
+    private init(directoryURL: URL, defaults: UserDefaults, accessMode: AccessMode) {
+        self.directoryURL = directoryURL
+        self.defaults = defaults
+        self.accessMode = accessMode
     }
 
-    public static func appGroupDefaults(suiteName: String = AppConstants.appGroupIdentifier) -> UserDefaults? {
-        UserDefaults(suiteName: suiteName)
-    }
-
-    public static func requiredDefaults(suiteName: String = AppConstants.appGroupIdentifier) throws -> UserDefaults {
-        guard let defaults = appGroupDefaults(suiteName: suiteName) else {
-            throw AccessError.appGroupDefaultsUnavailable(suiteName)
-        }
-        return defaults
-    }
-
-    public static func resolvedDefaults(suiteName: String = AppConstants.appGroupIdentifier) -> DefaultsResolution {
-        if let defaults = appGroupDefaults(suiteName: suiteName) {
-            return DefaultsResolution(defaults: defaults, accessMode: .appGroup)
-        }
-
-        DiagnosticLog.append("shared defaults fallback suite=\(suiteName)")
-        return DefaultsResolution(
-            defaults: .standard,
-            accessMode: .diagnosticFallback("standard UserDefaults")
-        )
-    }
-
-    public static func directory() throws -> URL {
-        try resolvedDirectory().url
-    }
-
-    public static func resolvedDirectory(
-        groupIdentifier: String = AppConstants.appGroupIdentifier,
-        fallbackBaseURL: URL? = nil,
-        fileManager: FileManager = .default
-    ) throws -> DirectoryResolution {
-        try resolvedDirectory(
-            containerURL: fileManager.containerURL(forSecurityApplicationGroupIdentifier: groupIdentifier),
-            groupIdentifier: groupIdentifier,
-            fallbackBaseURL: fallbackBaseURL,
-            fileManager: fileManager
-        )
-    }
-
-    static func resolvedDirectory(
-        containerURL: URL?,
-        groupIdentifier: String = AppConstants.appGroupIdentifier,
-        fallbackBaseURL: URL? = nil,
-        fileManager: FileManager = .default
-    ) throws -> DirectoryResolution {
-        if let containerURL {
-            try fileManager.createDirectory(at: containerURL, withIntermediateDirectories: true)
-            return DirectoryResolution(url: containerURL, accessMode: .appGroup)
-        }
-
-        let fallback = (fallbackBaseURL ?? fileManager.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Application Support", isDirectory: true))
-            .appendingPathComponent("Get Oudio", isDirectory: true)
-        try fileManager.createDirectory(at: fallback, withIntermediateDirectories: true)
-        DiagnosticLog.append("shared container fallback group=\(groupIdentifier) path=\(fallback.path)")
-        return DirectoryResolution(
-            url: fallback,
-            accessMode: .diagnosticFallback("Application Support")
-        )
-    }
-
-    public static func requiredDirectory(
+    public static func production(
         groupIdentifier: String = AppConstants.appGroupIdentifier,
         fileManager: FileManager = .default
-    ) throws -> URL {
-        if let containerURL = fileManager.containerURL(forSecurityApplicationGroupIdentifier: groupIdentifier) {
-            try fileManager.createDirectory(at: containerURL, withIntermediateDirectories: true)
-            return containerURL
+    ) throws -> SharedContainer {
+        guard let directoryURL = fileManager.containerURL(
+            forSecurityApplicationGroupIdentifier: groupIdentifier
+        ) else {
+            throw AccessError.appGroupDirectoryUnavailable(groupIdentifier)
         }
+        try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
 
-        throw CocoaError(.fileNoSuchFile)
+        guard let defaults = UserDefaults(suiteName: groupIdentifier) else {
+            throw AccessError.appGroupDefaultsUnavailable(groupIdentifier)
+        }
+        return SharedContainer(directoryURL: directoryURL, defaults: defaults, accessMode: .appGroup)
     }
 
-    public static func queueFileURL() throws -> URL {
-        try directory().appendingPathComponent("queued-jobs.json")
+    public static func diagnostic(
+        rootURL: URL,
+        defaults: UserDefaults,
+        fileManager: FileManager = .default
+    ) throws -> SharedContainer {
+        try fileManager.createDirectory(at: rootURL, withIntermediateDirectories: true)
+        return SharedContainer(directoryURL: rootURL, defaults: defaults, accessMode: .diagnostic)
     }
 
-    public static func shareEventsFileURL() throws -> URL {
-        try directory().appendingPathComponent("share-events.json")
+    public static func forCurrentProcess(
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        fileManager: FileManager = .default
+    ) throws -> SharedContainer {
+#if DEBUG
+        if let rootPath = environment[diagnosticRootEnvironmentKey], !rootPath.isEmpty {
+            guard let defaults = UserDefaults(suiteName: diagnosticDefaultsSuiteName) else {
+                throw AccessError.diagnosticDefaultsUnavailable(diagnosticDefaultsSuiteName)
+            }
+            return try diagnostic(
+                rootURL: URL(fileURLWithPath: rootPath, isDirectory: true),
+                defaults: defaults,
+                fileManager: fileManager
+            )
+        }
+#endif
+        return try production(fileManager: fileManager)
     }
 
-    public static func pendingAppleMusicDownloadsFileURL() throws -> URL {
-        try directory().appendingPathComponent("pending-apple-music-downloads.json")
-    }
-
-    public static func notificationEventsDirectoryURL() throws -> URL {
-        try directory().appendingPathComponent("notification-events", isDirectory: true)
-    }
-
-    public static func conversionLogFileURL() throws -> URL {
-        try directory().appendingPathComponent("conversion-log.txt")
+    public func url(for resource: Resource) -> URL {
+        switch resource {
+        case .jobQueue:
+            return directoryURL.appendingPathComponent("queued-jobs.json")
+        case .shareEvents:
+            return directoryURL.appendingPathComponent("share-events.json")
+        case .pendingAppleMusicDownloads:
+            return directoryURL.appendingPathComponent("pending-apple-music-downloads.json")
+        case .notificationEvents:
+            return directoryURL.appendingPathComponent("notification-events", isDirectory: true)
+        case .conversionLog:
+            return directoryURL.appendingPathComponent("conversion-log.txt")
+        case .appleMusicRuntime:
+            return directoryURL.appendingPathComponent("AppleMusicRuntime", isDirectory: true)
+        case .appleMusicRuntimeIPC:
+            return directoryURL.appendingPathComponent("AppleMusicRuntimeIPC", isDirectory: true)
+        }
     }
 }

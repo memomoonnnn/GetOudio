@@ -114,7 +114,7 @@ public final class DockerImageManager {
     private let runner: ProcessRunner
     private let runtime: ColimaDockerRuntime
 
-    public init(runner: ProcessRunner = ProcessRunner(), runtime: ColimaDockerRuntime = ColimaDockerRuntime()) {
+    public init(runner: ProcessRunner = ProcessRunner(), runtime: ColimaDockerRuntime) {
         self.runner = runner
         self.runtime = runtime
     }

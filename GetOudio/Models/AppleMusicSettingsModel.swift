@@ -21,13 +21,15 @@ final class AppleMusicSettingsModel: ObservableObject {
     @Published var isManagingAppleMusicRuntime = false
 
     private let store: SettingsStore
-    private let appleMusicAgentClient = AppleMusicRuntimeAgentClient()
-    private let appleMusicDownloadService = AppleMusicDownloadService()
+    private let appleMusicAgentClient: AppleMusicRuntimeAgentClient
+    private let appleMusicDownloadService: AppleMusicDownloadService
     private let appleMusicAgentLauncher = AppleMusicRuntimeAgentLauncher.shared
     private var runtimeProgressTask: Task<Void, Never>?
 
-    init(store: SettingsStore = SettingsStore()) {
+    init(container: SharedContainer, store: SettingsStore) {
         self.store = store
+        appleMusicAgentClient = AppleMusicRuntimeAgentClient(container: container)
+        appleMusicDownloadService = AppleMusicDownloadService(container: container)
         appleMusicOutputURL = store.appleMusicOutputURL
         appleMusicDownloadFormat = store.appleMusicDownloadFormat
         isAppleMusicDownloadEnabled = store.isAppleMusicDownloadEnabled
@@ -218,8 +220,11 @@ final class AppleMusicSettingsModel: ObservableObject {
         runtimeProgressTask?.cancel()
         runtimeProgressTask = Task { [weak self] in
             while !Task.isCancelled {
+                guard let appleMusicAgentClient = self?.appleMusicAgentClient else {
+                    return
+                }
                 let progress = await Task.detached {
-                    AppleMusicRuntimeAgentClient().progress()
+                    appleMusicAgentClient.progress()
                 }.value
                 await MainActor.run {
                     self?.appleMusicRuntimeProgress = progress

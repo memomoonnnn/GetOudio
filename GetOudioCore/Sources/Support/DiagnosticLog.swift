@@ -1,9 +1,25 @@
 import Foundation
 
 public enum DiagnosticLog {
+    private static let lock = NSLock()
+    private static var configuredLogURL: URL?
+
+    public static func configure(container: SharedContainer) {
+        lock.lock()
+        configuredLogURL = container.url(for: .conversionLog)
+        lock.unlock()
+    }
+
     public static func append(_ message: String) {
+        lock.lock()
+        defer { lock.unlock() }
+
+        guard let logURL = configuredLogURL else {
+            NSLog("Get Oudio: \(message)")
+            return
+        }
+
         do {
-            let logURL = try SharedContainer.conversionLogFileURL()
             try FileManager.default.createDirectory(at: logURL.deletingLastPathComponent(), withIntermediateDirectories: true)
 
             let timestamp = ISO8601DateFormatter().string(from: Date())

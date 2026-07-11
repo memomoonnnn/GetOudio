@@ -6,9 +6,11 @@ import Darwin
 enum GetOudioAMRuntimeAgent {
     static func main() async {
         do {
+            let container = try SharedContainer.forCurrentProcess()
+            DiagnosticLog.configure(container: container)
             let arguments = Array(CommandLine.arguments.dropFirst())
             if arguments.isEmpty {
-                try await runDaemon()
+                try await runDaemon(container: container)
                 return
             }
 
@@ -20,7 +22,7 @@ enum GetOudioAMRuntimeAgent {
             let resourceRoot = options.value(for: "--resource-root").map {
                 URL(fileURLWithPath: $0, isDirectory: true)
             }
-            let manager = AppleMusicRuntimeManager(resourceRoot: resourceRoot)
+            let manager = AppleMusicRuntimeManager(container: container, resourceRoot: resourceRoot)
 
             switch command {
             case "status":
@@ -36,18 +38,20 @@ enum GetOudioAMRuntimeAgent {
                 let service = AppleMusicDownloadService(
                     componentManager: BundledComponentManager(resourceRoot: resourceRoot),
                     runtimeManager: manager,
-                    settingsStore: SettingsStore(),
+                    settingsStore: SettingsStore(container: container),
+                    agentClient: AppleMusicRuntimeAgentClient(container: container),
                     useAgent: false
                 )
                 let summary = await service.download(request.jobs)
-                persistShareDownloadNotificationIfNeeded(summary: summary, jobs: request.jobs)
+                persistShareDownloadNotificationIfNeeded(summary: summary, jobs: request.jobs, container: container)
                 try write(summary)
             case "initialize":
                 let request: AppleMusicRuntimeAgentInitializeRequest = try readRequest(options)
                 let service = AppleMusicDownloadService(
                     componentManager: BundledComponentManager(resourceRoot: resourceRoot),
                     runtimeManager: manager,
-                    settingsStore: SettingsStore(),
+                    settingsStore: SettingsStore(container: container),
+                    agentClient: AppleMusicRuntimeAgentClient(container: container),
                     useAgent: false
                 )
                 try write(await service.initializeWrapper(
@@ -61,12 +65,13 @@ enum GetOudioAMRuntimeAgent {
                 let service = AppleMusicDownloadService(
                     componentManager: BundledComponentManager(resourceRoot: resourceRoot),
                     runtimeManager: manager,
-                    settingsStore: SettingsStore(),
+                    settingsStore: SettingsStore(container: container),
+                    agentClient: AppleMusicRuntimeAgentClient(container: container),
                     useAgent: false
                 )
                 try write(await service.submitWrapperVerificationCode(request.code))
             case "wrapper-status":
-                try write(await wrapperRuntime(manager: manager).loginStatus())
+                try write(await wrapperRuntime(manager: manager, container: container).loginStatus())
             default:
                 throw ProcessRunnerError.processFailed("未知 Apple Music Runtime Agent 命令：\(command)")
             }
@@ -76,7 +81,8 @@ enum GetOudioAMRuntimeAgent {
         }
     }
 
-    private static func runDaemon() async throws {
+    private static func runDaemon(container: SharedContainer) async throws {
+        let client = AppleMusicRuntimeAgentClient(container: container)
         DiagnosticLog.append(
             "[Agent] started pid=\(ProcessInfo.processInfo.processIdentifier) "
                 + "bundle=\(Bundle.main.bundleURL.path) "
@@ -85,7 +91,7 @@ enum GetOudioAMRuntimeAgent {
         )
         while true {
             do {
-                try await processPendingRequests()
+                try await processPendingRequests(container: container, client: client)
             } catch {
                 DiagnosticLog.append("[Agent] request loop failed: \(error.localizedDescription)")
             }
@@ -93,8 +99,11 @@ enum GetOudioAMRuntimeAgent {
         }
     }
 
-    private static func processPendingRequests() async throws {
-        let directory = try AppleMusicRuntimeAgentClient.requestDirectory()
+    private static func processPendingRequests(
+        container: SharedContainer,
+        client: AppleMusicRuntimeAgentClient
+    ) async throws {
+        let directory = try client.requestDirectory()
         let requestURLs = (try FileManager.default.contentsOfDirectory(
             at: directory,
             includingPropertiesForKeys: nil,
@@ -106,19 +115,23 @@ enum GetOudioAMRuntimeAgent {
         for requestURL in requestURLs {
             let data = try Data(contentsOf: requestURL)
             let request = try JSONDecoder().decode(AppleMusicRuntimeAgentRequestEnvelope.self, from: data)
-            let response = await handle(request)
+            let response = await handle(request, container: container)
             let responseURL = directory.appendingPathComponent("\(request.id.uuidString).response.json")
             try JSONEncoder().encode(response).write(to: responseURL, options: .atomic)
             try? FileManager.default.removeItem(at: requestURL)
         }
     }
 
-    private static func handle(_ request: AppleMusicRuntimeAgentRequestEnvelope) async -> AppleMusicRuntimeAgentResponseEnvelope {
+    private static func handle(
+        _ request: AppleMusicRuntimeAgentRequestEnvelope,
+        container: SharedContainer
+    ) async -> AppleMusicRuntimeAgentResponseEnvelope {
         do {
             let resourceRoot = request.resourceRootPath.map {
                 URL(fileURLWithPath: $0, isDirectory: true)
             }
             let manager = AppleMusicRuntimeManager(
+                container: container,
                 resourceRoot: resourceRoot,
                 gpacPackageURLOverride: request.gpacPackageURLOverride
             )
@@ -136,8 +149,8 @@ enum GetOudioAMRuntimeAgent {
                 guard let downloadRequest = request.downloadRequest else {
                     throw ProcessRunnerError.processFailed("download 请求缺少任务。")
                 }
-                let summary = await worker(resourceRoot: resourceRoot, manager: manager).download(downloadRequest.jobs)
-                persistShareDownloadNotificationIfNeeded(summary: summary, jobs: downloadRequest.jobs)
+                let summary = await worker(resourceRoot: resourceRoot, manager: manager, container: container).download(downloadRequest.jobs)
+                persistShareDownloadNotificationIfNeeded(summary: summary, jobs: downloadRequest.jobs, container: container)
                 return AppleMusicRuntimeAgentResponseEnvelope(
                     id: request.id,
                     summary: summary
@@ -146,7 +159,7 @@ enum GetOudioAMRuntimeAgent {
                 guard let initializeRequest = request.initializeRequest else {
                     throw ProcessRunnerError.processFailed("initialize 请求缺少凭据。")
                 }
-                let summary = await worker(resourceRoot: resourceRoot, manager: manager).initializeWrapper(
+                let summary = await worker(resourceRoot: resourceRoot, manager: manager, container: container).initializeWrapper(
                     username: initializeRequest.username,
                     password: initializeRequest.password,
                     verificationCode: initializeRequest.verificationCode,
@@ -157,12 +170,12 @@ enum GetOudioAMRuntimeAgent {
                 guard let verificationRequest = request.verificationRequest else {
                     throw ProcessRunnerError.processFailed("submit-code 请求缺少验证码。")
                 }
-                let summary = await worker(resourceRoot: resourceRoot, manager: manager).submitWrapperVerificationCode(verificationRequest.code)
+                let summary = await worker(resourceRoot: resourceRoot, manager: manager, container: container).submitWrapperVerificationCode(verificationRequest.code)
                 return AppleMusicRuntimeAgentResponseEnvelope(id: request.id, summary: summary)
             case "wrapper-status":
                 return AppleMusicRuntimeAgentResponseEnvelope(
                     id: request.id,
-                    wrapperLoginStatus: await wrapperRuntime(manager: manager).loginStatus()
+                    wrapperLoginStatus: await wrapperRuntime(manager: manager, container: container).loginStatus()
                 )
             default:
                 throw ProcessRunnerError.processFailed("未知 Apple Music Runtime Agent 命令：\(request.command)")
@@ -196,23 +209,35 @@ enum GetOudioAMRuntimeAgent {
         )
     }
 
-    private static func worker(resourceRoot: URL?, manager: AppleMusicRuntimeManager) -> AppleMusicDownloadService {
+    private static func worker(
+        resourceRoot: URL?,
+        manager: AppleMusicRuntimeManager,
+        container: SharedContainer
+    ) -> AppleMusicDownloadService {
         AppleMusicDownloadService(
             componentManager: BundledComponentManager(resourceRoot: resourceRoot),
             runtimeManager: manager,
-            settingsStore: SettingsStore(),
+            settingsStore: SettingsStore(container: container),
+            agentClient: AppleMusicRuntimeAgentClient(container: container),
             useAgent: false
         )
     }
 
-    private static func wrapperRuntime(manager: AppleMusicRuntimeManager) -> AppleMusicWrapperRuntime {
+    private static func wrapperRuntime(
+        manager: AppleMusicRuntimeManager,
+        container: SharedContainer
+    ) -> AppleMusicWrapperRuntime {
         AppleMusicWrapperRuntime(
             runtimeManager: manager,
-            settingsStore: SettingsStore()
+            settingsStore: SettingsStore(container: container)
         )
     }
 
-    private static func persistShareDownloadNotificationIfNeeded(summary: ConversionSummary, jobs: [JobRequest]) {
+    private static func persistShareDownloadNotificationIfNeeded(
+        summary: ConversionSummary,
+        jobs: [JobRequest],
+        container: SharedContainer
+    ) {
         guard jobs.contains(where: { job in
             guard job.source == .shareExtension else {
                 return false
@@ -226,22 +251,32 @@ enum GetOudioAMRuntimeAgent {
         }
 
         do {
-            try NotificationEventQueue().enqueueConversionFinished(summary: summary, jobs: jobs)
-            wakeMainAppForNotificationDispatch()
+            try NotificationEventQueue(container: container).enqueueConversionFinished(summary: summary, jobs: jobs)
+            wakeMainAppForNotificationDispatch(container: container)
         } catch {
             DiagnosticLog.append("[Agent] notification event enqueue failed: \(error.localizedDescription)")
         }
     }
 
-    private static func wakeMainAppForNotificationDispatch() {
-        LaunchMarkerStore().mark(.notificationDispatch)
+    private static func wakeMainAppForNotificationDispatch(container: SharedContainer) {
+        LaunchMarkerStore(container: container).mark(.notificationDispatch)
 
         guard let url = URL(string: "\(AppConstants.appURLScheme)://run-queued") else {
             return
         }
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-        process.arguments = [url.absoluteString]
+        var arguments: [String] = []
+#if DEBUG
+        if container.accessMode == .diagnostic {
+            arguments.append(contentsOf: [
+                "--env",
+                "\(SharedContainer.diagnosticRootEnvironmentKey)=\(container.directoryURL.path)"
+            ])
+        }
+#endif
+        arguments.append(url.absoluteString)
+        process.arguments = arguments
         do {
             try process.run()
             DiagnosticLog.append("[Agent] notification dispatch wake requested")

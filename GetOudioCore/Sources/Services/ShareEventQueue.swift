@@ -28,10 +28,14 @@ public final class ShareEventQueue {
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
 
-    public init(fileURL: URL? = nil) throws {
-        self.fileURL = try fileURL ?? SharedContainer.shareEventsFileURL()
+    public init(fileURL: URL) throws {
+        self.fileURL = fileURL
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         try FileManager.default.createDirectory(at: self.fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+    }
+
+    public convenience init(container: SharedContainer) throws {
+        try self.init(fileURL: container.url(for: .shareEvents))
     }
 
     public func enqueue(_ events: [ShareEvent]) throws {

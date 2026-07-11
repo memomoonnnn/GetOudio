@@ -10,7 +10,7 @@ final class FinderDirectorySettingsModel: ObservableObject {
 
     private let store: SettingsStore
 
-    init(store: SettingsStore = SettingsStore()) {
+    init(store: SettingsStore) {
         self.store = store
         finderDirectories = store.finderDirectoryURLs
     }

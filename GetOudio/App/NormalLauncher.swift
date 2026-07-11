@@ -25,8 +25,9 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
     }
 
     private var mainWindow: NSWindow?
-    private let notificationService = NotificationService()
-    private let openWithDispatcher = OpenWithJobDispatcher()
+    private let container: SharedContainer
+    private let notificationService: NotificationService
+    private let openWithDispatcher: OpenWithJobDispatcher
     private let openWithMenuController = OpenWithPresetMenuController()
     private var launchIntent: LaunchIntent = .undecided
     private var activeNotificationResponses = 0
@@ -34,13 +35,20 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
     private var lastAudioOpenSignature: String?
     private var lastAudioOpenDate = Date.distantPast
 
+    init(container: SharedContainer) {
+        self.container = container
+        notificationService = NotificationService(container: container)
+        openWithDispatcher = OpenWithJobDispatcher(container: container)
+        super.init()
+    }
+
     // MARK: - Entry point
 
-    static func main() {
+    static func main(container: SharedContainer) {
         MainActor.assumeIsolated {
             let app = NSApplication.shared
             app.setActivationPolicy(.accessory)
-            let launcher = NormalLauncher()
+            let launcher = NormalLauncher(container: container)
             app.delegate = launcher
             app.run()
         }
@@ -123,7 +131,7 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
 
     private func showSettingsWindow() {
         NSApp.setActivationPolicy(.regular)
-        let hostingController = NSHostingController(rootView: MainView())
+        let hostingController = NSHostingController(rootView: MainView(container: container))
 
         let window = NSWindow(contentViewController: hostingController)
         window.title = ""
@@ -279,7 +287,8 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
 
         beginNotificationResponse()
         Task {
-            await AppleMusicShareDownloadCoordinator().handlePendingAppleMusicDownload(format: format)
+            await AppleMusicShareDownloadCoordinator(container: container)
+                .handlePendingAppleMusicDownload(format: format)
             completionHandler()
             await MainActor.run {
                 self.endNotificationResponse()

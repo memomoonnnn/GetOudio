@@ -1,4 +1,5 @@
 import AppKit
+import GetOudioCore
 import SwiftUI
 
 private enum MainLayoutMetrics {
@@ -8,8 +9,12 @@ private enum MainLayoutMetrics {
 }
 
 struct MainView: View {
-    @StateObject private var settingsViewModel = SettingsViewModel()
+    @StateObject private var settingsViewModel: SettingsViewModel
     @State private var selection: MainSidebarItem? = .overview
+
+    init(container: SharedContainer) {
+        _settingsViewModel = StateObject(wrappedValue: SettingsViewModel(container: container))
+    }
 
     var body: some View {
         ZStack {

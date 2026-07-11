@@ -7,24 +7,34 @@ import UserNotifications
 /// No windows are ever created — the user only sees the notification banner.
 final class HeadlessRunner: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
 
+    private let container: SharedContainer
     private let audioService = AudioConversionService()
     private let mediaService = MediaExtractionService()
-    private let ncmService = NCMConversionService()
-    private let amService = AppleMusicDownloadService()
+    private let ncmService: NCMConversionService
+    private let amService: AppleMusicDownloadService
     private let appleMusicAgentLauncher = AppleMusicRuntimeAgentLauncher.shared
-    private let notificationService = NotificationService()
-    private let appleMusicShareCoordinator = AppleMusicShareDownloadCoordinator()
+    private let notificationService: NotificationService
+    private let appleMusicShareCoordinator: AppleMusicShareDownloadCoordinator
     private let lifecycleLock = NSLock()
     private var launchProcessingFinished = false
     private var activeNotificationResponses = 0
     private var terminationTask: Task<Void, Never>?
 
+    init(container: SharedContainer) {
+        self.container = container
+        ncmService = NCMConversionService(container: container)
+        amService = AppleMusicDownloadService(container: container)
+        notificationService = NotificationService(container: container)
+        appleMusicShareCoordinator = AppleMusicShareDownloadCoordinator(container: container)
+        super.init()
+    }
+
     // MARK: - Entry point
 
-    static func main() {
+    static func main(container: SharedContainer) {
         let app = NSApplication.shared
         app.setActivationPolicy(.accessory)
-        let runner = HeadlessRunner()
+        let runner = HeadlessRunner(container: container)
         app.delegate = runner
         app.run()
     }
@@ -149,7 +159,7 @@ final class HeadlessRunner: NSObject, NSApplicationDelegate, UNUserNotificationC
 
     private func processAndNotify() async {
         // Clear extension launch markers so a subsequent direct launch isn't misidentified
-        LaunchMarkerStore().clear()
+        LaunchMarkerStore(container: container).clear()
 
         await notificationService.dispatchPendingNotificationEvents()
 
@@ -158,11 +168,11 @@ final class HeadlessRunner: NSObject, NSApplicationDelegate, UNUserNotificationC
         let queue: JobQueue
         let claimedJobs: ClaimedJobBatch?
         do {
-            let eventQueue = try ShareEventQueue()
+            let eventQueue = try ShareEventQueue(container: container)
             shareEvents = try eventQueue.drain()
             await appleMusicShareCoordinator.notifyShareEvents(shareEvents)
 
-            queue = try JobQueue()
+            queue = try JobQueue(container: container)
             claimedJobs = try queue.claimPending()
             jobs = claimedJobs?.jobs ?? []
         } catch {
@@ -243,7 +253,7 @@ final class HeadlessRunner: NSObject, NSApplicationDelegate, UNUserNotificationC
 
     private func writeConversionLog(summary: ConversionSummary, jobs: [JobRequest]) {
         do {
-            let logURL = try SharedContainer.conversionLogFileURL()
+            let logURL = container.url(for: .conversionLog)
             let timestamp = ISO8601DateFormatter().string(from: Date())
             var lines = [
                 "===== \(timestamp) (headless) =====",

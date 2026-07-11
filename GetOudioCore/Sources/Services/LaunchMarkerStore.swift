@@ -3,19 +3,18 @@ import Foundation
 public struct LaunchMarkerStore {
     public static let defaultTTL: TimeInterval = 120
 
-    private let defaults: UserDefaults?
+    private let defaults: UserDefaults
 
-    public init(defaults: UserDefaults? = SharedContainer.appGroupDefaults()) {
+    public init(defaults: UserDefaults) {
         self.defaults = defaults
+    }
+
+    public init(container: SharedContainer) {
+        defaults = container.defaults
     }
 
     @discardableResult
     public func mark(_ source: LaunchSource, at date: Date = Date()) -> Bool {
-        guard let defaults else {
-            DiagnosticLog.append("launch marker unavailable source=\(source.rawValue)")
-            return false
-        }
-
         defaults.set(source.rawValue, forKey: AppConstants.extensionLaunchSourceKey)
         defaults.set(date.timeIntervalSince1970, forKey: AppConstants.extensionLaunchTimestampKey)
         defaults.synchronize()
@@ -23,8 +22,7 @@ public struct LaunchMarkerStore {
     }
 
     public func activeSource(now: Date = Date(), ttl: TimeInterval = Self.defaultTTL) -> LaunchSource? {
-        guard let defaults,
-              let rawSource = defaults.string(forKey: AppConstants.extensionLaunchSourceKey),
+        guard let rawSource = defaults.string(forKey: AppConstants.extensionLaunchSourceKey),
               let source = LaunchSource(rawValue: rawSource),
               source != .direct else {
             return nil
@@ -38,10 +36,6 @@ public struct LaunchMarkerStore {
     }
 
     public func clear() {
-        guard let defaults else {
-            return
-        }
-
         defaults.removeObject(forKey: AppConstants.extensionLaunchSourceKey)
         defaults.removeObject(forKey: AppConstants.extensionLaunchTimestampKey)
         defaults.synchronize()

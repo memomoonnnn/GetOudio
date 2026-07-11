@@ -13,11 +13,25 @@ private final class FinderActionContext: NSObject {
 }
 
 @objc final class FinderSync: FIFinderSync {
-    private let settingsStore = SettingsStore()
-    private let actionFactory = ConversionActionFactory()
+    private let container: SharedContainer?
+    private let settingsStore: SettingsStore?
+    private let actionFactory: ConversionActionFactory?
     private var lastAudioSelection: [URL] = []
 
     override init() {
+        do {
+            let container = try SharedContainer.forCurrentProcess()
+            DiagnosticLog.configure(container: container)
+            self.container = container
+            let settingsStore = SettingsStore(container: container)
+            self.settingsStore = settingsStore
+            self.actionFactory = ConversionActionFactory(settingsStore: settingsStore)
+        } catch {
+            container = nil
+            settingsStore = nil
+            actionFactory = nil
+            NSLog("Get Oudio Finder extension shared container unavailable: \(error.localizedDescription)")
+        }
         super.init()
         reloadObservedDirectories()
     }
@@ -35,6 +49,7 @@ private final class FinderActionContext: NSObject {
     }
 
     override func menu(for menuKind: FIMenuKind) -> NSMenu? {
+        guard container != nil, actionFactory != nil else { return nil }
         reloadObservedDirectories()
 
         let menu = NSMenu(title: "Get Oudio")
@@ -171,7 +186,8 @@ private final class FinderActionContext: NSObject {
 
         do {
             DiagnosticLog.append("finder enqueue start count=\(jobs.count) operations=\(jobs.map { operationDescription($0.operation) }.joined(separator: ","))")
-            let intake = try JobIntake()
+            guard let container else { return }
+            let intake = try JobIntake(container: container)
             try intake.enqueue(jobs, launchSource: .finderSync)
             openContainingApp()
         } catch {
@@ -203,11 +219,11 @@ private final class FinderActionContext: NSObject {
     }
 
     private func reloadObservedDirectories() {
-        FIFinderSyncController.default().directoryURLs = Set(settingsStore.finderDirectoryURLs)
+        FIFinderSyncController.default().directoryURLs = Set(settingsStore?.finderDirectoryURLs ?? [])
     }
 
     private func enabledPresets() -> [ConversionPreset] {
-        actionFactory.enabledPresets()
+        actionFactory?.enabledPresets() ?? []
     }
 
     private func runPreset(_ preset: ConversionPreset) {
@@ -215,7 +231,7 @@ private final class FinderActionContext: NSObject {
         let urls = selectedURLs.isEmpty ? lastAudioSelection : selectedURLs
         DiagnosticLog.append("finder audio action preset=\(preset.rawValue) selected=\(urls.count)")
 
-        enqueue(actionFactory.audioTranscodeJobs(for: urls, preset: preset, source: .finderSync))
+        enqueue(actionFactory?.audioTranscodeJobs(for: urls, preset: preset, source: .finderSync) ?? [])
     }
 
     private func actionSelector(for preset: ConversionPreset) -> Selector {

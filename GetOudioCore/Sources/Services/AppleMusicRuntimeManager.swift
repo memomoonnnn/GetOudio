@@ -82,20 +82,6 @@ public final class AppleMusicRuntimeManager {
     )!
     static let downloadAttemptCount = 9
 
-    /// Default root directory for the Apple Music runtime helper.
-    ///
-    /// The helper is currently launched by the sandboxed main app, so it
-    /// inherits the app sandbox. Store mutable runtime data in the App Group
-    /// container, which is explicitly writable by both processes.
-    public static var defaultRootURL: URL {
-        if let groupContainer = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: AppConstants.appGroupIdentifier) {
-            return groupContainer.appendingPathComponent("AppleMusicRuntime", isDirectory: true)
-        }
-
-        return SettingsStore.realUserHomeDirectory()
-            .appendingPathComponent("Library/Group Containers/\(AppConstants.appGroupIdentifier)/AppleMusicRuntime", isDirectory: true)
-    }
-
     public static var defaultVMStateRootURL: URL {
         SettingsStore.realUserHomeDirectory()
             .appendingPathComponent("Library/Caches/GetOudio", isDirectory: true)
@@ -107,32 +93,33 @@ public final class AppleMusicRuntimeManager {
     private let resourceRoot: URL?
     private let gpacPackageURLOverride: String?
     private let wrapperImageInstaller: WrapperImageInstaller?
-    private let writesSharedProgress: Bool
+    private let progressURL: URL?
 
     public let rootURL: URL
     public let colimaHomeDirectory: URL
     public let limaHomeDirectory: URL
 
     public init(
-        rootURL: URL = AppleMusicRuntimeManager.defaultRootURL,
+        rootURL: URL,
         colimaHomeDirectory: URL? = nil,
         limaHomeDirectory: URL? = nil,
         runner: ProcessRunner = ProcessRunner(),
-        settingsStore: SettingsStore = SettingsStore(),
+        settingsStore: SettingsStore,
         resourceRoot: URL? = Bundle.main.resourceURL,
         gpacPackageURLOverride: String? = nil,
         wrapperImageInstaller: WrapperImageInstaller? = nil,
+        progressURL: URL? = nil,
         fileManager: FileManager = .default
     ) {
         self.rootURL = rootURL
-        let usesDefaultRoot = rootURL.standardizedFileURL == Self.defaultRootURL.standardizedFileURL
-        self.writesSharedProgress = usesDefaultRoot
+        let usesManagedVMState = progressURL != nil
+        self.progressURL = progressURL
         self.colimaHomeDirectory = colimaHomeDirectory
-            ?? (usesDefaultRoot
+            ?? (usesManagedVMState
                 ? Self.defaultVMStateRootURL.appendingPathComponent("Colima", isDirectory: true)
                 : rootURL.appendingPathComponent("colima-home", isDirectory: true))
         self.limaHomeDirectory = limaHomeDirectory
-            ?? (usesDefaultRoot
+            ?? (usesManagedVMState
                 ? Self.defaultVMStateRootURL.appendingPathComponent("Lima", isDirectory: true)
                 : rootURL.appendingPathComponent("lima-home", isDirectory: true))
         self.runner = runner
@@ -141,6 +128,26 @@ public final class AppleMusicRuntimeManager {
         self.gpacPackageURLOverride = gpacPackageURLOverride
         self.wrapperImageInstaller = wrapperImageInstaller
         self.fileManager = fileManager
+    }
+
+    public convenience init(
+        container: SharedContainer,
+        runner: ProcessRunner = ProcessRunner(),
+        resourceRoot: URL? = Bundle.main.resourceURL,
+        gpacPackageURLOverride: String? = nil,
+        wrapperImageInstaller: WrapperImageInstaller? = nil,
+        fileManager: FileManager = .default
+    ) {
+        self.init(
+            rootURL: container.url(for: .appleMusicRuntime),
+            runner: runner,
+            settingsStore: SettingsStore(container: container),
+            resourceRoot: resourceRoot,
+            gpacPackageURLOverride: gpacPackageURLOverride,
+            wrapperImageInstaller: wrapperImageInstaller,
+            progressURL: container.url(for: .appleMusicRuntimeIPC).appendingPathComponent("progress.json"),
+            fileManager: fileManager
+        )
     }
 
     public var binDirectory: URL { rootURL.appendingPathComponent("bin", isDirectory: true) }
@@ -823,7 +830,7 @@ public final class AppleMusicRuntimeManager {
         isActive: Bool,
         wrapperStatus: ManagedDockerImageStatus? = nil
     ) {
-        guard writesSharedProgress else {
+        guard let url = progressURL else {
             return
         }
 
@@ -834,7 +841,6 @@ public final class AppleMusicRuntimeManager {
             isActive: isActive,
             statuses: componentStatuses(wrapperStatus: wrapperStatus)
         )
-        let url = AppleMusicRuntimeAgentClient.progressURL(fileManager: fileManager)
         do {
             try fileManager.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             try JSONEncoder().encode(progress).write(to: url, options: .atomic)

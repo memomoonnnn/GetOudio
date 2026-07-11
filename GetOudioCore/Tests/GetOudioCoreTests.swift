@@ -238,15 +238,20 @@ final class GetOudioCoreTests: XCTestCase {
 
     func testConversionActionFactoryBuildsAudioTranscodeJobs() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let suiteName = "GetOudioCoreTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        defer { try? FileManager.default.removeItem(at: root) }
+        defer {
+            try? FileManager.default.removeItem(at: root)
+            defaults.removePersistentDomain(forName: suiteName)
+        }
 
         let audioURL = root.appendingPathComponent("song.mp3")
         let videoURL = root.appendingPathComponent("clip.mov")
         try Data("audio".utf8).write(to: audioURL)
         try Data("video".utf8).write(to: videoURL)
 
-        let jobs = ConversionActionFactory().audioTranscodeJobs(
+        let jobs = ConversionActionFactory(settingsStore: SettingsStore(defaults: defaults)).audioTranscodeJobs(
             for: [audioURL, videoURL],
             preset: .aac320,
             source: .openWith
@@ -331,19 +336,18 @@ final class GetOudioCoreTests: XCTestCase {
     }
 
     func testJobIntakeEnqueuesJobsAndMarksLaunchSource() throws {
-        let queueURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString)
-            .appendingPathComponent("queued-jobs.json")
-        defer { try? FileManager.default.removeItem(at: queueURL.deletingLastPathComponent()) }
-
+        let rootURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
         let suiteName = "GetOudioCoreTests-\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defaults.removePersistentDomain(forName: suiteName)
-        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defer {
+            try? FileManager.default.removeItem(at: rootURL)
+            defaults.removePersistentDomain(forName: suiteName)
+        }
 
-        let queue = try JobQueue(fileURL: queueURL)
-        let markerStore = LaunchMarkerStore(defaults: defaults)
-        let intake = JobIntake(queue: queue, markerStore: markerStore)
+        let container = try SharedContainer.diagnostic(rootURL: rootURL, defaults: defaults)
+        let intake = try JobIntake(container: container)
         let job = JobRequest(
             fileURL: URL(fileURLWithPath: "/tmp/song.wav"),
             category: .audio,
@@ -353,8 +357,8 @@ final class GetOudioCoreTests: XCTestCase {
 
         try intake.enqueue([job], launchSource: .openWithAudio)
 
-        XCTAssertEqual(try queue.read(), [job])
-        XCTAssertEqual(markerStore.activeSource(), .openWithAudio)
+        XCTAssertEqual(try JobQueue(container: container).read(), [job])
+        XCTAssertEqual(LaunchMarkerStore(container: container).activeSource(), .openWithAudio)
     }
 
     func testNotificationEventQueueClaimsAndAcknowledgesEvents() throws {
@@ -412,20 +416,63 @@ final class GetOudioCoreTests: XCTestCase {
         XCTAssertEqual(store.enabledPresets, ConversionPreset.defaultEnabled)
     }
 
-    func testSharedContainerDirectoryFallbackIsExplicit() throws {
-        let fallbackRoot = FileManager.default.temporaryDirectory
+    func testSharedContainerProductionFailsWhenAppGroupDirectoryIsUnavailable() {
+        XCTAssertThrowsError(try SharedContainer.production(groupIdentifier: "")) { error in
+            guard case SharedContainer.AccessError.appGroupDirectoryUnavailable(let groupIdentifier) = error else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+            XCTAssertEqual(groupIdentifier, "")
+        }
+    }
+
+    func testSharedContainerDiagnosticUsesInjectedStorage() throws {
+        let rootURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
-        defer { try? FileManager.default.removeItem(at: fallbackRoot) }
+        let suiteName = "GetOudioCoreTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer {
+            try? FileManager.default.removeItem(at: rootURL)
+            defaults.removePersistentDomain(forName: suiteName)
+        }
 
-        let resolution = try SharedContainer.resolvedDirectory(
-            containerURL: nil,
-            groupIdentifier: "group.test",
-            fallbackBaseURL: fallbackRoot
+        let container = try SharedContainer.diagnostic(rootURL: rootURL, defaults: defaults)
+
+        XCTAssertEqual(container.directoryURL, rootURL)
+        XCTAssertEqual(container.accessMode, .diagnostic)
+        XCTAssertTrue(container.defaults === defaults)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: rootURL.path))
+        XCTAssertEqual(container.url(for: .jobQueue), rootURL.appendingPathComponent("queued-jobs.json"))
+        XCTAssertEqual(container.url(for: .shareEvents), rootURL.appendingPathComponent("share-events.json"))
+        XCTAssertEqual(
+            container.url(for: .pendingAppleMusicDownloads),
+            rootURL.appendingPathComponent("pending-apple-music-downloads.json")
         )
+        XCTAssertEqual(
+            container.url(for: .notificationEvents),
+            rootURL.appendingPathComponent("notification-events", isDirectory: true)
+        )
+        XCTAssertEqual(container.url(for: .conversionLog), rootURL.appendingPathComponent("conversion-log.txt"))
+        XCTAssertEqual(
+            container.url(for: .appleMusicRuntime),
+            rootURL.appendingPathComponent("AppleMusicRuntime", isDirectory: true)
+        )
+        XCTAssertEqual(
+            container.url(for: .appleMusicRuntimeIPC),
+            rootURL.appendingPathComponent("AppleMusicRuntimeIPC", isDirectory: true)
+        )
+    }
 
-        XCTAssertEqual(resolution.url, fallbackRoot.appendingPathComponent("Get Oudio", isDirectory: true))
-        XCTAssertEqual(resolution.accessMode, .diagnosticFallback("Application Support"))
-        XCTAssertTrue(FileManager.default.fileExists(atPath: resolution.url.path))
+    func testSharedContainerForCurrentProcessUsesExplicitDiagnosticRoot() throws {
+        let rootURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+
+        let container = try SharedContainer.forCurrentProcess(environment: [
+            SharedContainer.diagnosticRootEnvironmentKey: rootURL.path
+        ])
+
+        XCTAssertEqual(container.accessMode, .diagnostic)
+        XCTAssertEqual(container.directoryURL, rootURL)
     }
 
     func testSettingsStoreResolvesFinderDirectoryAliases() throws {
@@ -488,13 +535,6 @@ final class GetOudioCoreTests: XCTestCase {
         store.appleMusicUseSystemProxy = true
 
         XCTAssertTrue(SettingsStore(defaults: defaults).appleMusicUseSystemProxy)
-    }
-
-    func testAppleMusicRuntimeDefaultRootIsAppGroupOrApplicationSupport() {
-        let path = AppleMusicRuntimeManager.defaultRootURL.path
-
-        XCTAssertTrue(path.contains("/Library/Group Containers/\(AppConstants.appGroupIdentifier)/AppleMusicRuntime"))
-        XCTAssertFalse(path.hasSuffix("/Get Oudio"))
     }
 
     func testAppleMusicDownloadFormatArguments() {
@@ -652,10 +692,16 @@ final class GetOudioCoreTests: XCTestCase {
 
     func testAppleMusicWrapperInitializationMatchesUpstreamLoginFlow() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
-        defer { try? FileManager.default.removeItem(at: root) }
+        let suiteName = "GetOudioCoreTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        let store = SettingsStore(defaults: defaults)
+        defer {
+            try? FileManager.default.removeItem(at: root)
+            defaults.removePersistentDomain(forName: suiteName)
+        }
 
-        let manager = AppleMusicRuntimeManager(rootURL: root, resourceRoot: nil)
-        let wrapper = AppleMusicWrapperRuntime(runtimeManager: manager)
+        let manager = AppleMusicRuntimeManager(rootURL: root, settingsStore: store, resourceRoot: nil)
+        let wrapper = AppleMusicWrapperRuntime(runtimeManager: manager, settingsStore: store)
         let mount = "\(root.path)/rootfs/data:/app/rootfs/data"
         let arguments = wrapper.initializationDockerArguments(
             username: "user@example.com",
@@ -690,8 +736,13 @@ final class GetOudioCoreTests: XCTestCase {
 
     func testAppleMusicWrapperLogSummaryFiltersLinkerNoiseAndKeepsFailure() {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let suiteName = "GetOudioCoreTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        let store = SettingsStore(defaults: defaults)
+        defer { defaults.removePersistentDomain(forName: suiteName) }
         let wrapper = AppleMusicWrapperRuntime(
-            runtimeManager: AppleMusicRuntimeManager(rootURL: root, resourceRoot: nil)
+            runtimeManager: AppleMusicRuntimeManager(rootURL: root, settingsStore: store, resourceRoot: nil),
+            settingsStore: store
         )
         let summary = wrapper.wrapperLogSummary(
             "WARNING: linker: unused DT entry\n[+] starting...\n[!] login failed\n"
@@ -745,10 +796,16 @@ final class GetOudioCoreTests: XCTestCase {
 
     func testAppleMusicWrapperClearsStaleVerificationCode() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
-        defer { try? FileManager.default.removeItem(at: root) }
+        let suiteName = "GetOudioCoreTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        let store = SettingsStore(defaults: defaults)
+        defer {
+            try? FileManager.default.removeItem(at: root)
+            defaults.removePersistentDomain(forName: suiteName)
+        }
 
-        let manager = AppleMusicRuntimeManager(rootURL: root, resourceRoot: nil)
-        let wrapper = AppleMusicWrapperRuntime(runtimeManager: manager)
+        let manager = AppleMusicRuntimeManager(rootURL: root, settingsStore: store, resourceRoot: nil)
+        let wrapper = AppleMusicWrapperRuntime(runtimeManager: manager, settingsStore: store)
         try wrapper.writeVerificationCode("123456")
         let codeURL = try wrapper.dataDirectory().appendingPathComponent("2fa.txt")
         XCTAssertTrue(FileManager.default.fileExists(atPath: codeURL.path))
@@ -839,12 +896,16 @@ final class GetOudioCoreTests: XCTestCase {
     func testAppleMusicRuntimeAcceptsShortVMStatePaths() {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         let vmRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let suiteName = "GetOudioCoreTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
         let colimaHome = vmRoot.appendingPathComponent("Colima", isDirectory: true)
         let limaHome = vmRoot.appendingPathComponent("Lima", isDirectory: true)
         let manager = AppleMusicRuntimeManager(
             rootURL: root,
             colimaHomeDirectory: colimaHome,
             limaHomeDirectory: limaHome,
+            settingsStore: SettingsStore(defaults: defaults),
             resourceRoot: nil
         )
 

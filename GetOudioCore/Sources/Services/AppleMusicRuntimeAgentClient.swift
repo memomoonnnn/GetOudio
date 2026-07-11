@@ -158,14 +158,17 @@ public final class AppleMusicRuntimeAgentClient {
     public static let executablePathEnvironmentKey = "GET_OUDIO_AM_RUNTIME_AGENT"
 
     private let resourceRoot: URL?
+    private let ipcDirectory: URL
     private let fileManager: FileManager
     private let timeout: TimeInterval
 
     public init(
+        container: SharedContainer,
         resourceRoot: URL? = Bundle.main.resourceURL,
         fileManager: FileManager = .default,
         timeout: TimeInterval = 3_600
     ) {
+        self.ipcDirectory = container.url(for: .appleMusicRuntimeIPC)
         self.resourceRoot = resourceRoot
         self.fileManager = fileManager
         self.timeout = timeout
@@ -280,23 +283,23 @@ public final class AppleMusicRuntimeAgentClient {
     }
 
     public func progress() -> AppleMusicRuntimeProgress? {
-        guard let data = try? Data(contentsOf: Self.progressURL(fileManager: fileManager)) else { return nil }
+        guard let data = try? Data(contentsOf: progressURL()) else { return nil }
         return try? JSONDecoder().decode(AppleMusicRuntimeProgress.self, from: data)
     }
 
     public func requestDownloadCancellation() throws {
-        let url = Self.downloadCancellationURL(fileManager: fileManager)
+        let url = downloadCancellationURL()
         try fileManager.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         let message = ISO8601DateFormatter().string(from: Date())
         try Data(message.utf8).write(to: url, options: .atomic)
     }
 
-    public static func clearDownloadCancellation(fileManager: FileManager = .default) {
-        try? fileManager.removeItem(at: downloadCancellationURL(fileManager: fileManager))
+    public func clearDownloadCancellation() {
+        try? fileManager.removeItem(at: downloadCancellationURL())
     }
 
-    public static func isDownloadCancellationRequested(fileManager: FileManager = .default) -> Bool {
-        fileManager.fileExists(atPath: downloadCancellationURL(fileManager: fileManager).path)
+    public func isDownloadCancellationRequested() -> Bool {
+        fileManager.fileExists(atPath: downloadCancellationURL().path)
     }
 
     private func send(
@@ -305,7 +308,7 @@ public final class AppleMusicRuntimeAgentClient {
         initializeRequest: AppleMusicRuntimeAgentInitializeRequest? = nil,
         verificationRequest: AppleMusicRuntimeAgentVerificationRequest? = nil
     ) async throws -> AppleMusicRuntimeAgentResponseEnvelope {
-        let directory = try Self.requestDirectory(fileManager: fileManager)
+        let directory = try requestDirectory()
         let id = UUID()
         let request = AppleMusicRuntimeAgentRequestEnvelope(
             id: id,
@@ -354,23 +357,17 @@ public final class AppleMusicRuntimeAgentClient {
         return summary
     }
 
-    public static func requestDirectory(fileManager: FileManager = .default) throws -> URL {
-        let directory = runtimeIPCDirectory(fileManager: fileManager).appendingPathComponent("requests", isDirectory: true)
+    public func requestDirectory() throws -> URL {
+        let directory = ipcDirectory.appendingPathComponent("requests", isDirectory: true)
         try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory
     }
 
-    public static func progressURL(fileManager: FileManager = .default) -> URL {
-        runtimeIPCDirectory(fileManager: fileManager).appendingPathComponent("progress.json")
+    public func progressURL() -> URL {
+        ipcDirectory.appendingPathComponent("progress.json")
     }
 
-    public static func downloadCancellationURL(fileManager: FileManager = .default) -> URL {
-        runtimeIPCDirectory(fileManager: fileManager).appendingPathComponent("download-cancel.flag")
-    }
-
-    public static func runtimeIPCDirectory(fileManager: FileManager = .default) -> URL {
-        let container = fileManager.containerURL(forSecurityApplicationGroupIdentifier: AppConstants.appGroupIdentifier)
-            ?? SettingsStore.realUserHomeDirectory().appendingPathComponent("Library/Group Containers/\(AppConstants.appGroupIdentifier)", isDirectory: true)
-        return container.appendingPathComponent("AppleMusicRuntimeIPC", isDirectory: true)
+    public func downloadCancellationURL() -> URL {
+        ipcDirectory.appendingPathComponent("download-cancel.flag")
     }
 }

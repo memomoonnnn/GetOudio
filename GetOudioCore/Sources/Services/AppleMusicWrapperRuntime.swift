@@ -13,8 +13,8 @@ public final class AppleMusicWrapperRuntime {
 
     public init(
         runner: ProcessRunner = ProcessRunner(),
-        runtimeManager: AppleMusicRuntimeManager = AppleMusicRuntimeManager(),
-        settingsStore: SettingsStore = SettingsStore(),
+        runtimeManager: AppleMusicRuntimeManager,
+        settingsStore: SettingsStore,
         runtime: ColimaDockerRuntime? = nil,
         dockerImageManager: DockerImageManager? = nil
     ) {
@@ -23,6 +23,14 @@ public final class AppleMusicWrapperRuntime {
         self.settingsStore = settingsStore
         self.runtime = runtime ?? ColimaDockerRuntime(runtimeManager: runtimeManager)
         self.dockerImageManager = dockerImageManager ?? DockerImageManager(runtime: self.runtime)
+    }
+
+    public convenience init(container: SharedContainer) {
+        let manager = AppleMusicRuntimeManager(container: container)
+        self.init(
+            runtimeManager: manager,
+            settingsStore: SettingsStore(container: container)
+        )
     }
 
     public func runtimeDirectory() throws -> URL {

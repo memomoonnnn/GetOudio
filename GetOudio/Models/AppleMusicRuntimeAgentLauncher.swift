@@ -36,7 +36,15 @@ final class AppleMusicRuntimeAgentLauncher {
         try await Task.detached(priority: .userInitiated) {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-            process.arguments = ["-g", "-j", bundleURL.path]
+            var arguments = ["-g", "-j"]
+            if let diagnosticRoot = ProcessInfo.processInfo.environment[SharedContainer.diagnosticRootEnvironmentKey] {
+                arguments.append(contentsOf: [
+                    "--env",
+                    "\(SharedContainer.diagnosticRootEnvironmentKey)=\(diagnosticRoot)"
+                ])
+            }
+            arguments.append(bundleURL.path)
+            process.arguments = arguments
 
             let standardError = Pipe()
             process.standardError = standardError
@@ -62,6 +70,9 @@ final class AppleMusicRuntimeAgentLauncher {
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = false
         configuration.createsNewApplicationInstance = false
+        if let diagnosticRoot = ProcessInfo.processInfo.environment[SharedContainer.diagnosticRootEnvironmentKey] {
+            configuration.environment = [SharedContainer.diagnosticRootEnvironmentKey: diagnosticRoot]
+        }
         do {
             _ = try await NSWorkspace.shared.openApplication(at: bundleURL, configuration: configuration)
         } catch {

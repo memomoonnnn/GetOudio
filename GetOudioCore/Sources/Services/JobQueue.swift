@@ -12,12 +12,16 @@ public final class JobQueue {
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
 
-    public init(fileURL: URL? = nil, fileManager: FileManager = .default) throws {
-        self.fileURL = try fileURL ?? SharedContainer.queueFileURL()
+    public init(fileURL: URL, fileManager: FileManager = .default) throws {
+        self.fileURL = fileURL
         self.fileManager = fileManager
         self.processingFileURL = Self.processingFileURL(for: self.fileURL)
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         try fileManager.createDirectory(at: self.fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+    }
+
+    public convenience init(container: SharedContainer, fileManager: FileManager = .default) throws {
+        try self.init(fileURL: container.url(for: .jobQueue), fileManager: fileManager)
     }
 
     public func enqueue(_ jobs: [JobRequest]) throws {

@@ -18,7 +18,7 @@ final class DefaultOpenWithSettingsModel: ObservableObject {
     private let defaultOpenWithService: DefaultOpenWithService
 
     init(
-        store: SettingsStore = SettingsStore(),
+        store: SettingsStore,
         defaultOpenWithService: DefaultOpenWithService? = nil
     ) {
         self.store = store

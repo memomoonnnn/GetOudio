@@ -35,11 +35,18 @@ final class ShareExtension: NSViewController {
                 return
             }
             hasStarted = true
-            process(context)
+            do {
+                let sharedContainer = try SharedContainer.forCurrentProcess()
+                DiagnosticLog.configure(container: sharedContainer)
+                process(context, container: sharedContainer)
+            } catch {
+                NSLog("Get Oudio Share extension shared container unavailable: \(error.localizedDescription)")
+                context.cancelRequest(withError: error)
+            }
         }
     }
 
-    private func process(_ context: NSExtensionContext) {
+    private func process(_ context: NSExtensionContext, container: SharedContainer) {
         let group = DispatchGroup()
         let lock = NSLock()
         var urls: [URL] = []
@@ -84,35 +91,36 @@ final class ShareExtension: NSViewController {
             DiagnosticLog.append(
                 "[ShareExtension] extracted URLs: \(urls.map(\.absoluteString).joined(separator: ", "))"
             )
-            self.enqueue(urls)
-            self.openContainingApp()
-            context.completeRequest(returningItems: [], completionHandler: nil)
+            do {
+                try self.enqueue(urls, container: container)
+                self.openContainingApp(container: container)
+                context.completeRequest(returningItems: [], completionHandler: nil)
+            } catch {
+                NSLog("Get Oudio Share extension failed to enqueue jobs: \(error.localizedDescription)")
+                context.cancelRequest(withError: error)
+            }
         }
     }
 
-    private func enqueue(_ urls: [URL]) {
+    private func enqueue(_ urls: [URL], container: SharedContainer) throws {
         let supportedURLs = AppleMusicShareURLParser.supportedURLs(from: urls)
         let jobs = supportedURLs
             .map { JobRequest(fileURL: $0, category: .appleMusic, operation: .appleMusicDownload(nil), source: .shareExtension) }
 
-        do {
-            if !jobs.isEmpty {
-                let intake = try JobIntake()
-                try intake.enqueue(jobs, launchSource: .shareExtension)
-            }
-            if !urls.isEmpty, supportedURLs.isEmpty {
-                let eventQueue = try ShareEventQueue()
-                try eventQueue.enqueue([
-                    ShareEvent(kind: .unsupportedDownloadSource, urls: urls)
-                ])
-            }
-        } catch {
-            NSLog("Get Oudio Share extension failed to enqueue jobs: \(error.localizedDescription)")
+        if !jobs.isEmpty {
+            let intake = try JobIntake(container: container)
+            try intake.enqueue(jobs, launchSource: .shareExtension)
+        }
+        if !urls.isEmpty, supportedURLs.isEmpty {
+            let eventQueue = try ShareEventQueue(container: container)
+            try eventQueue.enqueue([
+                ShareEvent(kind: .unsupportedDownloadSource, urls: urls)
+            ])
         }
     }
 
-    private func openContainingApp() {
-        LaunchMarkerStore().mark(.shareExtension)
+    private func openContainingApp(container: SharedContainer) {
+        LaunchMarkerStore(container: container).mark(.shareExtension)
 
         guard let runQueuedURL = URL(string: "\(AppConstants.appURLScheme)://run-queued") else {
             return

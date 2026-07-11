@@ -2,10 +2,12 @@ import AppKit
 import GetOudioCore
 
 final class OpenWithJobDispatcher {
+    private let container: SharedContainer
     private let actionFactory: ConversionActionFactory
 
-    init(actionFactory: ConversionActionFactory = ConversionActionFactory()) {
-        self.actionFactory = actionFactory
+    init(container: SharedContainer, actionFactory: ConversionActionFactory? = nil) {
+        self.container = container
+        self.actionFactory = actionFactory ?? ConversionActionFactory(container: container)
     }
 
     func enabledPresets() -> [ConversionPreset] {
@@ -48,6 +50,9 @@ final class OpenWithJobDispatcher {
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = false
         configuration.createsNewApplicationInstance = true
+        if let diagnosticRoot = ProcessInfo.processInfo.environment[SharedContainer.diagnosticRootEnvironmentKey] {
+            configuration.environment = [SharedContainer.diagnosticRootEnvironmentKey: diagnosticRoot]
+        }
 
         let bundleURL = Bundle.main.bundleURL
         DiagnosticLog.append("open with launch headless bundle=\(bundleURL.path)")
@@ -63,7 +68,7 @@ final class OpenWithJobDispatcher {
     private func enqueue(_ jobs: [JobRequest], launchSource: LaunchSource) -> Bool {
         do {
             DiagnosticLog.append("open with enqueue start source=\(launchSource.rawValue) count=\(jobs.count)")
-            let intake = try JobIntake()
+            let intake = try JobIntake(container: container)
             try intake.enqueue(jobs, launchSource: launchSource)
             launchHeadlessProcessor()
             return true

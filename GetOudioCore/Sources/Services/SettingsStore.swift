@@ -16,9 +16,13 @@ public final class SettingsStore {
 
     private let defaults: UserDefaults
 
-    public init(defaults: UserDefaults = SharedContainer.defaults()) {
+    public init(defaults: UserDefaults) {
         self.defaults = defaults
         seedDefaultsIfNeeded()
+    }
+
+    public convenience init(container: SharedContainer) {
+        self.init(defaults: container.defaults)
     }
 
     public var enabledPresets: Set<ConversionPreset> {

@@ -2,6 +2,7 @@ import Foundation
 import GetOudioCore
 
 final class AppleMusicShareDownloadCoordinator {
+    private let container: SharedContainer
     private let settingsStore: SettingsStore
     private let agentClient: AppleMusicRuntimeAgentClient
     private let agentLauncher: AppleMusicRuntimeAgentLauncher
@@ -10,19 +11,21 @@ final class AppleMusicShareDownloadCoordinator {
     private let pendingStoreFactory: () throws -> PendingAppleMusicDownloadStore
 
     init(
-        settingsStore: SettingsStore = SettingsStore(),
-        agentClient: AppleMusicRuntimeAgentClient = AppleMusicRuntimeAgentClient(),
+        container: SharedContainer,
+        settingsStore: SettingsStore? = nil,
+        agentClient: AppleMusicRuntimeAgentClient? = nil,
         agentLauncher: AppleMusicRuntimeAgentLauncher = .shared,
-        downloadService: AppleMusicDownloadService = AppleMusicDownloadService(),
-        notificationService: NotificationService = NotificationService(),
-        pendingStoreFactory: @escaping () throws -> PendingAppleMusicDownloadStore = { try PendingAppleMusicDownloadStore() }
+        downloadService: AppleMusicDownloadService? = nil,
+        notificationService: NotificationService? = nil,
+        pendingStoreFactory: (() throws -> PendingAppleMusicDownloadStore)? = nil
     ) {
-        self.settingsStore = settingsStore
-        self.agentClient = agentClient
+        self.container = container
+        self.settingsStore = settingsStore ?? SettingsStore(container: container)
+        self.agentClient = agentClient ?? AppleMusicRuntimeAgentClient(container: container)
         self.agentLauncher = agentLauncher
-        self.downloadService = downloadService
-        self.notificationService = notificationService
-        self.pendingStoreFactory = pendingStoreFactory
+        self.downloadService = downloadService ?? AppleMusicDownloadService(container: container)
+        self.notificationService = notificationService ?? NotificationService(container: container)
+        self.pendingStoreFactory = pendingStoreFactory ?? { try PendingAppleMusicDownloadStore(container: container) }
     }
 
     func notifyShareEvents(_ events: [ShareEvent]) async {
@@ -104,7 +107,7 @@ final class AppleMusicShareDownloadCoordinator {
     }
 
     private func hasCompletedAppleMusicAuthentication() -> Bool {
-        let manager = AppleMusicRuntimeManager(resourceRoot: Bundle.main.resourceURL)
+        let manager = AppleMusicRuntimeManager(container: container, resourceRoot: Bundle.main.resourceURL)
         let markerURL = manager.wrapperDataDirectory.appendingPathComponent(".login-completed")
         return FileManager.default.fileExists(atPath: markerURL.path)
     }
@@ -126,7 +129,7 @@ final class AppleMusicShareDownloadCoordinator {
 
     private func writeConversionLog(summary: ConversionSummary, jobs: [JobRequest]) {
         do {
-            let logURL = try SharedContainer.conversionLogFileURL()
+            let logURL = container.url(for: .conversionLog)
             let timestamp = ISO8601DateFormatter().string(from: Date())
             var lines = [
                 "===== \(timestamp) (share Apple Music) =====",
@@ -157,7 +160,7 @@ final class AppleMusicShareDownloadCoordinator {
     }
 
     private func markShareExtensionHeadlessLaunch() {
-        LaunchMarkerStore().mark(.shareExtension)
+        LaunchMarkerStore(container: container).mark(.shareExtension)
     }
 }
 
