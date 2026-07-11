@@ -52,14 +52,6 @@ final class FinderDirectorySettingsModel: ObservableObject {
         NSWorkspace.shared.activateFileViewerSelecting([url])
     }
 
-    func openExtensionSettings() {
-        guard let url = URL(string: "x-apple.systempreferences:com.apple.ExtensionsPreferences") else {
-            return
-        }
-
-        NSWorkspace.shared.open(url)
-    }
-
     func restoreDefaultFinderDirectories() {
         finderDirectories = SettingsStore.defaultFinderDirectories()
         saveFinderDirectories()

@@ -11,10 +11,10 @@
     {
       "id": "appleMusicDownloader",
       "name": "apple-music-downloader",
-      "upstream": "https://github.com/zhaarey/apple-music-downloader",
+      "upstream": "https://github.com/memomoonnnn/apple-music-downloader",
       "license": "Check upstream repository before redistribution.",
       "expectedPath": "apple-music-downloader/apple-music-downloader",
-      "notes": "Project-private macOS executable embedded in the app bundle Resources root. Runtime config is generated from apple-music-downloader/config.yaml.template under the app-managed runtime directory."
+      "notes": "Project-private macOS executable embedded in the app bundle Resources root. Built from the Get Oudio fork of zhaarey/apple-music-downloader with script/build_apple_music_downloader.sh. Runtime config is generated from apple-music-downloader/config.yaml.template under the app-managed runtime directory."
     }
   ],
   "managedDockerImages": [

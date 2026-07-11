@@ -21,8 +21,6 @@
 			</array>
 		</dict>
 		<dict>
-			<key>CFBundleTypeName</key>
-			<string>Audio File</string>
 			<key>CFBundleTypeExtensions</key>
 			<array>
 				<string>m4a</string>
@@ -37,6 +35,8 @@
 				<string>opus</string>
 				<string>caf</string>
 			</array>
+			<key>CFBundleTypeName</key>
+			<string>Audio File</string>
 			<key>CFBundleTypeRole</key>
 			<string>Viewer</string>
 			<key>LSHandlerRank</key>
@@ -76,6 +76,8 @@
 	<string>1</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Get Oudio 需要重启 Finder，以便新启用的 Finder Sync 菜单拓展生效。</string>
 	<key>UTExportedTypeDeclarations</key>
 	<array>
 		<dict>

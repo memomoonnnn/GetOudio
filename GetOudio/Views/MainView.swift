@@ -90,7 +90,10 @@ struct MainView: View {
     private var detailView: some View {
         switch selection ?? .overview {
         case .overview:
-            DashboardView(viewModel: settingsViewModel.finderSettings)
+            DashboardView(
+                finderSettings: settingsViewModel.finderSettings,
+                systemExtensionSettings: settingsViewModel.systemExtensionSettings
+            )
         case .transcoding:
             TranscodingSettingsPage(
                 presetSettings: settingsViewModel.presetSettings,

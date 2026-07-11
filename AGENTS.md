@@ -1,97 +1,55 @@
 # AGENTS.md
 
-本文件是给 AI Agent 使用的项目工作指南。修改此仓库时先读这里，再读 `project.yml`、相关 Swift 源码和脚本；不要把本文当成产品说明书，也不要用猜测替代当前文件内容。
+本文件是 AI Agent 修改本仓库时必须先读的根级操作指南。它只保留全仓库护栏、任务路由和验证入口；专项实现约束位于 `docs/agent-guides/`，开始相关任务前必须读取对应文件，并以当前 `project.yml`、源码和脚本为最终真源，不得用本文或历史经验替代现场检查。
 
 ## Project Overview
 
-Get Oudio 是一个 XcodeGen 驱动的 macOS 原生音频转换工具。主 App 的可见职责是设置窗口、Apple Music 初始化界面和 Open With 音频的菜单式预设选择；日常转码执行不挂在设置窗口上，而是由 `HeadlessRunner` 在无窗口路径中 drain `JobQueue` 后运行、记录日志并派发通知。`GetOudioCore` 承载模型、服务、队列、共享容器和进程执行逻辑，Finder Sync、Share Extension 与 Open With 入口只负责接收系统输入并写入 App Group 队列，Apple Music 的重型 Docker/Colima/wrapper 运行时由独立 `GetOudioAMRuntimeAgent` 管理。
+Get Oudio 是 XcodeGen 驱动的 macOS 原生音频转换工具。`GetOudioCore` 承载模型、服务、队列、共享容器和进程执行；Finder Sync、Share Extension 与 Open With 入口只接收系统输入并入队；`HeadlessRunner` 负责日常转换、日志和通知事件；独立的 `GetOudioAMRuntimeAgent` 管理 Apple Music 所需的 Docker、Colima、GPAC/MP4Box 和 wrapper。直接启动 App 才显示设置窗口，其他入口应保持无窗口、无 Dock 干扰。
 
----
+## Source of Truth and Boundaries
 
-## Repository Layout
+可修改源码主要位于 `GetOudio/`、`GetOudioCore/`、`GetOudioAMRuntimeAgent/`、`GetOudioFinderExtension/`、`GetOudioShareExtension/`、`script/` 和 `project.yml`。涉及 target、sources、resources、Info.plist 注入、entitlements、签名或构建设置时，`project.yml` 是真源，修改后运行 `xcodegen generate`；`GetOudio.xcodeproj/project.pbxproj` 和 `build/` 是生成或本地输出，不能反向当作源码真源。
 
-可以修改的源目录主要是 `GetOudio/App/`、`GetOudio/Models/`、`GetOudio/Views/`、`GetOudioCore/Sources/`、`GetOudioCore/Tests/`、`GetOudioAMRuntimeAgent/Sources/`、`GetOudioFinderExtension/Sources/`、`GetOudioShareExtension/Sources/`、各 target 的 `Info.plist` 与 entitlements、`script/` 和 `project.yml`。涉及 target、资源、签名、Info.plist 注入、entitlements 或构建设置时，`project.yml` 是真源，先改它，再运行 `xcodegen generate`。
+不得碰触 `.git/`、与当前任务无关的未提交改动、用户 App Group 数据、Apple Music 输出目录、Keychain 凭据或任务范围外的第三方二进制。文件系统和共享设置统一经 `SharedContainer` 与基于其 suite defaults 构造的 `SettingsStore`，不得在调用点创建 `UserDefaults(suiteName:)`、拼接 `Library/Group Containers` 路径、以 `.standard` 或普通 Application Support 静默降级。新增网络、虚拟化、App Group、文件访问或 Hardened Runtime 能力时必须同步检查对应 target 的 entitlements，不能通过关闭沙盒或移除安全作用域访问绕过权限。
 
-自动生成或本地输出目录包括 `GetOudio.xcodeproj/` 和 `build/`。`GetOudio.xcodeproj/project.pbxproj` 由 XcodeGen 生成，除非是在验证生成结果，否则不要把它当作唯一真源手工维护；`build/DerivedData`、`build/TestDerivedData`、`build/IconVerify`、`build/Icon*`、`build/Agent*` 等都是本机构建、测试或图标诊断产物，通常可以删除，不能反向当成源码资产。
+代码改动保持小范围且按职责落位：业务行为优先进入 Core 的 Models/Services 或对应入口源码，进程执行复用 `ProcessRunner` 或现有 runtime 服务，跨进程常量和共享路径进入 Core Support。Extension 只分类、入队、写共享事件和唤醒后台；设置窗口只负责设置；转换、通知派发、下载和 Docker 操作必须由后台 runner 或 Agent 执行。不要为了拆文件增加只转发属性或方法的浅层包装，也不要把 UI 状态、队列消费、权限和进程调用重新揉进一个视图或大 view model。
 
-不要碰的边界包括 `.git/`、与本任务无关的已有未提交改动、用户本地 App Group 数据、用户配置的 Apple Music 输出目录、Keychain 中的账号凭据，以及 `GetOudio/Resources/ThirdParty/` 中未经明确任务要求的二进制依赖。当前 App Bundle 只应携带精简 `ffmpeg`、`ncmdump` 和 `apple-music-downloader`；Docker CLI、Colima、Lima、GPAC/MP4Box 和 wrapper 镜像必须由 AM Runtime Agent 安装到受控 runtime，不要塞回 App Bundle 或改为使用用户系统里的 Homebrew、Docker Desktop、Colima 或 GPAC。内嵌 `apple-music-downloader` 的源码不在本仓库内维护，默认使用相邻目录 `../apple-music-downloader-get-oudio` 中的 Get Oudio 专用 fork `https://github.com/memomoonnnn/apple-music-downloader`，本仓库只保存构建后的可执行文件和运行时 `config.yaml.template`。
+App Bundle 只携带精简 `ffmpeg`、`ncmdump` 和 `apple-music-downloader`。Docker CLI、Colima、Lima、GPAC/MP4Box 与 wrapper 镜像必须由 AM Runtime Agent 安装到 managed runtime，不得塞回 App Bundle，也不得改用用户系统里的 Homebrew、Docker Desktop、Colima 或 GPAC。内嵌 downloader 的源码由相邻专用 fork `../apple-music-downloader-get-oudio` 维护，本仓库只保存构建产物与 `config.yaml.template`。
 
----
+## Required Task Guides
 
-## Development Rules
+开始任务前按改动面读取下列指南；跨多个改动面时读取所有相关文件。
 
-代码改动保持小范围、分层清晰。业务行为优先落在 `GetOudioCore/Sources/Services/`、`GetOudioCore/Sources/Models/` 或对应 App/Extension 源码中；进程执行放在 `ProcessRunner` 或现有 runtime 服务层，文件系统与 App Group 访问统一经 `SharedContainer`，共享设置再由基于其 suite defaults 构造的 `SettingsStore` 读写，不要在调用点自行创建 `UserDefaults(suiteName:)` 或拼接 Group Containers 路径，也不要把 UI 状态、队列消费、权限处理和底层进程调用揉进同一个视图或扩展控制器。
+| 改动面 | 必读指南 |
+| --- | --- |
+| 启动路由、Open With、设置模型、设置窗口、Dock 或 SwiftUI/AppKit 布局 | `docs/agent-guides/app-architecture-and-ui.md` |
+| Finder Sync、Share Extension、格式分类、默认打开方式或外置磁盘权限 | `docs/agent-guides/system-integrations.md` |
+| Apple Music runtime、Agent、Colima/Docker、wrapper、下载、代理、凭据或通知事件 | `docs/agent-guides/apple-music-runtime.md` |
+| ffmpeg、转码预设、图标或内嵌 apple-music-downloader 构建 | `docs/agent-guides/bundled-tools-and-assets.md` |
+| 构建、测试、安装、日志、插件注册或已知诊断陷阱 | `docs/agent-guides/validation-and-troubleshooting.md` |
 
-设置页状态已经按职责拆分为 `PresetSettingsModel`、`FinderDirectorySettingsModel`、`NCMSettingsModel`、`DefaultOpenWithSettingsModel` 和 `AppleMusicSettingsModel`，`SettingsViewModel` 只作为共享 `SettingsStore` 的组合入口，具体页面直接观察所需的窄模型，目录选择统一通过 `DirectoryChooser`。新增设置状态应归入最接近其业务职责的模型，不要把异步状态、系统集成、目录权限和 Apple Music runtime 生命周期重新汇总成单一大 view model，也不要为了拆文件而增加只转发属性或方法的浅层包装。
+## Global Constraints
 
-命名沿用现有 Swift 风格：类型用 UpperCamelCase，方法、属性和局部变量用 lowerCamelCase，服务以职责命名为 `*Service`、`*Runtime`、`*Queue`、`*Store` 或 `*Client`，状态枚举和模型放在 `GetOudioCore/Sources/Models/`，跨进程常量和共享路径放在 `GetOudioCore/Sources/Support/`。新增文件应放入与职责一致的目录，并通过 `project.yml` 的 sources 自动纳入 target，而不是临时在 Xcode 工程里拖文件。
+App Group 标识固定为 `group.com.shengjiacheng.GetOudio`。任务队列、共享设置、launch marker、诊断日志、通知事件和 Apple Music runtime 必须通过共享容器或 suite defaults 访问。`SharedContainer.production()` 缺少 App Group URL 或 suite defaults 时应抛出可观察错误并关闭当前入口；`diagnostic(rootURL:defaults:)` 只用于测试或显式 Debug 诊断，Release 不得响应 `GET_OUDIO_DIAGNOSTIC_SHARED_CONTAINER_ROOT`。容器解析失败时先写系统日志，不得调用依赖同一容器的 `DiagnosticLog`。
 
-依赖规则是“轻量内嵌、重型托管”。App Bundle 内的第三方资源只限当前精简工具链；Apple Music 下载必须经 `GetOudioAMRuntimeAgent`、managed Colima/Docker、GPAC/MP4Box 和 wrapper 链路，主 App 不能直接依赖系统 PATH 中的运行时工具。新增网络、虚拟化、App Group、文件访问或 Hardened Runtime 需求时，必须同步检查对应 target 的 entitlements，不能通过关闭沙盒、移除安全作用域访问或写入普通容器目录来绕过权限。
+凭据不得写入 UserDefaults、日志、配置文件或命令诊断输出。完成类通知不得依赖正在等待的窗口或客户端进程，应写入 `NotificationEventQueue`，再由 `NotificationService.dispatchPendingNotificationEvents()` 统一派发；Apple Music Share 下载由 Agent 执行，完成后由 Agent 写事件并唤醒主 App/headless 路径。
 
-架构规则是扩展轻、设置窗口轻、Core 复用、后台 runner/Agent 执行。Finder Sync、Share Extension 和 Open With 入口只能分类输入、写入 `JobQueue` 或共享事件、设置 launch marker，并通过 `getoudio://run-queued` 或新的 headless app 实例唤醒后台处理；它们不能执行转换、通知派发、下载、Docker 操作或 AM Runtime Agent 请求。`NormalLauncher` 启动时默认保持 accessory，只有确认要显示直接启动的设置窗口时才升为 regular，让设置窗口在 Dock 中出现；Open With 音频菜单、NCM Open With 入队、URL wake 和 `HeadlessRunner` 仍应保持无 Dock、无设置窗口。`NormalLauncher` 只负责直接启动时的设置窗口、Open With 音频菜单式预设选择、NCM Open With 入队，以及把已入队任务转交给 `HeadlessRunner`；不能把日常转码重新接回设置窗口、SwiftUI view model 或 `NormalLauncher` 自身。`OpenWithPresetMenuController` 应保持菜单语义，使用 `NSMenu` 做一次性预设选择，不要退回 `NSPanel` 或 SwiftUI 浮窗；`OpenWithJobDispatcher` 是 Open With 入队、launch marker 和 headless 唤醒的边界。`LSUIElement = true`、默认 accessory activation 和设置窗口前的定点 regular promotion 共同维持这条边界，不要为了使用 SwiftUI `WindowGroup` 而移除。
+必须保留 `GetOudio/Resources/AppIcon.icon` 这一 Icon Composer 源资产。不得替换成手工 `.icns`、静态 `AppIcon.appiconset` 或构建位图；源码 Info.plist 只维护 `CFBundleIconName = AppIcon`。Share Extension 独立使用 `GetOudioShareExtension/Resources/icon.icns`，不得让它编译主 App 图标源。
 
-设置窗口当前采用自定义 SwiftUI 视觉层与窄 AppKit 窗口控制配合实现，后续修改不要退回 `NavigationSplitView` 默认侧栏或可见系统标题栏。`NormalLauncher.showSettingsWindow()` 负责隐藏标准标题、使用 `.fullSizeContentView`、透明 titlebar、透明窗口背景、内容视图圆角裁剪、自定义窗口按钮隐藏系统三点按钮，并通过 `contentMinSize/contentMaxSize` 限制窗口宽度；`MainView` 负责根背景、悬浮半透明边栏、自定义三点按钮和 sidebar/detail 的等距布局；`SettingsForm` 负责设置内容最大宽度、滚动留白和 `.scrollClipDisabled()`，避免白色设置卡片在顶部或底部被提前裁掉。当前设计约束是外边距 `22pt`、边栏宽度 `272pt`、设置内容最大宽度 `760pt`、窗口圆角 `28pt`，窗口最大内容宽度应保持为 `22 + 272 + 22 + 760 + 22 = 1098pt`；若调整其中任一常量，必须同步更新 `GetOudio/Views/MainView.swift` 与 `GetOudio/App/NormalLauncher.swift` 的窗口尺寸约束，并确认边栏左/上/下边距、边栏到设置内容距离、设置内容到右边界距离仍相等。设置窗口最低部署目标仍是 macOS 14.0，`.scrollClipDisabled()` 正好从 macOS 14 可用，材质效果在 macOS 14/15/26 可能有视觉差异但不应引入 macOS 26 专属 API；若低版本出现少量标题栏安全区或窗口最大宽度偏差，优先小幅调整这些布局常量或用 `window.maxSize` 兜底，不要重写窗口架构。
+## Validation Matrix
 
-默认打开方式设置只属于设置窗口的系统集成辅助功能，不应改变 Open With 入队、菜单预设选择或 headless 转码链路。转换侧和系统默认打开方式侧必须分开维护：`FileCategory.supportedAudioExtensions` 是 Finder Sync、Open With 和队列入口判断“能否交给内嵌 ffmpeg 转码”的宽集合，应对齐 `GetOudio/Resources/ThirdParty/ffmpeg/ffmpeg -hide_banner -demuxers` 暴露的音频输入能力并保留 `UTType.conforms(to: .audio)` 兜底；`FileCategory.defaultOpenWithAudioExtensions`、`project.yml` 的 Audio File 文档类型声明和设置页展示是默认打开方式的窄集合，当前仅包括 `.m4a/.aac`、`.mp3`、`.alac`、`.flac`、`.wav`、`.aiff/.aif`、`.ogg`、`.opus` 和 `.caf`。`.m4a` 与 `.aac` 必须作为一组设置，`.aiff` 与 `.aif` 也必须作为一组设置，用户一次开关应同时更新组内所有扩展名。关闭某个音频格式组时使用用户在设置页指定的播放器，播放器候选应以 `.wav` 的可打开应用列表为基准通过 `NSWorkspace.urlsForApplications(toOpen:)` 枚举，不要退回让用户手动在文件系统里找 App 的 `NSOpenPanel`，也不要为了让设置页更“完整”而把 ffmpeg 支持但不常用的格式加入默认打开方式列表。
+验证范围必须与改动面匹配；不要默认运行沙箱内 unsigned 完整 App 构建，因为它容易把 AppIcon、签名和安装噪声混入无关判断。
 
-音频转换预设的真源是 `GetOudioCore/Sources/Models/ConversionPreset.swift`。新增或调整预设时必须同步维护 enum case、`ConversionPresetGroup`、`title`、`finderMenuTitle`、`outputNameSuffix`、`outputExtension` 和 `ffmpegArguments`，再补齐 `GetOudioCoreTests`；Finder Sync 还需要在 `GetOudioFinderExtension/Sources/FinderSync.swift` 为每个新预设添加显式 `@objc` selector，否则菜单项可能显示但无法触发。预设分组和扁平菜单都依赖 `allCases` 顺序，当前顺序必须保持为 AAC、MP3、Vorbis、Opus、ALAC、FLAC、PCM WAV、PCM AIFF；不要只改设置页外观而让 Finder Sync 或 Open With 菜单顺序漂移。
+| 改动面 | 最低验证 |
+| --- | --- |
+| 纯文档 | `git diff --check` 与目标文档 diff |
+| Core 服务、模型、队列、预设、通知协议、Apple Music 参数 | `xcodebuild -project GetOudio.xcodeproj -scheme GetOudioCoreTests -configuration Debug -derivedDataPath build/DerivedData test` |
+| Finder Sync 菜单或分类入口 | `xcodebuild -project GetOudio.xcodeproj -target GetOudioFinderExtension -configuration Debug build CODE_SIGNING_ALLOWED=NO` |
+| App 启动、窗口、扩展嵌入、Info.plist、URL scheme、entitlements、图标或注册 | `bash script/build_and_run.sh --install` 或等价签名构建，并检查相关 `pluginkit` 注册 |
+| 本地 unsigned 启动诊断 | `bash script/build_and_run.sh`；启动验证使用 `bash script/build_and_run.sh --verify` |
 
----
-
-## Common Tasks
-
-无签名 Debug 运行与签名安装必须使用不同的共享容器路径：`bash script/build_and_run.sh` 通过 `GET_OUDIO_DIAGNOSTIC_SHARED_CONTAINER_ROOT` 显式使用 `build/DiagnosticSharedContainer`，用于无 App Group entitlement 的本地诊断构建；`--install` 和正式分发构建不得设置该变量，必须使用签名 entitlement 授权的生产 App Group。
-
-常用命令都在仓库根目录执行。启动开发构建使用 `bash script/build_and_run.sh`，它会在缺少 `GetOudio.xcodeproj` 时先跑 `xcodegen generate`，把 DerivedData 固定写入 `build/DerivedData`，构建 unsigned Debug app 后启动；验证 app 能启动使用 `bash script/build_and_run.sh --verify`；需要安装签名 App 并注册 Finder/Share 扩展时使用 `bash script/build_and_run.sh --install`；清理系统插件注册缓存使用 `bash script/build_and_run.sh --clean-plugins`。
-
-核心测试使用 `xcodebuild -project GetOudio.xcodeproj -scheme GetOudioCoreTests -configuration Debug -derivedDataPath build/DerivedData test`。修改核心服务、模型、队列、转换预设、Apple Music 下载参数、通知事件协议或 App Group 队列时优先跑这条命令；涉及 `NotificationEventQueue` 时至少覆盖事件写入、认领、确认删除和重复 drain 为空的行为。只修改 Finder Sync 菜单生成、分类入口或扩展侧轻量逻辑时，优先跑 `xcodebuild -project GetOudio.xcodeproj -target GetOudioFinderExtension -configuration Debug build CODE_SIGNING_ALLOWED=NO`，避免把无关的主 App 图标、签名或安装链路混入判断。
-
-本仓库没有单独的格式化命令，也不是 SwiftPM 项目；不要把 `swift test`、`swift build` 或 `Package.swift` 当成默认入口。需要重新生成工程时运行 `xcodegen generate`，并检查 `project.yml` 的 `postGenCommand` 是否仍把 `AppIcon.icon` 的 `lastKnownFileType` 修补为 `folder.iconcomposer.icon`。调试日志优先看 App Group 下的 `conversion-log.txt`；Open With 音频/NCM 的正常链路应先出现 `open with enqueue ...` 和 `open with launch headless ...`，随后由 `HeadlessRunner` 写入 `headless processing ...`、转换结果和通知事件，不应出现设置窗口路径里的直接 `app run start ...`。通知链路重点关注 `notification event enqueue`、`notification event claim`、`notification scheduled` 和 `[Agent] notification dispatch wake requested`，系统日志按进程使用 `log stream --predicate 'process == "Get Oudio"'`、`process == "GetOudioAMRuntimeAgent"`、`process == "GetOudioFinderExtension"` 或 `process == "GetOudioShareExtension"`。
-
-精简 ffmpeg 的构建入口是 `bash script/build_minimal_ffmpeg.sh`。修改编码器、muxer、demuxer 或预设依赖时，需要重编 `GetOudio/Resources/ThirdParty/ffmpeg/ffmpeg` 并用 `ffmpeg -hide_banner -encoders`、`ffmpeg -hide_banner -muxers` 和 `otool -L GetOudio/Resources/ThirdParty/ffmpeg/ffmpeg` 验证结果；当前 Vorbis 与 Opus 转码依赖 `libvorbis`、`libvorbisenc`、`libogg` 和 `libopus` 静态链接进 ffmpeg，不能重新引入对 Homebrew dylib 的运行时依赖，也不要把单独的 `libmp3lame.0.dylib` 或其他 Homebrew 动态库当成必须随包资源。
-
-内嵌 `apple-music-downloader` 的构建同步入口是 `bash script/build_apple_music_downloader.sh`。修改相邻 fork 后在本仓库根目录运行该脚本，它会从 `../apple-music-downloader-get-oudio` 构建 `darwin/arm64` 产物，使用 `go build -trimpath -ldflags="-s -w"` 去除 Go 符号和 DWARF 调试信息，并复制到 `GetOudio/Resources/ThirdParty/apple-music-downloader/apple-music-downloader`；如果源码不在默认相邻目录，用 `APPLE_MUSIC_DOWNLOADER_SOURCE=/path/to/apple-music-downloader bash script/build_apple_music_downloader.sh` 覆盖。脚本使用 `build/apple-music-downloader/go-build-cache` 和 `build/apple-music-downloader/go-mod-cache` 作为专用 Go 缓存，避免复用被污染的 `/private/tmp/go-mod-cache`；不要手工用上游默认 `go build` 产物替换内嵌二进制，也不要把 fork 源码、Go module cache 或构建中间产物提交进本仓库。
-
----
-
-## Constraints
-
-必须遵守 App Group 边界，标识为 `group.com.shengjiacheng.GetOudio`。任务队列、共享设置、launch marker、转换诊断日志、通知事件和 Apple Music runtime 都应通过共享容器或 suite defaults 访问；扩展、主 App 和 AM Runtime Agent 的沙盒权限不同，新增共享数据时必须确认每个 target 的 entitlements 与可访问路径。
-
-`SharedContainer.production()` 必须取得 App Group 目录和 suite defaults，任一缺失都应抛出可观察错误并让当前入口关闭；`SharedContainer.diagnostic(rootURL:defaults:)` 只允许测试或 Debug 诊断入口显式注入，`forCurrentProcess()` 仅在 Debug 构建看到 `GET_OUDIO_DIAGNOSTIC_SHARED_CONTAINER_ROOT` 时才选用诊断模式，Release 构建不得响应该环境变量。不能把 `.standard`、普通 Application Support 或手工拼接的 `Library/Group Containers` 路径静默带入生产；测试应注入独立的 `UserDefaults` 和文件 URL。共享容器解析失败时只能先写系统日志，不能调用本身依赖共享容器的 `DiagnosticLog`，否则会形成递归。完成类通知不能只依赖正在等待的窗口或客户端进程，应优先写入 `NotificationEventQueue`，再由 `NotificationService.dispatchPendingNotificationEvents()` 统一派发；Apple Music Share 下载的实际执行者是 Agent，完成后应由 Agent 写入通知事件并唤醒主 App/headless 做派发。
-
-必须保留 Icon Composer 源资产。`GetOudio/Resources/AppIcon.icon` 是主图标源文件，不能替换成手工 `.icns`、静态 `AppIcon.appiconset` 或构建产物位图；源码 `Info.plist` 只维护 `CFBundleIconName = AppIcon`，构建产物中出现 `CFBundleIconFile = AppIcon` 是 `actool` 补全，不要反向写回源码。Share Extension 使用独立的 `GetOudioShareExtension/Resources/icon.icns` 和 `CFBundleIconFile = icon`，不要让 Share Extension 自己编译 `AppIcon.icon`。
-
-Apple Music runtime 必须可恢复、可验证、可清理。启用流程按 Colima、Lima/limactl、Docker CLI、GPAC/MP4Box、wrapper image 五个组件推进，每个组件先验证 managed 文件，失败才重装；下载使用 `downloads/*.part` 断点续传，curl 只做单次传输，不使用 `--retry` 或 `--retry-all-errors`，重试由 Swift 控制并确认 `.part` 没有异常缩小。安装完成后可清理安装包、`.part`、解包目录和可重新获取的 Colima 基础镜像缓存；卸载只清理 Apple Music managed runtime、短路径 VM 状态、容器和 wrapper 数据，不删除用户 Apple Music 输出目录。
-
-禁止把凭据写入 `UserDefaults`、日志、配置文件或命令诊断输出。wrapper 初始化必须保持 `rootfs/data:/app/rootfs/data` 挂载和 `args=-L username:password -F` 参数，但日志必须隐藏包含 `-L username:password` 的凭据行；验证码只能在 `waitingForVerificationCode` 阶段写入 `rootfs/data/2fa.txt`，每次初始化前应删除旧验证码。系统代理默认关闭，只有用户显式启用时才把 macOS 代理转换为 wrapper 的 `-P` 参数，loopback host 必须改写为 Colima 可访问的 `host.lima.internal`。
-
----
-
-## Common Pitfalls
-
-Finder Sync 的可见性首先受监听目录控制，不像 Share Extension 那样由内容类型激活规则精确控制。`GetOudioFinderExtension/Sources/FinderSync.swift` 的 `menu(for:)` 是最终决定右键菜单是否显示的路径：选中项经过 `FileCategory.classify(_:)` 过滤后，如果没有可处理的 audio、video 或 ncm 文件，必须直接返回 `nil`，不能返回一个包含禁用项的 `NSMenu`，否则 Finder 仍会在不支持的文件或文件夹上显示 Get Oudio；目录背景、侧边栏等非文件选择默认也应保持 `nil`，混选场景可以只对受支持文件生成动作，但不要扩大到目录、压缩包或普通文档。
-
-Open With 音频入口不是常规窗口。`NormalLauncher.application(_:openFiles:)` 对全音频选择应弹出 `OpenWithPresetMenuController` 的 `NSMenu`，用户选择预设后由 `OpenWithJobDispatcher` 生成 `.transcode(preset)` jobs、写入 `JobQueue`、设置 `LaunchSource.openWithAudio` marker 并启动新的 headless app 实例；全 NCM 选择同样只生成 `.convertNCM` jobs 并设置 `LaunchSource.openWithNCM` marker。混合、视频或 unsupported 文件应直接 `reply(.failure)` 并写诊断日志，不能顺手打开设置窗口。直接启动 App 才显示设置窗口并升为 regular 出现在 Dock；Finder、Share、Open With 和 notification dispatch 唤醒都应尽量保持无 Dock、无设置窗口、无 Stage Manager 干扰。
-
-macOS 默认打开方式不是严格按单个文件扩展名保存，而是通过 Launch Services 按内容类型 UTType 设置默认处理器。`DefaultOpenWithService` 对 `.mp3`、`.wav` 等扩展名调用 `NSWorkspace.setDefaultApplication(at:toOpen:)` 时，系统确认弹窗可能显示同一内容类型族中的额外别名扩展名，例如设置 `.mp3` 时出现 `.mpga`；这属于系统类型映射，不代表默认打开方式设置页的窄集合已扩大，也不要为了消除弹窗文案而把 `.mpga`、`.m4b`、`.wma` 或其他 ffmpeg 可读但不常用的格式加入 `project.yml` 的 Audio File 文档类型声明或默认打开方式 UI。判断转换入口能否接受某个音频扩展名时，以 `FileCategory.supportedAudioExtensions`、内嵌 ffmpeg demuxer 能力和 `GetOudioCoreTests.testFileCategoryClassification` 为准；判断设置页能否一键接管系统默认打开方式时，以 `FileCategory.defaultOpenWithAudioExtensions`、设置页格式组和 `project.yml` 为准。
-
-Vorbis 与 Opus 预设有额外语义，不要把它们当成普通固定码率格式改动。Vorbis 使用 `libvorbis`、Ogg muxer 和 `.ogg` 后缀，质量档是 `-q:a 3/6/10`；Opus 使用 `libopus`、Ogg muxer 和 `.opus` 后缀，菜单文案里的 `64/96/128kbps Per-Ch` 是每声道目标码率，执行时由 `AudioConversionService` 先探测输入声道数，再把每声道码率折算成 ffmpeg 的整流 `-b:a`，探测失败才按立体声兜底。两类预设都应继续复制元数据，输出参数里不要丢掉 `-map_metadata 0:g`。
-
-Share Extension 的显示与宿主缓存容易误判。系统分享扩展不需要也不能声明只针对 Safari 或 Apple Music，宿主依据 `NSExtensionActivationRule` 与分享内容类型决定是否显示；当前结构化激活字典支持附件、文件、图片、视频、文本和一个 Web URL，不要退回 `TRUEPREDICATE` 或重新加入非标准 `NSExtensionVersion`。`ShareExtension` 应在 `loadView()` 中异步读取 `extensionContext`，同时检查附件中的 `public.url`、`public.plain-text` 和 `NSExtensionItem.attributedContentText`；可见性要用安装后的签名 App 验证，Music 会缓存分享菜单，Safari 可见且 `pluginkit` 启用时应先完整重启 Music 再判断。
-
-AM Runtime Agent 是常驻进程，只重建主 App 或替换 `.app` 不会自动替换已经运行在内存中的旧 Agent。统一通过 `script/build_and_run.sh` 启动或安装，它会先结束主 App 与旧 Agent，并校验 `Build/Products` 中的 Agent 和主 App `Contents/Library/LoginItems` 内嵌副本一致；若手工从 Xcode 运行，在验证新 Agent 行为前也必须先结束 `GetOudioAMRuntimeAgent`。Agent 启动后会在 `conversion-log.txt` 写入 `[Agent] started`、PID、bundle 路径、可执行路径和诊断版本，用它判断当前请求究竟由哪个构建处理。
-
-wrapper 状态判断必须区分镜像、服务容器、登录容器和 Colima VM 运行态。Docker/Colima 能在 daemon 启动后查询已存在但未运行的容器，所以不要只用 `.State.Running` 判断 wrapper 是否“消失”；服务容器 `get-oudio-wrapper` 非运行态时优先 `docker start get-oudio-wrapper`，只有启动失败或容器确实不存在时才删除并重建。登录容器 `get-oudio-wrapper-login` 是初始化过程的临时容器，完成登录后可以停止或移除，不能把它不存在误判为 wrapper 服务不可用；若 Colima 当前未运行，`docker ps -a` 或 `inspect` 无法连接 daemon 只说明 VM 停止，不等于镜像或容器缺失。
-
-路径、图标和下载缓存也有历史坑。Colima/Lima socket 受 `UNIX_PATH_MAX` 限制，`COLIMA_HOME` 与 `LIMA_HOME` 必须使用较短的 `~/Library/Caches/GetOudio/Colima` 和 `~/Library/Caches/GetOudio/Lima`；`limactl` 必须带 `com.apple.security.virtualization` entitlement。沙箱内、unsigned diagnostic build 或临时 DerivedData 构建若出现 `actool` 的 `attempt to insert nil object`、`The file “AppIcon” couldn’t be opened`，先判断是否只是验证面过宽触发完整 App 图标编译。Docker 官方静态包顶层本身有名为 `docker` 的目录，查找解包产物时必须验证候选项是常规文件，不能只按文件名或 `isExecutableFile` 判断。
-
----
+本仓库不是 SwiftPM 项目，没有统一格式化命令；不得把 `swift test`、`swift build` 或 `Package.swift` 当作默认入口。沙箱内 XCTest 若仅因 `com.apple.testmanagerd.control` 被拒绝而失败，应在非沙箱环境用同一命令复验后再判断代码失败。更具体的命令、日志和验收条件见专项指南。
 
 ## Before Commit
 
-提交前先运行 `git status --short`，确认只包含本任务相关改动，尤其不要因为 `xcodegen generate`、构建验证或用户已有工作把无关 `.xcodeproj`、`build/`、`.DS_Store` 或其他源码变更一起提交。文档或注释改动至少检查 `git diff -- AGENTS.md`；修改 `project.yml` 后应运行 `xcodegen generate` 并检查生成差异是否符合预期。
-
-需要通过的验证取决于改动面。纯文档改动不需要跑完整 Xcode 构建；核心服务、模型、队列、通知事件和 Apple Music 下载逻辑改动必须优先通过 `xcodebuild -project GetOudio.xcodeproj -scheme GetOudioCoreTests -configuration Debug -derivedDataPath build/DerivedData test`；Finder Sync 菜单或分类入口改动至少通过 `xcodebuild -project GetOudio.xcodeproj -target GetOudioFinderExtension -configuration Debug build CODE_SIGNING_ALLOWED=NO`；App 启动、窗口行为、扩展嵌入、Info.plist、URL scheme、entitlements、图标或安装注册改动应通过 `bash script/build_and_run.sh --install` 或等价签名构建，并用 `pluginkit -m -v -i com.shengjiacheng.GetOudio.FinderExtension` 与 `pluginkit -m -v -i com.shengjiacheng.GetOudio.ShareExtension` 确认注册结果。
-
-替换 `GetOudio/Resources/ThirdParty/apple-music-downloader/apple-music-downloader` 后至少检查 `go version -m GetOudio/Resources/ThirdParty/apple-music-downloader/apple-music-downloader`、`otool -L GetOudio/Resources/ThirdParty/apple-music-downloader/apple-music-downloader` 和文件体积，确认产物来自预期 fork、目标为 `darwin/arm64`、`CGO_ENABLED=0`，且只依赖 macOS 系统库；随后运行 `GetOudioCoreTests`，重点确认 `AppleMusicDownloadFormat`、`AppleMusicDownloadService.downloaderArguments` 和进度解析相关测试仍通过。若沙箱内 XCTest 因 `com.apple.testmanagerd.control` 被拒绝而失败，按同一命令在非沙箱环境重跑后再判断代码是否真的失败。
+提交前运行 `git status --short`，确认只有本任务改动；尤其不要带入用户已有更改、`build/`、`.DS_Store` 或无关生成工程差异。修改 `project.yml` 后运行 `xcodegen generate` 并核对生成结果；替换二进制、修改通知协议或安装相关行为时，必须完成对应专项指南中的附加验证。除非用户明确要求，不要提交或暂存改动。

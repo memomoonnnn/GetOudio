@@ -71,10 +71,12 @@ private struct SettingsGroupedRowBackgroundModifier: ViewModifier {
             .overlay(
                 RoundedRectangle(cornerRadius: SettingsMetrics.rowCornerRadius, style: .continuous)
                     .fill(SettingsSurface.controlFill(for: colorScheme))
+                    .allowsHitTesting(false)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: SettingsMetrics.rowCornerRadius, style: .continuous)
                     .strokeBorder(SettingsSurface.border(for: colorScheme), lineWidth: 0.6)
+                    .allowsHitTesting(false)
             )
     }
 }

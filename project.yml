@@ -73,6 +73,7 @@ targets:
       properties:
         LSUIElement: true
         CFBundleIconName: AppIcon
+        NSAppleEventsUsageDescription: Get Oudio 需要重启 Finder，以便新启用的 Finder Sync 菜单拓展生效。
         CFBundleURLTypes:
           - CFBundleURLName: com.shengjiacheng.GetOudio
             CFBundleURLSchemes:
@@ -114,6 +115,9 @@ targets:
       path: GetOudio/GetOudio.entitlements
       properties:
         com.apple.security.app-sandbox: true
+        com.apple.security.automation.apple-events: true
+        com.apple.security.temporary-exception.apple-events:
+          - com.apple.finder
         com.apple.security.files.user-selected.read-write: true
         com.apple.security.files.bookmarks.app-scope: true
         com.apple.security.files.desktop.read-write: true
