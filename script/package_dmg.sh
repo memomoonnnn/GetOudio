@@ -17,9 +17,7 @@ VOLUME_NAME="${VOLUME_NAME:-Get Oudio}"
 
 cd "$ROOT_DIR"
 
-if [[ ! -d "$ROOT_DIR/GetOudio.xcodeproj" ]]; then
-  xcodegen generate
-fi
+xcodegen generate
 
 build_app() {
   local xcodebuild_args=(

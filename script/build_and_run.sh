@@ -24,9 +24,7 @@ LEGACY_USER_APP="$HOME/Applications/$APP_NAME.app"
 
 cd "$ROOT_DIR"
 
-if [[ ! -d "$ROOT_DIR/GetOudio.xcodeproj" ]]; then
-  xcodegen generate
-fi
+xcodegen generate
 
 stop_running_processes() {
   pkill -x "$APP_NAME" >/dev/null 2>&1 || true

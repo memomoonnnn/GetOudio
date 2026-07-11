@@ -17,6 +17,8 @@ settings:
     CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED: YES
     SWIFT_VERSION: 5.0
     MACOSX_DEPLOYMENT_TARGET: "14.0"
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
     DEVELOPMENT_TEAM: ZWNUJ64F36
     CODE_SIGN_STYLE: Automatic
 configs:
@@ -30,6 +32,9 @@ targets:
       - path: GetOudioCore/Sources
     info:
       path: GetOudioCore/Info.plist
+      properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.shengjiacheng.GetOudioCore
@@ -71,6 +76,8 @@ targets:
     info:
       path: GetOudio/Info.plist
       properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSUIElement: true
         CFBundleIconName: AppIcon
         NSAppleEventsUsageDescription: Get Oudio 需要重启 Finder，以便新启用的 Finder Sync 菜单拓展生效。
@@ -167,6 +174,8 @@ targets:
     info:
       path: GetOudioAMRuntimeAgent/Info.plist
       properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSUIElement: true
         CFBundleDisplayName: Get Oudio Apple Music Runtime Agent
     entitlements:
@@ -193,6 +202,8 @@ targets:
     info:
       path: GetOudioFinderExtension/Info.plist
       properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleDisplayName: Get Oudio Finder Extension
         NSExtension:
           NSExtensionAttributes: {}
@@ -223,6 +234,8 @@ targets:
     info:
       path: GetOudioShareExtension/Info.plist
       properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundleDisplayName: Get Oudio
         CFBundleIconFile: icon
         NSExtension:
