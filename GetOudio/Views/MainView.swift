@@ -17,13 +17,13 @@ struct MainView: View {
             HStack(alignment: .top, spacing: LayoutConstants.outerMargin) {
                 sidebar
                     .frame(width: LayoutConstants.sidebarWidth)
-                    .padding(.bottom, LayoutConstants.outerMargin)
+                    .padding(.bottom, LayoutConstants.sidebarBottomMargin)
 
                 detailView
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
             .padding(.horizontal, LayoutConstants.outerMargin)
-            .padding(.top, LayoutConstants.outerMargin)
+            .padding(.top, LayoutConstants.sidebarTopMargin)
         }
         .clipShape(RoundedRectangle(cornerRadius: LayoutConstants.windowCornerRadius, style: .continuous))
     }

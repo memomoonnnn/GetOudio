@@ -132,6 +132,7 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
     private func showSettingsWindow() {
         NSApp.setActivationPolicy(.regular)
         let hostingController = NSHostingController(rootView: MainView(container: container))
+        hostingController.safeAreaRegions = []
 
         let window = NSWindow(contentViewController: hostingController)
         window.title = ""
