@@ -12,8 +12,9 @@ struct MainView: View {
     @StateObject private var settingsViewModel: SettingsViewModel
     @State private var selection: MainSidebarItem? = .overview
 
-    init(container: SharedContainer) {
+    init(container: SharedContainer, initialRecordingPage: Bool = false) {
         _settingsViewModel = StateObject(wrappedValue: SettingsViewModel(container: container))
+        _selection = State(initialValue: initialRecordingPage ? .recording : .overview)
     }
 
     var body: some View {
@@ -32,6 +33,9 @@ struct MainView: View {
             .padding(.top, MainLayoutMetrics.outerMargin)
         }
         .clipShape(RoundedRectangle(cornerRadius: MainLayoutMetrics.windowCornerRadius, style: .continuous))
+        .onReceive(NotificationCenter.default.publisher(for: .getOudioShowRecordingSettings)) { _ in
+            selection = .recording
+        }
     }
 
     private var sidebar: some View {
@@ -106,6 +110,8 @@ struct MainView: View {
             )
         case .appleMusic:
             AppleMusicSettingsPage(viewModel: settingsViewModel.appleMusicSettings)
+        case .recording:
+            RecordingSettingsPage(viewModel: settingsViewModel.recordingSettings)
         }
     }
 }
@@ -200,6 +206,7 @@ private enum MainSidebarItem: String, CaseIterable, Identifiable {
     case transcoding
     case ncm
     case appleMusic
+    case recording
 
     var id: String { rawValue }
 
@@ -209,6 +216,7 @@ private enum MainSidebarItem: String, CaseIterable, Identifiable {
         case .transcoding: return "Re-Encoding"
         case .ncm: return "NCM Transcoder"
         case .appleMusic: return "Apple Music Downloader"
+        case .recording: return "Audio Bridge Recorder"
         }
     }
 
@@ -218,6 +226,11 @@ private enum MainSidebarItem: String, CaseIterable, Identifiable {
         case .transcoding: return "slider.horizontal.3"
         case .ncm: return "music.note"
         case .appleMusic: return "arrow.down.circle"
+        case .recording: return "record.circle"
         }
     }
+}
+
+extension Notification.Name {
+    static let getOudioShowRecordingSettings = Notification.Name("GetOudioShowRecordingSettings")
 }

@@ -8,6 +8,8 @@
 
 Finder Extension 注册检查使用 `pluginkit -m -v -i com.shengjiacheng.GetOudio.FinderExtension`，Share Extension 使用 `pluginkit -m -v -i com.shengjiacheng.GetOudio.ShareExtension`。涉及安装、签名、Info.plist、entitlements、URL scheme、图标或扩展嵌入的改动必须进行签名安装或等价验收，不能用 target-only build 代替系统集成验证。
 
+Audio Bridge 录音改动先运行 Core tests，再构建 `GetOudioRecordingWidget` target；最终必须签名安装并在桌面添加 Widget，分别验证 2-A/2-B、麦克风权限、默认媒体输出切换与恢复、原设备监听、剪贴板文件 URL 和录音 PID 异常退出恢复。测试中不得把系统提醒音输出也切到 Bridge。沙箱无法枚举真实 Core Audio 设备或访问 testmanagerd 时，target build 只能证明编译与嵌入，真实设备链路必须在安装后的 App 中复验。
+
 ## Logs
 
 优先查看 App Group 下的 `conversion-log.txt`。Open With 音频/NCM 正常链路先出现 `open with enqueue ...` 和 `open with launch headless ...`，随后是 `headless processing ...`、转换结果及通知事件，不应出现设置窗口路径直接执行的 `app run start ...`。系统日志可按进程使用 `log stream --predicate 'process == "Get Oudio"'`、`GetOudioAMRuntimeAgent`、`GetOudioFinderExtension` 或 `GetOudioShareExtension`。

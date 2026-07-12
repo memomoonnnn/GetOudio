@@ -90,6 +90,13 @@ public final class NotificationService {
         await notify(title: "Get Oudio", body: "该功能尚未激活")
     }
 
+    public func notifyRecordingFinished(fileURL: URL?, message: String? = nil) async {
+        let title = fileURL == nil ? "录音未完成" : "录音完成"
+        let fallback = fileURL.map { "已复制 \($0.lastPathComponent) 到剪贴板。" } ?? "没有生成可用的录音文件。"
+        let body = message.flatMap { $0.isEmpty ? nil : $0 } ?? fallback
+        await notify(title: title, body: body)
+    }
+
     public func notifyUnsupportedDownloadSource(urls: [URL]) async {
         let suffix = urls.first.map { " \($0.absoluteString)" } ?? ""
         await notify(title: "Get Oudio", body: "不支持的下载源...\(suffix)")

@@ -3,6 +3,83 @@ import XCTest
 @testable import GetOudioCore
 
 final class GetOudioCoreTests: XCTestCase {
+    func testSupportedAudioBridgeRequiresKnownStereoDevice() {
+        XCTAssertTrue(AudioDeviceDescriptor(
+            uid: "bridge-a",
+            name: "Pro Tools Audio Bridge 2-A",
+            inputChannelCount: 2,
+            outputChannelCount: 2,
+            nominalSampleRate: 48_000
+        ).isSupportedProToolsAudioBridge)
+        XCTAssertFalse(AudioDeviceDescriptor(
+            uid: "bridge-16",
+            name: "Pro Tools Audio Bridge 16",
+            inputChannelCount: 16,
+            outputChannelCount: 16,
+            nominalSampleRate: 48_000
+        ).isSupportedProToolsAudioBridge)
+    }
+
+    func testRecordingControlStorePersistsStateAndDrainsCommandsOnce() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = try RecordingControlStore(rootURL: root)
+        let snapshot = RecordingSessionSnapshot(phase: .recording, runnerPID: 42)
+        try store.save(snapshot)
+        try store.enqueue(.start)
+        try store.enqueue(.stop)
+
+        XCTAssertEqual(store.snapshot(), snapshot)
+        XCTAssertEqual(store.drainCommands().map(\.kind), [.start, .stop])
+        XCTAssertTrue(store.drainCommands().isEmpty)
+    }
+
+    func testRecordingCacheEvictsOldestCompletedFile() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let cache = try RecordingCacheStore(directoryURL: root)
+        let old = root.appendingPathComponent("old.wav")
+        let current = root.appendingPathComponent("current.wav")
+        try Data(repeating: 1, count: 8).write(to: old)
+        try Data(repeating: 2, count: 8).write(to: current)
+        try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSince1970: 1)], ofItemAtPath: old.path)
+
+        let removed = cache.enforceLimit(8, protecting: current)
+        XCTAssertEqual(removed.map(\.lastPathComponent), [old.lastPathComponent])
+        XCTAssertFalse(FileManager.default.fileExists(atPath: old.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: current.path))
+    }
+
+    func testRecordingWAVWriterCreatesRecoverable24BitHeader() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let url = root.appendingPathComponent("recording.wav.part")
+        let writer = try RecordingWAVWriter(url: url, sampleRate: 48_000, channelCount: 2)
+        let samples: [Float] = [0, 0.5, -0.5, 0.25]
+        try samples.withUnsafeBufferPointer {
+            try writer.write(planarSamples: $0.baseAddress!, frameCount: 2, planeStride: 2)
+        }
+        try writer.finalize()
+
+        let data = try Data(contentsOf: url)
+        XCTAssertEqual(String(data: data[0..<4], encoding: .ascii), "RIFF")
+        XCTAssertEqual(String(data: data[48..<52], encoding: .ascii), "fmt ")
+        XCTAssertEqual(String(data: data[72..<76], encoding: .ascii), "data")
+        XCTAssertEqual(data.count, Int(RecordingWAVWriter.headerSize) + 12)
+    }
+
+    func testRecordingWAVWriterUsesRF64ForLargePayloads() throws {
+        let header = try RecordingWAVWriter.headerData(
+            dataByteCount: UInt64(UInt32.max),
+            sampleRate: 48_000,
+            channelCount: 2
+        )
+        XCTAssertEqual(String(data: header[0..<4], encoding: .ascii), "RF64")
+        XCTAssertEqual(String(data: header[12..<16], encoding: .ascii), "ds64")
+        XCTAssertEqual(header[4..<8], Data(repeating: 0xFF, count: 4))
+        XCTAssertEqual(header[76..<80], Data(repeating: 0xFF, count: 4))
+    }
     func testAACPresetBuildsExpectedOutputAndArguments() throws {
         let input = URL(fileURLWithPath: "/tmp/song.flac")
         let preset = ConversionPreset.aac320

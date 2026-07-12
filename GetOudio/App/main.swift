@@ -22,9 +22,11 @@ do {
     exit(EXIT_FAILURE)
 }
 
-let isHeadless = LaunchMarkerStore(container: sharedContainer).activeSource() != nil
+let launchSource = LaunchMarkerStore(container: sharedContainer).activeSource()
 
-if isHeadless {
+if launchSource == .recording {
+    RecordingRunner.main(container: sharedContainer)
+} else if launchSource != nil {
     HeadlessRunner.main(container: sharedContainer)
 } else {
     NormalLauncher.main(container: sharedContainer)

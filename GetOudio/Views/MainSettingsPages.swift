@@ -12,6 +12,107 @@ private enum SettingsMetrics {
     static let groupTitleFont = Font.system(size: 12.5, weight: .semibold)
 }
 
+// MARK: - Audio Bridge Recording Settings
+
+struct RecordingSettingsPage: View {
+    @ObservedObject var viewModel: RecordingSettingsModel
+
+    var body: some View {
+        SettingsForm {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Audio Bridge Recorder")
+                    .font(.system(size: 26, weight: .bold))
+                Text("桌面组件会把默认媒体输出切换到 Pro Tools Audio Bridge，并从切换前的播放设备实时监听。系统提醒音不会进入录音。")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            SettingsSection("输入与权限", systemImage: "waveform.badge.mic") {
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack {
+                        Text("Audio Bridge")
+                        Spacer()
+                        Picker("", selection: Binding(
+                            get: { viewModel.selectedBridgeUID },
+                            set: { viewModel.selectBridge($0) }
+                        )) {
+                            Text("未选择").tag(String?.none)
+                            ForEach(viewModel.bridgeDevices) { device in
+                                Text("\(device.name) · \(Int(device.nominalSampleRate)) Hz")
+                                    .tag(Optional(device.uid))
+                            }
+                        }
+                        .labelsHidden()
+                        .frame(maxWidth: 320)
+                    }
+
+                    HStack {
+                        Label(
+                            viewModel.microphoneAuthorized ? "音频输入权限已启用" : "需要音频输入权限",
+                            systemImage: viewModel.microphoneAuthorized ? "checkmark.circle.fill" : "exclamationmark.circle"
+                        )
+                        .foregroundStyle(viewModel.microphoneAuthorized ? .green : .secondary)
+                        Spacer()
+                        if !viewModel.microphoneAuthorized {
+                            Button("授权") { viewModel.requestMicrophonePermission() }
+                        }
+                        Button("刷新设备") { viewModel.refresh() }
+                    }
+                }
+            }
+
+            SettingsSection("文件与缓存", systemImage: "externaldrive") {
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack {
+                        Text("缓存上限")
+                        Spacer()
+                        Picker("", selection: Binding(
+                            get: { viewModel.cacheLimitBytes },
+                            set: { viewModel.setCacheLimit($0) }
+                        )) {
+                            ForEach(RecordingSettingsModel.cacheLimitOptions) { option in
+                                Text(option.title).tag(option.bytes)
+                            }
+                        }
+                        .labelsHidden()
+                    }
+
+                    HStack {
+                        Text("当前缓存")
+                            .foregroundStyle(.secondary)
+                        Text(viewModel.cacheSizeText)
+                            .font(.body.monospacedDigit())
+                        Spacer()
+                        Button("清理") { viewModel.clearCache() }
+                    }
+
+                    Divider()
+
+                    Toggle("完成后移动到指定目录", isOn: Binding(
+                        get: { viewModel.usesCustomOutputDirectory },
+                        set: { viewModel.setUsesCustomOutputDirectory($0) }
+                    ))
+
+                    HStack {
+                        Text(viewModel.customOutputDirectoryName)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                        Spacer()
+                        Button("选择目录") { viewModel.chooseOutputDirectory() }
+                    }
+                    .disabled(!viewModel.usesCustomOutputDirectory)
+                }
+            }
+
+            if !viewModel.message.isEmpty {
+                Label(viewModel.message, systemImage: "info.circle")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
 private enum SettingsSurface {
     static func pageTint(for scheme: ColorScheme) -> Color {
         scheme == .light ? Color.black.opacity(0.025) : Color.white.opacity(0.035)

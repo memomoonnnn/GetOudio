@@ -4,11 +4,11 @@
 
 ## Project Overview
 
-Get Oudio 是 XcodeGen 驱动的 macOS 原生音频转换工具。`GetOudioCore` 承载模型、服务、队列、共享容器和进程执行；Finder Sync、Share Extension 与 Open With 入口只接收系统输入并入队；`HeadlessRunner` 负责日常转换、日志和通知事件；独立的 `GetOudioAMRuntimeAgent` 管理 Apple Music 所需的 Docker、Colima、GPAC/MP4Box 和 wrapper。直接启动 App 才显示设置窗口，其他入口应保持无窗口、无 Dock 干扰。
+Get Oudio 是 XcodeGen 驱动的 macOS 原生音频工具。`GetOudioCore` 承载模型、服务、队列、共享容器和进程执行；Finder Sync、Share Extension、Open With 与录音 Widget 只接收系统输入并转交后台；`HeadlessRunner` 负责日常转换，`RecordingRunner` 负责 Pro Tools Audio Bridge 实时录音，独立的 `GetOudioAMRuntimeAgent` 管理 Apple Music runtime。直接启动 App 才显示设置窗口，其他入口应保持无窗口、无 Dock 干扰。
 
 ## Source of Truth and Boundaries
 
-可修改源码主要位于 `GetOudio/`、`GetOudioCore/`、`GetOudioAMRuntimeAgent/`、`GetOudioFinderExtension/`、`GetOudioShareExtension/`、`script/` 和 `project.yml`。涉及 target、sources、resources、Info.plist 注入、entitlements、签名或构建设置时，`project.yml` 是真源，修改后运行 `xcodegen generate`；`GetOudio.xcodeproj/project.pbxproj` 和 `build/` 是生成或本地输出，不能反向当作源码真源。
+可修改源码主要位于 `GetOudio/`、`GetOudioCore/`、`GetOudioAMRuntimeAgent/`、`GetOudioFinderExtension/`、`GetOudioShareExtension/`、`GetOudioRecordingWidget/`、`script/` 和 `project.yml`。涉及 target、sources、resources、Info.plist 注入、entitlements、签名或构建设置时，`project.yml` 是真源，修改后运行 `xcodegen generate`；`GetOudio.xcodeproj/project.pbxproj` 和 `build/` 是生成或本地输出，不能反向当作源码真源。
 
 不得碰触 `.git/`、与当前任务无关的未提交改动、用户 App Group 数据、Apple Music 输出目录、Keychain 凭据或任务范围外的第三方二进制。文件系统和共享设置统一经 `SharedContainer` 与基于其 suite defaults 构造的 `SettingsStore`，不得在调用点创建 `UserDefaults(suiteName:)`、拼接 `Library/Group Containers` 路径、以 `.standard` 或普通 Application Support 静默降级。新增网络、虚拟化、App Group、文件访问或 Hardened Runtime 能力时必须同步检查对应 target 的 entitlements，不能通过关闭沙盒或移除安全作用域访问绕过权限。
 

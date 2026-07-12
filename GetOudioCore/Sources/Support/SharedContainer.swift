@@ -17,6 +17,8 @@ public struct SharedContainer {
         case conversionLog
         case appleMusicRuntime
         case appleMusicRuntimeIPC
+        case recordingControl
+        case recordingCache
     }
 
     public enum AccessError: LocalizedError {
@@ -107,6 +109,10 @@ public struct SharedContainer {
             return directoryURL.appendingPathComponent("AppleMusicRuntime", isDirectory: true)
         case .appleMusicRuntimeIPC:
             return directoryURL.appendingPathComponent("AppleMusicRuntimeIPC", isDirectory: true)
+        case .recordingControl:
+            return directoryURL.appendingPathComponent("RecordingControl", isDirectory: true)
+        case .recordingCache:
+            return directoryURL.appendingPathComponent("Library/Caches/Recordings", isDirectory: true)
         }
     }
 }

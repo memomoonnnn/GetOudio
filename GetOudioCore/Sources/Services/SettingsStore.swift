@@ -12,6 +12,10 @@ public final class SettingsStore {
         public static let isAppleMusicDownloadEnabled = "isAppleMusicDownloadEnabled"
         public static let appleMusicUseSystemProxy = "appleMusicUseSystemProxy"
         public static let defaultAudioPlayerPath = "defaultAudioPlayerPath"
+        public static let recordingBridgeDeviceUID = "recordingBridgeDeviceUID"
+        public static let recordingCacheLimitBytes = "recordingCacheLimitBytes"
+        public static let recordingCustomOutputBookmark = "recordingCustomOutputBookmark"
+        public static let recordingUsesCustomOutputDirectory = "recordingUsesCustomOutputDirectory"
     }
 
     private let defaults: UserDefaults
@@ -106,6 +110,29 @@ public final class SettingsStore {
         set {
             defaults.set(newValue?.path, forKey: Keys.defaultAudioPlayerPath)
         }
+    }
+
+    public var recordingBridgeDeviceUID: String? {
+        get { defaults.string(forKey: Keys.recordingBridgeDeviceUID) }
+        set { defaults.set(newValue, forKey: Keys.recordingBridgeDeviceUID) }
+    }
+
+    public var recordingCacheLimitBytes: Int64 {
+        get {
+            let value = defaults.object(forKey: Keys.recordingCacheLimitBytes) as? NSNumber
+            return value?.int64Value ?? 1_073_741_824
+        }
+        set { defaults.set(NSNumber(value: newValue), forKey: Keys.recordingCacheLimitBytes) }
+    }
+
+    public var recordingCustomOutputBookmarkData: Data? {
+        get { defaults.data(forKey: Keys.recordingCustomOutputBookmark) }
+        set { defaults.set(newValue, forKey: Keys.recordingCustomOutputBookmark) }
+    }
+
+    public var recordingUsesCustomOutputDirectory: Bool {
+        get { defaults.bool(forKey: Keys.recordingUsesCustomOutputDirectory) }
+        set { defaults.set(newValue, forKey: Keys.recordingUsesCustomOutputDirectory) }
     }
 
     public static func defaultFinderDirectories() -> [URL] {

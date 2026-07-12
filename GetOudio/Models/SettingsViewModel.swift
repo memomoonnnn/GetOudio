@@ -11,6 +11,7 @@ final class SettingsViewModel: ObservableObject {
     let ncmSettings: NCMSettingsModel
     let defaultOpenWithSettings: DefaultOpenWithSettingsModel
     let appleMusicSettings: AppleMusicSettingsModel
+    let recordingSettings: RecordingSettingsModel
 
     init(container: SharedContainer) {
         let store = SettingsStore(container: container)
@@ -20,5 +21,6 @@ final class SettingsViewModel: ObservableObject {
         ncmSettings = NCMSettingsModel(store: store)
         defaultOpenWithSettings = DefaultOpenWithSettingsModel(store: store)
         appleMusicSettings = AppleMusicSettingsModel(container: container, store: store)
+        recordingSettings = RecordingSettingsModel(container: container, store: store)
     }
 }
