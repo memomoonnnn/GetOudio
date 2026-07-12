@@ -2,12 +2,6 @@ import AppKit
 import GetOudioCore
 import SwiftUI
 
-private enum MainLayoutMetrics {
-    static let windowCornerRadius: CGFloat = 28
-    static let outerMargin: CGFloat = 22
-    static let sidebarWidth: CGFloat = 272
-}
-
 struct MainView: View {
     @StateObject private var settingsViewModel: SettingsViewModel
     @State private var selection: MainSidebarItem? = .overview
@@ -20,30 +14,30 @@ struct MainView: View {
         ZStack {
             SettingsRootBackground()
 
-            HStack(alignment: .top, spacing: MainLayoutMetrics.outerMargin) {
+            HStack(alignment: .top, spacing: LayoutConstants.outerMargin) {
                 sidebar
-                    .frame(width: MainLayoutMetrics.sidebarWidth)
-                    .padding(.bottom, MainLayoutMetrics.outerMargin)
+                    .frame(width: LayoutConstants.sidebarWidth)
+                    .padding(.bottom, LayoutConstants.outerMargin)
 
                 detailView
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             }
-            .padding(.horizontal, MainLayoutMetrics.outerMargin)
-            .padding(.top, MainLayoutMetrics.outerMargin)
+            .padding(.horizontal, LayoutConstants.outerMargin)
+            .padding(.top, LayoutConstants.outerMargin)
         }
-        .clipShape(RoundedRectangle(cornerRadius: MainLayoutMetrics.windowCornerRadius, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: LayoutConstants.windowCornerRadius, style: .continuous))
     }
 
     private var sidebar: some View {
         ZStack(alignment: .top) {
-            RoundedRectangle(cornerRadius: MainLayoutMetrics.windowCornerRadius, style: .continuous)
+            RoundedRectangle(cornerRadius: LayoutConstants.sidebarCornerRadius, style: .continuous)
                 .fill(.ultraThinMaterial)
                 .overlay {
-                    RoundedRectangle(cornerRadius: MainLayoutMetrics.windowCornerRadius, style: .continuous)
+                    RoundedRectangle(cornerRadius: LayoutConstants.sidebarCornerRadius, style: .continuous)
                         .fill(Color.primary.opacity(0.035))
                 }
                 .overlay {
-                    RoundedRectangle(cornerRadius: MainLayoutMetrics.windowCornerRadius, style: .continuous)
+                    RoundedRectangle(cornerRadius: LayoutConstants.sidebarCornerRadius, style: .continuous)
                         .strokeBorder(.white.opacity(0.55), lineWidth: 1)
                 }
 

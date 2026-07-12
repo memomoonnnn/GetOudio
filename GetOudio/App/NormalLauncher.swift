@@ -7,14 +7,14 @@ import UserNotifications
 /// Background conversion is delegated to HeadlessRunner through JobQueue.
 final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     private enum SettingsWindowMetrics {
-        static let outerMargin: CGFloat = 22
-        static let sidebarWidth: CGFloat = 272
-        static let settingsContentMaxWidth: CGFloat = 760
-        static let contentMaxWidth: CGFloat = outerMargin + sidebarWidth + outerMargin + settingsContentMaxWidth + outerMargin
+        static let contentMaxWidth: CGFloat = LayoutConstants.outerMargin
+            + LayoutConstants.sidebarWidth
+            + LayoutConstants.outerMargin
+            + LayoutConstants.settingsContentMaxWidth
+            + LayoutConstants.outerMargin
         static let contentMinWidth: CGFloat = 900
         static let contentMinHeight: CGFloat = 560
         static let contentInitialHeight: CGFloat = 660
-        static let windowCornerRadius: CGFloat = 28
     }
 
     private enum LaunchIntent {
@@ -143,7 +143,7 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
         window.isOpaque = false
         window.backgroundColor = .clear
         window.contentView?.wantsLayer = true
-        window.contentView?.layer?.cornerRadius = SettingsWindowMetrics.windowCornerRadius
+        window.contentView?.layer?.cornerRadius = LayoutConstants.windowCornerRadius
         window.contentView?.layer?.masksToBounds = true
         window.contentMinSize = NSSize(
             width: SettingsWindowMetrics.contentMinWidth,

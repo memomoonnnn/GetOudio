@@ -53,6 +53,7 @@
 		9592ABD5238190A0FECF2673 /* AppleMusicRuntimeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9C68E3D12622013AF3CB161 /* AppleMusicRuntimeManager.swift */; };
 		995A3254ABC5325D7D583905 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D84480E867AAD02E3F55067 /* main.swift */; };
 		9A58A40606282A3F920A071F /* MainSettingsPages.swift in Sources */ = {isa = PBXBuildFile; fileRef = C63E67A469198DCFAAEF52A5 /* MainSettingsPages.swift */; };
+		A111098435FEDCDDCA524720 /* LayoutConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76995440FD4DFA28DBA35A05 /* LayoutConstants.swift */; };
 		A244B0BDB474A7B4712BD80F /* PresetSettingsModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBB5D4A69A9524F2BF4087DB /* PresetSettingsModel.swift */; };
 		A284874C51E3738AEDC9BC65 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A31E47AC388151B7BA99BFE6 /* NotificationService.swift */; };
 		A32095A60C634D85C3E1E64C /* Documentation in Resources */ = {isa = PBXBuildFile; fileRef = 78BBD92AC5CAECA405A07511 /* Documentation */; };
@@ -226,6 +227,7 @@
 		7277FA0381ED5023AA2D587E /* NCMFileIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = NCMFileIcon.icns; sourceTree = "<group>"; };
 		730C0C3FEA5DE504A597E570 /* AppleMusicShareDownloadCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleMusicShareDownloadCoordinator.swift; sourceTree = "<group>"; };
 		74D3AADF75639B9295A0B4BF /* AppConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConstants.swift; sourceTree = "<group>"; };
+		76995440FD4DFA28DBA35A05 /* LayoutConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayoutConstants.swift; sourceTree = "<group>"; };
 		78BBD92AC5CAECA405A07511 /* Documentation */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Documentation; path = GetOudio/Resources/Documentation; sourceTree = SOURCE_ROOT; };
 		7E935EA0A23172AF7AE10BEB /* SettingsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsViewModel.swift; sourceTree = "<group>"; };
 		7F29A548AD0635BE90D34456 /* JobQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JobQueue.swift; sourceTree = "<group>"; };
@@ -484,6 +486,7 @@
 			children = (
 				74D3AADF75639B9295A0B4BF /* AppConstants.swift */,
 				80F5F247C72D46445AD92B40 /* DiagnosticLog.swift */,
+				76995440FD4DFA28DBA35A05 /* LayoutConstants.swift */,
 				07E142F989021D191723AA81 /* SharedContainer.swift */,
 			);
 			path = Support;
@@ -815,6 +818,7 @@
 				2A6A646F2170DC2516434BF2 /* JobQueue.swift in Sources */,
 				A8AF384073CDDFCAADE1383D /* JobRequest.swift in Sources */,
 				8FFCE884D7BC03D9A2B1F5B7 /* LaunchMarkerStore.swift in Sources */,
+				A111098435FEDCDDCA524720 /* LayoutConstants.swift in Sources */,
 				D52AE571DC64BBCF63A285E3 /* MediaExtractionService.swift in Sources */,
 				1830DE3F5D6F7D43C5BC7923 /* NCMConversionService.swift in Sources */,
 				0D20ED1C18BE4AAD9EE1311C /* NotificationEventQueue.swift in Sources */,

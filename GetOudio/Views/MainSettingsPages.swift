@@ -5,7 +5,7 @@ private enum SettingsMetrics {
     static let sectionCornerRadius: CGFloat = 20
     static let rowCornerRadius: CGFloat = 14
     static let sectionPadding: CGFloat = 16
-    static let contentMaxWidth: CGFloat = 760
+    static let contentMaxWidth: CGFloat = LayoutConstants.settingsContentMaxWidth
     static let contentTopInset: CGFloat = 54
     static let contentBottomInset: CGFloat = 96
     static let sectionTitleFont = Font.system(size: 12, weight: .semibold)
