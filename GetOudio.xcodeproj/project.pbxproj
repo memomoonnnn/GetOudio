@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		043B134B72CE2E5637C11530 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 54C8CCAA28BE713D16820038 /* AppIcon.icon */; };
+		064462A769601DD9C18E82D8 /* Fonts in Resources */ = {isa = PBXBuildFile; fileRef = 3478CDBAC14F45447AB23C23 /* Fonts */; };
 		0BEB235A871AD3566C4C1F7E /* SettingsDocumentationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECE3EE582980C639EF8D003F /* SettingsDocumentationView.swift */; };
 		0D20ED1C18BE4AAD9EE1311C /* NotificationEventQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21A23B92406F8183901D2051 /* NotificationEventQueue.swift */; };
 		0E537BFEFE1F926149378250 /* MainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DC8B37B7E84B3163CBDECF5 /* MainView.swift */; };
@@ -209,6 +210,7 @@
 		2D140BDEF696D4BCE7EDDCBB /* NCMSettingsModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NCMSettingsModel.swift; sourceTree = "<group>"; };
 		2D84480E867AAD02E3F55067 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		323FD01C817E384689C4EAA8 /* AppleMusicRuntimeAgentClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleMusicRuntimeAgentClient.swift; sourceTree = "<group>"; };
+		3478CDBAC14F45447AB23C23 /* Fonts */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Fonts; path = GetOudio/Resources/Fonts; sourceTree = SOURCE_ROOT; };
 		4092C290A220FE1E53D899C9 /* FileCategory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileCategory.swift; sourceTree = "<group>"; };
 		43638432B32307180F0DC2FD /* GetOudioShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = GetOudioShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		45B8F600ED7CF7F3BC4E8D67 /* DirectoryChooser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DirectoryChooser.swift; sourceTree = "<group>"; };
@@ -386,6 +388,7 @@
 			children = (
 				54C8CCAA28BE713D16820038 /* AppIcon.icon */,
 				78BBD92AC5CAECA405A07511 /* Documentation */,
+				3478CDBAC14F45447AB23C23 /* Fonts */,
 				7277FA0381ED5023AA2D587E /* NCMFileIcon.icns */,
 				ECE867F4C2F8E4FFDE4263F2 /* ThirdParty */,
 			);
@@ -744,6 +747,7 @@
 			files = (
 				043B134B72CE2E5637C11530 /* AppIcon.icon in Resources */,
 				A32095A60C634D85C3E1E64C /* Documentation in Resources */,
+				064462A769601DD9C18E82D8 /* Fonts in Resources */,
 				4F57CEC14D119E7A78D11488 /* NCMFileIcon.icns in Resources */,
 				3AD5723738429067C46F5E53 /* apple-music-downloader in Resources */,
 				D0471A3CCE40DBACF8511587 /* ffmpeg in Resources */,

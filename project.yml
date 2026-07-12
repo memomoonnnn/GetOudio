@@ -52,6 +52,9 @@ targets:
         buildPhase: resources
       - path: GetOudio/Resources/NCMFileIcon.icns
         buildPhase: resources
+      - path: GetOudio/Resources/Fonts
+        type: folder
+        buildPhase: resources
       - path: GetOudio/Resources/Documentation
         type: folder
         buildPhase: resources
@@ -80,6 +83,7 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSUIElement: true
         CFBundleIconName: AppIcon
+        ATSApplicationFontsPath: Fonts
         NSAppleEventsUsageDescription: Get Oudio 需要重启 Finder，以便新启用的 Finder Sync 菜单拓展生效。
         CFBundleURLTypes:
           - CFBundleURLName: com.shengjiacheng.GetOudio

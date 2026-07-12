@@ -15,7 +15,7 @@ public enum LayoutConstants {
     /// Margin between the settings sidebar and the window's bottom edge.
     public static let sidebarBottomMargin: CGFloat = 21
     /// Width of the settings sidebar.
-    public static let sidebarWidth: CGFloat = 272
+    public static let sidebarWidth: CGFloat = 260
     /// Maximum width of the settings content area (right panel).
     public static let settingsContentMaxWidth: CGFloat = 760
 }

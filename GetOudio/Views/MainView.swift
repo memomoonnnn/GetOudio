@@ -41,28 +41,21 @@ struct MainView: View {
                         .strokeBorder(.white.opacity(0.55), lineWidth: 1)
                 }
 
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: SidebarLayout.sectionSpacing) {
                 SidebarWindowControls()
-                    .padding(.horizontal, 18)
-                    .padding(.top, 16)
+                    .padding(.horizontal, SidebarLayout.contentHorizontalInset)
+                    .padding(.top, SidebarLayout.windowControlTopInset)
 
-                HStack(spacing: 10) {
-                    Image(nsImage: NSApp.applicationIconImage)
-                        .resizable()
-                        .frame(width: 30, height: 30)
-
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text("Get Oudio")
-                            .font(.system(size: 13, weight: .semibold))
-                        Text("Settings")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(.secondary)
-                    }
+                HStack(spacing: 0) {
+                    Text("Get Oudio ")
+                    Text("Settings")
+                        .opacity(0.30)
                 }
-                .padding(.horizontal, 22)
-                .padding(.top, 10)
+                    .font(.custom("Urbanist-Bold", size: 22))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, SidebarLayout.contentHorizontalInset + 1)
 
-                VStack(spacing: 8) {
+                VStack(spacing: SidebarLayout.navigationRowSpacing) {
                     ForEach(MainSidebarItem.allCases) { item in
                         Button {
                             selection = item
@@ -72,7 +65,7 @@ struct MainView: View {
                         .buttonStyle(.plain)
                     }
                 }
-                .padding(.horizontal, 20)
+                .padding(.horizontal, SidebarLayout.contentHorizontalInset)
 
                 Spacer(minLength: 0)
             }
@@ -103,6 +96,8 @@ struct MainView: View {
         }
     }
 }
+
+/// 红绿灯
 
 private struct SidebarWindowControls: View {
     @State private var isHovering = false
@@ -136,10 +131,10 @@ private struct WindowControlButton: View {
                 Circle()
                     .fill(color)
                 Image(systemName: symbol)
-                    .font(.system(size: 7, weight: .bold))
+                    .font(.system(size: SidebarLayout.windowControlSymbolSize, weight: .bold))
                     .foregroundStyle(.black.opacity(isHovering ? 0.55 : 0))
             }
-            .frame(width: 12, height: 12)
+            .frame(width: SidebarLayout.windowControlSize, height: SidebarLayout.windowControlSize)
             .overlay {
                 Circle()
                     .stroke(.black.opacity(0.12), lineWidth: 0.5)
@@ -160,33 +155,47 @@ private extension EnvironmentValues {
     }
 }
 
+/// 导航项
+
 private struct MainSidebarRow: View {
     let item: MainSidebarItem
     let isSelected: Bool
 
     var body: some View {
-        HStack(spacing: 11) {
+        HStack(spacing: 0) {
             Image(systemName: item.systemImage)
-                .font(.system(size: 14, weight: .medium))
-                .frame(width: 18, alignment: .center)
+                .font(.system(size: SidebarLayout.navigationIconSize, weight: .medium))
+                .frame(width: SidebarLayout.iconColumnWidth, alignment: .center)
             Text(item.title)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(size: 14, weight: .medium))
                 .lineLimit(1)
                 .minimumScaleFactor(0.92)
             Spacer(minLength: 0)
         }
         .foregroundStyle(isSelected ? .white : .primary)
-        .padding(.horizontal, 14)
         .padding(.vertical, 11)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
             if isSelected {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                RoundedRectangle(cornerRadius: 11, style: .continuous)
                     .fill(Color.accentColor)
             }
         }
-        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
     }
+}
+
+private enum SidebarLayout {
+    static let contentHorizontalInset: CGFloat = 18
+    static let windowControlTopInset: CGFloat = 16
+    static let windowControlSize: CGFloat = 14
+    static let windowControlSymbolSize: CGFloat = 8
+    static let sectionSpacing: CGFloat = 26
+    static let navigationRowSpacing: CGFloat = 6
+    static let iconColumnWidth: CGFloat = 30
+    static let navigationIconSize: CGFloat = 16
+    static let iconVisualLeadingInset: CGFloat = contentHorizontalInset
+        + (iconColumnWidth - navigationIconSize) / 2
 }
 
 private enum MainSidebarItem: String, CaseIterable, Identifiable {
@@ -199,10 +208,10 @@ private enum MainSidebarItem: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .overview: return "概览"
-        case .transcoding: return "Re-Encoding"
-        case .ncm: return "NCM Transcoder"
-        case .appleMusic: return "Apple Music Downloader"
+        case .overview: return "授权/关于"
+        case .transcoding: return "音频重编码"
+        case .ncm: return "NCM解密"
+        case .appleMusic: return "Apple Music 下载"
         }
     }
 
