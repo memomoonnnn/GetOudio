@@ -34,6 +34,20 @@ final class GetOudioCoreTests: XCTestCase {
         XCTAssertTrue(store.drainCommands().isEmpty)
     }
 
+    func testRecordingControlStoreReservesOnlyOneConcurrentStart() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let firstStore = try RecordingControlStore(rootURL: root)
+        let secondStore = try RecordingControlStore(rootURL: root)
+
+        let reservation = try XCTUnwrap(firstStore.reserveStart())
+        XCTAssertEqual(reservation.phase, .starting)
+        XCTAssertEqual(secondStore.snapshot(), reservation)
+        XCTAssertNil(try secondStore.reserveStart())
+        XCTAssertEqual(secondStore.drainCommands().map(\.kind), [.start])
+        XCTAssertTrue(firstStore.drainCommands().isEmpty)
+    }
+
     func testRecordingCacheEvictsOldestCompletedFile() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }

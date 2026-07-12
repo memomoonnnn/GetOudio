@@ -15,7 +15,7 @@ final class RecordingControlCoordinator {
 
     private let container: SharedContainer
     private let store: SettingsStore
-    private let controlStore: RecordingControlStore
+    private let controlStore: RecordingControlStore?
     private var supervisionTimer: Timer?
     private var supervisionSawActiveState = false
     private var supervisionStartedAt = Date.distantPast
@@ -23,10 +23,18 @@ final class RecordingControlCoordinator {
     init(container: SharedContainer) {
         self.container = container
         store = SettingsStore(container: container)
-        controlStore = try! RecordingControlStore(container: container)
+        do {
+            controlStore = try RecordingControlStore(container: container)
+        } catch {
+            controlStore = nil
+            DiagnosticLog.append("[Recording] control store unavailable error=\(error.localizedDescription)")
+        }
     }
 
     func toggle(onRunnerFinished: @escaping () -> Void) -> ToggleResult {
+        guard let controlStore else {
+            return .failed("录音共享状态不可用，请检查 App Group 配置。")
+        }
         let snapshot = controlStore.snapshot()
         DiagnosticLog.append("[Recording] toggle coordinator phase=\(snapshot.phase.rawValue) runnerPID=\(snapshot.runnerPID.map(String.init) ?? "none")")
         if snapshot.phase.isActive {
@@ -47,11 +55,16 @@ final class RecordingControlCoordinator {
         }
 
         do {
-            try controlStore.enqueue(.start)
+            guard let reservation = try controlStore.reserveStart() else {
+                try controlStore.enqueue(.stop)
+                RecordingControlSignal.post()
+                DiagnosticLog.append("[Recording] concurrent toggle converted to stop request")
+                return .requestedStop
+            }
             LaunchMarkerStore(container: container).mark(.recording)
-            DiagnosticLog.append("[Recording] preflight passed; start command enqueued and launch marker written")
-            launchNewAppInstance()
-            beginSupervision(onFinished: onRunnerFinished)
+            DiagnosticLog.append("[Recording] preflight passed; session reserved id=\(reservation.id.uuidString) and launch marker written")
+            launchNewAppInstance(sessionID: reservation.id)
+            beginSupervision(sessionID: reservation.id, onFinished: onRunnerFinished)
             return .launchedRunner
         } catch {
             DiagnosticLog.append("[Recording] start command setup failed error=\(error.localizedDescription)")
@@ -98,6 +111,7 @@ final class RecordingControlCoordinator {
     }
 
     func recoverStaleSessionIfNeeded() {
+        guard let controlStore else { return }
         let snapshot = controlStore.snapshot()
         guard snapshot.phase.isActive,
               let pid = snapshot.runnerPID,
@@ -105,17 +119,23 @@ final class RecordingControlCoordinator {
         recover(snapshot, reason: .runnerCrashed)
     }
 
-    private func beginSupervision(onFinished: @escaping () -> Void) {
+    private func beginSupervision(sessionID: UUID, onFinished: @escaping () -> Void) {
+        guard let controlStore else { return }
         supervisionTimer?.invalidate()
         supervisionSawActiveState = false
         supervisionStartedAt = Date()
         supervisionTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] timer in
             guard let self else { timer.invalidate(); return }
-            let snapshot = self.controlStore.snapshot()
+            let snapshot = controlStore.snapshot()
+            guard snapshot.id == sessionID else {
+                timer.invalidate()
+                self.supervisionTimer = nil
+                return
+            }
             if snapshot.phase.isActive {
                 self.supervisionSawActiveState = true
             }
-            if snapshot.phase == .failed || (snapshot.phase == .idle && self.supervisionSawActiveState) {
+            if snapshot.phase == .failed || snapshot.phase == .idle {
                 timer.invalidate()
                 self.supervisionTimer = nil
                 onFinished()
@@ -124,7 +144,7 @@ final class RecordingControlCoordinator {
             if !self.supervisionSawActiveState, Date().timeIntervalSince(self.supervisionStartedAt) > 10 {
                 timer.invalidate()
                 self.supervisionTimer = nil
-                self.failPendingLaunch(message: "录音后台进程未能及时启动。")
+                self.failPendingLaunch(sessionID: sessionID, message: "录音后台进程未能及时启动。")
                 onFinished()
                 return
             }
@@ -138,6 +158,7 @@ final class RecordingControlCoordinator {
     }
 
     private func recover(_ snapshot: RecordingSessionSnapshot, reason: RecordingStopReason) {
+        guard let controlStore else { return }
         RecordingDeviceService.restoreDefaultOutput(
             preferredUID: snapshot.originalOutputDeviceUID,
             excluding: snapshot.bridgeDeviceUID
@@ -169,7 +190,7 @@ final class RecordingControlCoordinator {
         }
     }
 
-    private func launchNewAppInstance() {
+    private func launchNewAppInstance(sessionID: UUID) {
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = false
         configuration.createsNewApplicationInstance = true
@@ -183,17 +204,20 @@ final class RecordingControlCoordinator {
             if let error {
                 DiagnosticLog.append("[Recording] runner launch failed error=\(error.localizedDescription)")
                 guard let self else { return }
-                self.failPendingLaunch(message: error.localizedDescription)
+                self.failPendingLaunch(sessionID: sessionID, message: error.localizedDescription)
             } else {
                 DiagnosticLog.append("[Recording] runner launch request completed")
             }
         }
     }
 
-    private func failPendingLaunch(message: String) {
+    private func failPendingLaunch(sessionID: UUID, message: String) {
+        guard let controlStore else { return }
+        let current = controlStore.snapshot()
+        guard current.id == sessionID, current.phase == .starting else { return }
         _ = controlStore.drainCommands()
         LaunchMarkerStore(container: container).clear()
-        var failed = RecordingSessionSnapshot.idle
+        var failed = current
         failed.phase = .failed
         failed.stopReason = .startupFailure
         failed.errorMessage = message

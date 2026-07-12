@@ -26,6 +26,8 @@ final class RecordingAudioSession {
     private let inputCapture: RecordingInputAUHAL
     private let monitorPlayback: RecordingMonitorPlayback
     private let pipeline: RecordingBufferPipeline
+    private let realtimeIssues: RecordingRealtimeIssues
+    private let inputDiagnostics: RecordingInputDiagnostics
     private var deviceListeners: [(AudioObjectID, AudioObjectPropertyAddress, AudioObjectPropertyListenerBlock)] = []
 
     init(
@@ -34,7 +36,13 @@ final class RecordingAudioSession {
         outputURL: URL,
         failureHandler: @escaping @Sendable (RecordingStopReason, String) -> Void
     ) throws {
-        let input = try RecordingInputAUHAL(deviceUID: bridgeUID, failureHandler: failureHandler)
+        let realtimeIssues = RecordingRealtimeIssues()
+        let inputDiagnostics = RecordingInputDiagnostics()
+        let input = try RecordingInputAUHAL(
+            deviceUID: bridgeUID,
+            realtimeIssues: realtimeIssues,
+            diagnostics: inputDiagnostics
+        )
         let captureFormat = input.captureFormat
         DiagnosticLog.append(
             "[Recording] AUHAL input format sampleRate=\(captureFormat.sampleRate) " +
@@ -45,10 +53,14 @@ final class RecordingAudioSession {
         let monitor = try RecordingMonitorPlayback(deviceUID: monitorUID, sourceFormat: captureFormat)
         inputCapture = input
         monitorPlayback = monitor
+        self.realtimeIssues = realtimeIssues
+        self.inputDiagnostics = inputDiagnostics
         pipeline = try RecordingBufferPipeline(
             outputURL: outputURL,
             sampleRate: sampleRate,
             channelCount: channelCount,
+            realtimeIssues: realtimeIssues,
+            diagnostics: inputDiagnostics,
             failureHandler: failureHandler
         )
         input.setBufferHandler { [pipeline, monitor] buffer in
@@ -81,6 +93,14 @@ final class RecordingAudioSession {
 
     func verifyMonitorDevice() throws {
         try monitorPlayback.verifyBoundDevice()
+    }
+
+    func takeRealtimeIssue() -> (reason: RecordingStopReason, message: String)? {
+        realtimeIssues.take()
+    }
+
+    func inputDiagnosticSnapshot() -> RecordingInputDiagnostics.Snapshot {
+        inputDiagnostics.snapshot()
     }
 
     private func observeDevice(
@@ -119,17 +139,19 @@ private final class RecordingInputAUHAL: @unchecked Sendable {
 
     private let audioUnit: AudioUnit
     private let renderBuffer: AVAudioPCMBuffer
-    private let failureHandler: @Sendable (RecordingStopReason, String) -> Void
+    private let realtimeIssues: RecordingRealtimeIssues
+    private let diagnostics: RecordingInputDiagnostics
     private let frameCapacity: AVAudioFrameCount = 4_096
     private var bufferHandler: (@Sendable (AVAudioPCMBuffer) -> Void)?
     private var started = false
-    private var reportedRenderFailure = false
 
     init(
         deviceUID: String,
-        failureHandler: @escaping @Sendable (RecordingStopReason, String) -> Void
+        realtimeIssues: RecordingRealtimeIssues,
+        diagnostics: RecordingInputDiagnostics
     ) throws {
-        self.failureHandler = failureHandler
+        self.realtimeIssues = realtimeIssues
+        self.diagnostics = diagnostics
 
         var description = AudioComponentDescription(
             componentType: kAudioUnitType_Output,
@@ -269,7 +291,7 @@ private final class RecordingInputAUHAL: @unchecked Sendable {
         frameCount: UInt32
     ) -> OSStatus {
         guard frameCount <= frameCapacity else {
-            reportRenderFailure(.bufferOverflow, "Audio Bridge 单次输入帧数超过预分配缓冲容量")
+            realtimeIssues.record(.inputFrameCapacityExceeded)
             return kAudio_ParamError
         }
         renderBuffer.frameLength = AVAudioFrameCount(frameCount)
@@ -282,18 +304,12 @@ private final class RecordingInputAUHAL: @unchecked Sendable {
             renderBuffer.mutableAudioBufferList
         )
         guard status == noErr else {
-            reportRenderFailure(.sourceDeviceUnavailable, "Audio Bridge 输入读取失败（\(status)）")
+            realtimeIssues.record(.inputRenderFailed, status: status)
             return status
         }
+        diagnostics.recordCallback(timestamp.pointee)
         bufferHandler?(renderBuffer)
         return noErr
-    }
-
-    private func reportRenderFailure(_ reason: RecordingStopReason, _ message: String) {
-        guard !reportedRenderFailure else { return }
-        reportedRenderFailure = true
-        DiagnosticLog.append("[Recording] AUHAL render failure: \(message)")
-        failureHandler(reason, message)
     }
 
     private static func setProperty<T>(
@@ -338,6 +354,7 @@ private final class RecordingMonitorPlayback: @unchecked Sendable {
     private let pushedFrames: UnsafeMutablePointer<Int64>
     private let renderedFrames: UnsafeMutablePointer<Int64>
     private let underflowFrames: UnsafeMutablePointer<Int64>
+    private let droppedFrames: UnsafeMutablePointer<Int64>
     private let primingFrameCount = 2_048
     private var started = false
 
@@ -370,6 +387,8 @@ private final class RecordingMonitorPlayback: @unchecked Sendable {
         renderedFrames.initialize(to: 0)
         underflowFrames = .allocate(capacity: 1)
         underflowFrames.initialize(to: 0)
+        droppedFrames = .allocate(capacity: 1)
+        droppedFrames.initialize(to: 0)
 
         var description = AudioComponentDescription(
             componentType: kAudioUnitType_Output,
@@ -469,7 +488,8 @@ private final class RecordingMonitorPlayback: @unchecked Sendable {
         AudioUnitUninitialize(audioUnit)
         DiagnosticLog.append(
             "[Recording] output-only monitor AUHAL stopped pushedFrames=\(atomicLoad(pushedFrames)) " +
-            "renderedFrames=\(atomicLoad(renderedFrames)) underflowFrames=\(atomicLoad(underflowFrames))"
+            "renderedFrames=\(atomicLoad(renderedFrames)) underflowFrames=\(atomicLoad(underflowFrames)) " +
+            "droppedFrames=\(atomicLoad(droppedFrames))"
         )
     }
 
@@ -499,7 +519,11 @@ private final class RecordingMonitorPlayback: @unchecked Sendable {
         let frames = Int(buffer.frameLength)
         let write = atomicLoad(writePosition)
         let read = atomicLoad(readPosition)
-        guard frames > 0, Int64(frameCapacity) - (write - read) >= Int64(frames) else { return }
+        guard frames > 0 else { return }
+        guard Int64(frameCapacity) - (write - read) >= Int64(frames) else {
+            OSAtomicAdd64Barrier(Int64(frames), droppedFrames)
+            return
+        }
 
         let start = Int(write % Int64(frameCapacity))
         let firstCount = min(frames, frameCapacity - start)
@@ -522,12 +546,10 @@ private final class RecordingMonitorPlayback: @unchecked Sendable {
         let buffers = UnsafeMutableAudioBufferListPointer(outputData)
         for index in buffers.indices {
             guard let data = buffers[index].mData else { continue }
-            data.assumingMemoryBound(to: Float.self).initialize(
-                repeating: 0,
-                count: requestedFrames * Int(buffers[index].mNumberChannels)
-            )
+            let byteCount = requestedFrames * Int(buffers[index].mNumberChannels) * MemoryLayout<Float>.size
+            memset(data, 0, byteCount)
             buffers[index].mDataByteSize = UInt32(
-                requestedFrames * Int(buffers[index].mNumberChannels) * MemoryLayout<Float>.size
+                byteCount
             )
         }
         guard atomicLoad(stopped) == 0 else { return noErr }
@@ -584,6 +606,8 @@ private final class RecordingMonitorPlayback: @unchecked Sendable {
         renderedFrames.deallocate()
         underflowFrames.deinitialize(count: 1)
         underflowFrames.deallocate()
+        droppedFrames.deinitialize(count: 1)
+        droppedFrames.deallocate()
     }
 
     private static func setProperty<T>(
@@ -607,6 +631,129 @@ private let recordingMonitorCallback: AURenderCallback = { refCon, _, _, _, fram
         .render(frameCount: frameCount, outputData: outputData)
 }
 
+/// Carries a bounded error code out of a Core Audio callback. Formatting, logging and stopping
+/// happen later on the runner's main queue, never on the realtime thread.
+private final class RecordingRealtimeIssues: @unchecked Sendable {
+    fileprivate enum Code: Int32 {
+        case none
+        case bufferOverflow
+        case inputFrameCapacityExceeded
+        case inputRenderFailed
+    }
+
+    private let code = UnsafeMutablePointer<Int32>.allocate(capacity: 1)
+    private let status = UnsafeMutablePointer<Int64>.allocate(capacity: 1)
+
+    init() {
+        code.initialize(to: Code.none.rawValue)
+        status.initialize(to: Int64(noErr))
+    }
+
+    deinit {
+        code.deinitialize(count: 1)
+        code.deallocate()
+        status.deinitialize(count: 1)
+        status.deallocate()
+    }
+
+    func record(_ newCode: Code, status newStatus: OSStatus = noErr) {
+        guard newCode != .none else { return }
+        atomicStore(Int64(newStatus), at: status)
+        OSMemoryBarrier()
+        _ = OSAtomicCompareAndSwap32Barrier(Code.none.rawValue, newCode.rawValue, code)
+    }
+
+    func take() -> (reason: RecordingStopReason, message: String)? {
+        let current = atomicLoad(code)
+        guard let issue = Code(rawValue: current), issue != .none,
+              OSAtomicCompareAndSwap32Barrier(current, Code.none.rawValue, code) else {
+            return nil
+        }
+        switch issue {
+        case .bufferOverflow:
+            return (.bufferOverflow, RecordingAudioSession.SessionError.bufferOverflow.localizedDescription)
+        case .inputFrameCapacityExceeded:
+            return (.bufferOverflow, "Audio Bridge 单次输入帧数超过预分配缓冲容量")
+        case .inputRenderFailed:
+            return (.sourceDeviceUnavailable, "Audio Bridge 输入读取失败（\(atomicLoad(status))）")
+        case .none:
+            return nil
+        }
+    }
+}
+
+final class RecordingInputDiagnostics: @unchecked Sendable {
+    struct Snapshot {
+        let callbackCount: Int64
+        let writtenFrameCount: Int64
+        let nonSilentBlockCount: Int64
+        let lastSampleTime: Double
+        let lastHostTime: UInt64
+    }
+
+    private let callbackCount = UnsafeMutablePointer<Int64>.allocate(capacity: 1)
+    private let writtenFrameCount = UnsafeMutablePointer<Int64>.allocate(capacity: 1)
+    private let nonSilentBlockCount = UnsafeMutablePointer<Int64>.allocate(capacity: 1)
+    private let lastSampleTimeBits = UnsafeMutablePointer<Int64>.allocate(capacity: 1)
+    private let lastHostTime = UnsafeMutablePointer<Int64>.allocate(capacity: 1)
+
+    init() {
+        callbackCount.initialize(to: 0)
+        writtenFrameCount.initialize(to: 0)
+        nonSilentBlockCount.initialize(to: 0)
+        lastSampleTimeBits.initialize(to: 0)
+        lastHostTime.initialize(to: 0)
+    }
+
+    deinit {
+        callbackCount.deinitialize(count: 1)
+        callbackCount.deallocate()
+        writtenFrameCount.deinitialize(count: 1)
+        writtenFrameCount.deallocate()
+        nonSilentBlockCount.deinitialize(count: 1)
+        nonSilentBlockCount.deallocate()
+        lastSampleTimeBits.deinitialize(count: 1)
+        lastSampleTimeBits.deallocate()
+        lastHostTime.deinitialize(count: 1)
+        lastHostTime.deallocate()
+    }
+
+    func recordCallback(_ timestamp: AudioTimeStamp) {
+        atomicStore(Int64(bitPattern: timestamp.mHostTime), at: lastHostTime)
+        atomicStore(Int64(bitPattern: timestamp.mSampleTime.bitPattern), at: lastSampleTimeBits)
+        OSAtomicAdd64Barrier(1, callbackCount)
+    }
+
+    func recordWrittenBlock(
+        planarSamples: UnsafePointer<Float>,
+        frameCount: Int,
+        channelCount: Int,
+        planeStride: Int
+    ) {
+        guard frameCount > 0 else { return }
+        var hasSignal = false
+        for channel in 0..<channelCount where !hasSignal {
+            let samples = planarSamples.advanced(by: channel * planeStride)
+            for frame in 0..<frameCount where samples[frame] != 0 {
+                hasSignal = true
+                break
+            }
+        }
+        if hasSignal { OSAtomicAdd64Barrier(1, nonSilentBlockCount) }
+        OSAtomicAdd64Barrier(Int64(frameCount), writtenFrameCount)
+    }
+
+    func snapshot() -> Snapshot {
+        Snapshot(
+            callbackCount: atomicLoad(callbackCount),
+            writtenFrameCount: atomicLoad(writtenFrameCount),
+            nonSilentBlockCount: atomicLoad(nonSilentBlockCount),
+            lastSampleTime: Double(bitPattern: UInt64(bitPattern: atomicLoad(lastSampleTimeBits))),
+            lastHostTime: UInt64(bitPattern: atomicLoad(lastHostTime))
+        )
+    }
+}
+
 private final class RecordingBufferPipeline: @unchecked Sendable {
     private let slotCount: Int32 = 64
     private let frameCapacity = 4_096
@@ -615,8 +762,10 @@ private final class RecordingBufferPipeline: @unchecked Sendable {
     private let frameCounts: UnsafeMutablePointer<Int32>
     private let writer: RecordingWAVWriter
     private let queue = DispatchQueue(label: "com.shengjiacheng.GetOudio.recording-writer", qos: .userInitiated)
-    private let wake = DispatchSemaphore(value: 0)
+    private let writerTimer: DispatchSourceTimer
     private let finished = DispatchSemaphore(value: 0)
+    private let realtimeIssues: RecordingRealtimeIssues
+    private let diagnostics: RecordingInputDiagnostics
     private let failureHandler: @Sendable (RecordingStopReason, String) -> Void
     private let writePosition: UnsafeMutablePointer<Int64>
     private let readPosition: UnsafeMutablePointer<Int64>
@@ -628,9 +777,13 @@ private final class RecordingBufferPipeline: @unchecked Sendable {
         outputURL: URL,
         sampleRate: Double,
         channelCount: Int,
+        realtimeIssues: RecordingRealtimeIssues,
+        diagnostics: RecordingInputDiagnostics,
         failureHandler: @escaping @Sendable (RecordingStopReason, String) -> Void
     ) throws {
         self.channelCount = channelCount
+        self.realtimeIssues = realtimeIssues
+        self.diagnostics = diagnostics
         self.failureHandler = failureHandler
         samples = .allocate(capacity: Int(slotCount) * frameCapacity * channelCount)
         samples.initialize(repeating: 0, count: Int(slotCount) * frameCapacity * channelCount)
@@ -643,10 +796,14 @@ private final class RecordingBufferPipeline: @unchecked Sendable {
         stopping = .allocate(capacity: 1)
         stopping.initialize(to: 0)
         writer = try RecordingWAVWriter(url: outputURL, sampleRate: sampleRate, channelCount: channelCount)
-        queue.async { [self] in writerLoop() }
+        writerTimer = DispatchSource.makeTimerSource(queue: queue)
+        writerTimer.setEventHandler { [weak self] in self?.drainPendingBuffers() }
+        writerTimer.schedule(deadline: .now(), repeating: .milliseconds(2), leeway: .milliseconds(1))
+        writerTimer.resume()
     }
 
     deinit {
+        writerTimer.cancel()
         samples.deinitialize(count: Int(slotCount) * frameCapacity * channelCount)
         samples.deallocate()
         frameCounts.deinitialize(count: Int(slotCount))
@@ -666,7 +823,7 @@ private final class RecordingBufferPipeline: @unchecked Sendable {
         let write = atomicLoad(writePosition)
         let read = atomicLoad(readPosition)
         guard frames <= frameCapacity, write - read < Int64(slotCount) else {
-            failureHandler(.bufferOverflow, RecordingAudioSession.SessionError.bufferOverflow.localizedDescription)
+            realtimeIssues.record(.bufferOverflow)
             return
         }
 
@@ -678,26 +835,20 @@ private final class RecordingBufferPipeline: @unchecked Sendable {
         frameCounts[slot] = Int32(frames)
         OSMemoryBarrier()
         OSAtomicAdd64Barrier(1, writePosition)
-        wake.signal()
     }
 
     func finish() throws {
         OSAtomicCompareAndSwap32Barrier(0, 1, stopping)
-        wake.signal()
         finished.wait()
         if let writerError { throw writerError }
     }
 
-    private func writerLoop() {
-        while true {
-            wake.wait()
-            while drainOne() {}
-
-            if isStoppedAndDrained() {
-                do { try writer.finalize() } catch { writerError = error }
-                finished.signal()
-                return
-            }
+    private func drainPendingBuffers() {
+        while drainOne() {}
+        if isStoppedAndDrained() {
+            do { try writer.finalize() } catch { writerError = error }
+            writerTimer.cancel()
+            finished.signal()
         }
     }
 
@@ -711,6 +862,12 @@ private final class RecordingBufferPipeline: @unchecked Sendable {
             try writer.write(
                 planarSamples: slotSamples,
                 frameCount: frames,
+                planeStride: frameCapacity
+            )
+            diagnostics.recordWrittenBlock(
+                planarSamples: slotSamples,
+                frameCount: frames,
+                channelCount: channelCount,
                 planeStride: frameCapacity
             )
             if !loggedFirstBuffer {
@@ -738,4 +895,11 @@ private func atomicLoad(_ pointer: UnsafeMutablePointer<Int64>) -> Int64 {
 
 private func atomicLoad(_ pointer: UnsafeMutablePointer<Int32>) -> Int32 {
     OSAtomicAdd32Barrier(0, pointer)
+}
+
+private func atomicStore(_ value: Int64, at pointer: UnsafeMutablePointer<Int64>) {
+    var current = atomicLoad(pointer)
+    while !OSAtomicCompareAndSwap64Barrier(current, value, pointer) {
+        current = atomicLoad(pointer)
+    }
 }

@@ -14,6 +14,10 @@ final class RecordingRunner: NSObject, NSApplicationDelegate, UNUserNotification
     private var controlSignal: RecordingControlSignal?
     private var stopStarted = false
     private var sleepObserver: NSObjectProtocol?
+    private var healthTimer: Timer?
+    private var recordingStartedAt: Date?
+    private var reportedNoInputCallbacks = false
+    private var reportedSilentInput = false
 
     init(container: SharedContainer) throws {
         self.container = container
@@ -69,6 +73,7 @@ final class RecordingRunner: NSObject, NSApplicationDelegate, UNUserNotification
 
     func applicationWillTerminate(_ notification: Notification) {
         if let sleepObserver { NSWorkspace.shared.notificationCenter.removeObserver(sleepObserver) }
+        healthTimer?.invalidate()
     }
 
     func userNotificationCenter(
@@ -86,8 +91,26 @@ final class RecordingRunner: NSObject, NSApplicationDelegate, UNUserNotification
     private func startIfRequested() async {
         let commands = controlStore.drainCommands()
         DiagnosticLog.append("[Recording] runner drained commands count=\(commands.count) latest=\(commands.last?.kind.rawValue ?? "none")")
+        if commands.contains(where: { $0.kind == .stop }) {
+            var snapshot = controlStore.snapshot()
+            if snapshot.phase == .starting {
+                snapshot.phase = .idle
+                snapshot.runnerPID = nil
+                snapshot.stopReason = .user
+                snapshot.errorMessage = nil
+                try? controlStore.save(snapshot)
+            }
+            reloadWidget()
+            await MainActor.run { NSApp.terminate(nil) }
+            return
+        }
         guard let latestCommand = commands.last, latestCommand.kind == .start else {
-            try? controlStore.save(.idle)
+            var snapshot = controlStore.snapshot()
+            if snapshot.phase == .starting {
+                snapshot.phase = .idle
+                snapshot.runnerPID = nil
+                try? controlStore.save(snapshot)
+            }
             reloadWidget()
             await MainActor.run { NSApp.terminate(nil) }
             return
@@ -120,17 +143,16 @@ final class RecordingRunner: NSObject, NSApplicationDelegate, UNUserNotification
         )
 
         cacheStore.enforceLimit(settings.recordingCacheLimitBytes)
-        let sessionID = UUID()
-        let temporaryURL = cacheStore.makeTemporaryFileURL(id: sessionID)
-        var snapshot = RecordingSessionSnapshot(
-            id: sessionID,
-            phase: .starting,
-            runnerPID: ProcessInfo.processInfo.processIdentifier,
-            bridgeDeviceUID: bridgeUID,
-            originalOutputDeviceUID: originalUID,
-            temporaryFileURL: temporaryURL,
-            startedAt: Date()
-        )
+        var snapshot = controlStore.snapshot()
+        guard snapshot.phase == .starting else {
+            throw RecordingDeviceError.deviceNotFound("录音会话预约")
+        }
+        let temporaryURL = cacheStore.makeTemporaryFileURL(id: snapshot.id)
+        snapshot.runnerPID = ProcessInfo.processInfo.processIdentifier
+        snapshot.bridgeDeviceUID = bridgeUID
+        snapshot.originalOutputDeviceUID = originalUID
+        snapshot.temporaryFileURL = temporaryURL
+        snapshot.startedAt = snapshot.startedAt ?? Date()
         try controlStore.save(snapshot)
         reloadWidget()
         DiagnosticLog.append("[Recording] runner snapshot phase=starting temporaryFile=\(temporaryURL.lastPathComponent)")
@@ -153,6 +175,7 @@ final class RecordingRunner: NSObject, NSApplicationDelegate, UNUserNotification
         snapshot.phase = .recording
         try controlStore.save(snapshot)
         reloadWidget()
+        beginHealthChecks()
         DiagnosticLog.append("[Recording] recording started bridge=\(bridge.name) sampleRate=\(audioSession.sampleRate) channels=\(audioSession.channelCount)")
     }
 
@@ -164,6 +187,8 @@ final class RecordingRunner: NSObject, NSApplicationDelegate, UNUserNotification
     private func stop(reason: RecordingStopReason, message: String?) {
         guard !stopStarted else { return }
         stopStarted = true
+        healthTimer?.invalidate()
+        healthTimer = nil
         DiagnosticLog.append("[Recording] stop begin reason=\(reason.rawValue) message=\(message ?? "none")")
         var snapshot = controlStore.snapshot()
         snapshot.phase = .stopping
@@ -239,6 +264,8 @@ final class RecordingRunner: NSObject, NSApplicationDelegate, UNUserNotification
 
     private func failStartup(_ error: Error) async {
         DiagnosticLog.append("[Recording] startup failed error=\(error.localizedDescription)")
+        healthTimer?.invalidate()
+        healthTimer = nil
         let snapshot = controlStore.snapshot()
         session?.stopCapture()
         try? session?.finalize()
@@ -262,5 +289,37 @@ final class RecordingRunner: NSObject, NSApplicationDelegate, UNUserNotification
 
     private func reloadWidget() {
         WidgetCenter.shared.reloadTimelines(ofKind: AppConstants.recordingWidgetKind)
+    }
+
+    private func beginHealthChecks() {
+        healthTimer?.invalidate()
+        recordingStartedAt = Date()
+        reportedNoInputCallbacks = false
+        reportedSilentInput = false
+        healthTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            self?.checkRecordingHealth()
+        }
+    }
+
+    private func checkRecordingHealth() {
+        guard let session else { return }
+        if let issue = session.takeRealtimeIssue() {
+            DiagnosticLog.append("[Recording] deferred realtime issue reason=\(issue.reason.rawValue) message=\(issue.message)")
+            stop(reason: issue.reason, message: issue.message)
+            return
+        }
+        guard let recordingStartedAt,
+              Date().timeIntervalSince(recordingStartedAt) >= 3 else { return }
+        let diagnostics = session.inputDiagnosticSnapshot()
+        if diagnostics.callbackCount == 0, !reportedNoInputCallbacks {
+            reportedNoInputCallbacks = true
+            DiagnosticLog.append("[Recording] input health: no callbacks after 3s; Audio Bridge may be stalled. Refresh its Input/Output page in Audio MIDI Setup. lastSampleTime=\(diagnostics.lastSampleTime) lastHostTime=\(diagnostics.lastHostTime)")
+        } else if diagnostics.callbackCount > 0,
+                  diagnostics.writtenFrameCount > 0,
+                  diagnostics.nonSilentBlockCount == 0,
+                  !reportedSilentInput {
+            reportedSilentInput = true
+            DiagnosticLog.append("[Recording] input health: callbacks and PCM writes are active but every block is silent; keeping recording active because silence can be valid. Audio Bridge may require a refresh. callbacks=\(diagnostics.callbackCount) writtenFrames=\(diagnostics.writtenFrameCount) lastSampleTime=\(diagnostics.lastSampleTime) lastHostTime=\(diagnostics.lastHostTime)")
+        }
     }
 }
