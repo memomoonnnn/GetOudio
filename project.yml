@@ -17,8 +17,8 @@ settings:
     CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED: YES
     SWIFT_VERSION: 5.0
     MACOSX_DEPLOYMENT_TARGET: "14.0"
-    MARKETING_VERSION: "1.0"
-    CURRENT_PROJECT_VERSION: "1"
+    MARKETING_VERSION: "1.1.1"
+    CURRENT_PROJECT_VERSION: "3"
     DEVELOPMENT_TEAM: ZWNUJ64F36
     CODE_SIGN_STYLE: Automatic
 configs:
@@ -76,6 +76,8 @@ targets:
         embed: true
       - target: GetOudioShareExtension
         embed: true
+      - target: GetOudioRecordingWidget
+        embed: true
     info:
       path: GetOudio/Info.plist
       properties:
@@ -85,6 +87,7 @@ targets:
         CFBundleIconName: AppIcon
         ATSApplicationFontsPath: Fonts
         NSAppleEventsUsageDescription: Get Oudio 需要重启 Finder，以便新启用的 Finder Sync 菜单拓展生效。
+        NSMicrophoneUsageDescription: Get Oudio 需要读取 Pro Tools Audio Bridge 的输入信号以录制 PCM 音频。
         CFBundleURLTypes:
           - CFBundleURLName: com.shengjiacheng.GetOudio
             CFBundleURLSchemes:
@@ -139,6 +142,7 @@ targets:
         com.apple.security.files.pictures.read-write: true
         com.apple.security.network.client: true
         com.apple.security.network.server: true
+        com.apple.security.device.audio-input: true
         com.apple.security.application-groups:
           - group.com.shengjiacheng.GetOudio
     settings:
@@ -167,6 +171,34 @@ targets:
           rm -rf "$LEGACY_DEST/GetOudioAMRuntimeAgent.app"
           rm -rf "$DEST/GetOudioAMRuntimeAgent.app"
           cp -R "$AGENT_APP" "$DEST/GetOudioAMRuntimeAgent.app"
+
+  GetOudioRecordingWidget:
+    type: app-extension
+    platform: macOS
+    sources:
+      - path: GetOudioRecordingWidget/Sources
+    dependencies:
+      - target: GetOudioCore
+    info:
+      path: GetOudioRecordingWidget/Info.plist
+      properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleDisplayName: Get Oudio Recorder
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: GetOudioRecordingWidget/GetOudioRecordingWidget.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.application-groups:
+          - group.com.shengjiacheng.GetOudio
+    settings:
+      base:
+        APPLICATION_EXTENSION_API_ONLY: YES
+        ENABLE_APP_SANDBOX: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.shengjiacheng.GetOudio.RecordingWidget
+        PRODUCT_NAME: GetOudioRecordingWidget
 
   GetOudioAMRuntimeAgent:
     type: application
@@ -299,6 +331,7 @@ schemes:
         GetOudioAMRuntimeAgent: all
         GetOudioFinderExtension: all
         GetOudioShareExtension: all
+        GetOudioRecordingWidget: all
     run:
       config: Debug
       executable: GetOudio

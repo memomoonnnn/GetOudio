@@ -28,17 +28,20 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
     private let container: SharedContainer
     private let notificationService: NotificationService
     private let openWithDispatcher: OpenWithJobDispatcher
+    private let recordingControl: RecordingControlCoordinator
     private let openWithMenuController = OpenWithPresetMenuController()
     private var launchIntent: LaunchIntent = .undecided
     private var activeNotificationResponses = 0
     private var isPresentingAudioMenu = false
     private var lastAudioOpenSignature: String?
     private var lastAudioOpenDate = Date.distantPast
+    private var isSupervisingRecording = false
 
     init(container: SharedContainer) {
         self.container = container
         notificationService = NotificationService(container: container)
         openWithDispatcher = OpenWithJobDispatcher(container: container)
+        recordingControl = RecordingControlCoordinator(container: container)
         super.init()
     }
 
@@ -50,13 +53,15 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
             app.setActivationPolicy(.accessory)
             let launcher = NormalLauncher(container: container)
             app.delegate = launcher
+            launcher.installURLHandler()
+            DiagnosticLog.append("[Recording] normal launcher ready; URL handler installed before app run")
             app.run()
         }
     }
 
     // MARK: - NSApplicationDelegate
 
-    func applicationWillFinishLaunching(_ notification: Notification) {
+    private func installURLHandler() {
         NSAppleEventManager.shared().setEventHandler(
             self,
             andSelector: #selector(handleGetURLEvent(_:withReplyEvent:)),
@@ -66,12 +71,15 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        DiagnosticLog.append("[Recording] normal launcher did finish launching")
         UNUserNotificationCenter.current().delegate = self
 
         Task {
             await notificationService.requestAuthorization()
             await notificationService.dispatchPendingNotificationEvents()
         }
+
+        recordingControl.recoverStaleSessionIfNeeded()
 
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 700_000_000)
@@ -117,6 +125,7 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
     }
 
     private func showSettingsWindowIfNeeded() {
+        DiagnosticLog.append("[Recording] delayed settings decision intent=\(String(describing: launchIntent))")
         guard launchIntent == .undecided || launchIntent == .settings else { return }
         if let mainWindow {
             NSApp.setActivationPolicy(.regular)
@@ -129,9 +138,20 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
         showSettingsWindow()
     }
 
-    private func showSettingsWindow() {
+    private func showSettingsWindow(recordingPage: Bool = false) {
+        if let mainWindow {
+            NSApp.setActivationPolicy(.regular)
+            mainWindow.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            if recordingPage {
+                NotificationCenter.default.post(name: .getOudioShowRecordingSettings, object: nil)
+            }
+            return
+        }
         NSApp.setActivationPolicy(.regular)
-        let hostingController = NSHostingController(rootView: MainView(container: container))
+        let hostingController = NSHostingController(
+            rootView: MainView(container: container, initialRecordingPage: recordingPage)
+        )
         hostingController.safeAreaRegions = []
 
         let window = NSWindow(contentViewController: hostingController)
@@ -192,6 +212,33 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
               let url = URL(string: urlString),
               url.scheme == AppConstants.appURLScheme else { return }
 
+        if url.host == "recording" {
+            DiagnosticLog.append("[Recording] toggle URL received path=\(url.path)")
+            if mainWindow?.isVisible != true { launchIntent = .backgroundWake }
+            let result = recordingControl.toggle { [weak self] in
+                guard let self else { return }
+                self.isSupervisingRecording = false
+                self.finishTransientInteractionIfNeeded()
+            }
+            switch result {
+            case .launchedRunner:
+                DiagnosticLog.append("[Recording] toggle result=launchedRunner")
+                isSupervisingRecording = true
+            case .requestedStop:
+                DiagnosticLog.append("[Recording] toggle result=requestedStop")
+                finishTransientInteractionIfNeeded()
+            case .needsConfiguration:
+                DiagnosticLog.append("[Recording] toggle result=needsConfiguration")
+                launchIntent = .settings
+                showSettingsWindow(recordingPage: true)
+            case .failed(let message):
+                DiagnosticLog.append("[Recording] toggle result=failed error=\(message)")
+                Task { await notificationService.notifyRecordingFinished(fileURL: nil, message: message) }
+                finishTransientInteractionIfNeeded()
+            }
+            return
+        }
+
         DiagnosticLog.append("normal url wake forwarded \(url.absoluteString)")
         if mainWindow?.isVisible != true {
             launchIntent = .backgroundWake
@@ -239,6 +286,7 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
 
     private func finishTransientInteractionIfNeeded() {
         guard mainWindow?.isVisible != true,
+              !isSupervisingRecording,
               activeNotificationResponses == 0,
               launchIntent == .transientOpenWith || launchIntent == .backgroundWake else { return }
 

@@ -6,7 +6,7 @@
 
 Apple Music 重型工具链必须由 `GetOudioAMRuntimeAgent` 管理。启用流程按 Colima、Lima/limactl、Docker CLI、GPAC/MP4Box、wrapper image 五个组件推进；每个组件先验证 managed 文件，失败才重装。安装完成可清理安装包、`.part`、解包目录和可重新获取的 Colima 基础镜像缓存；卸载只清理 managed runtime、短路径 VM 状态、容器及 wrapper 数据，绝不删除用户输出目录。
 
-下载使用 `downloads/*.part` 断点续传。curl 只承担单次传输，不使用 `--retry` 或 `--retry-all-errors`；重试由 Swift 控制，并确认 `.part` 没有异常缩小。Colima/Lima socket 受 `UNIX_PATH_MAX` 限制，`COLIMA_HOME` 与 `LIMA_HOME` 必须使用短路径 `~/Library/Caches/GetOudio/Colima` 和 `~/Library/Caches/GetOudio/Lima`；`limactl` 必须带 `com.apple.security.virtualization` entitlement。Docker 静态包顶层存在同名 `docker` 目录，查找可执行文件时必须验证候选是常规文件，不能只检查名称或 `isExecutableFile`。
+下载使用 `downloads/*.part` 断点续传。curl 只承担单次传输，不使用 `--retry` 或 `--retry-all-errors`；重试由 Swift 控制，并确认 `.part` 没有异常缩小。Colima/Lima socket 受 `UNIX_PATH_MAX` 限制，`COLIMA_HOME` 与 `LIMA_HOME` 必须使用既持久又短的 `~/Library/Application Support/GetOudio/AM/Colima` 和 `~/Library/Application Support/GetOudio/AM/Lima`，不得改回可被清理的 `Caches`；`limactl` 必须带 `com.apple.security.virtualization` entitlement。Docker 静态包顶层存在同名 `docker` 目录，查找可执行文件时必须验证候选是常规文件，不能只检查名称或 `isExecutableFile`。
 
 ## Wrapper State and Credentials
 

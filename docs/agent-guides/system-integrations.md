@@ -2,6 +2,12 @@
 
 本指南适用于 Finder Sync、Share Extension、文件分类、默认打开方式和外置磁盘权限改动。相关行为必须从当前 `FileCategory`、`FinderSync.swift`、`ShareExtension`、`DefaultOpenWithService`、`SettingsStore` 和 `project.yml` 复核。
 
+## Pro Tools Audio Bridge Recording
+
+录音源只支持用户在设置页选定的 `Pro Tools Audio Bridge 2-A` 或 `2-B`，持久化设备 UID，运行时重新解析 AudioDeviceID。开始录音时只修改 `kAudioHardwarePropertyDefaultOutputDevice`，不得修改系统提醒音使用的 `kAudioHardwarePropertyDefaultSystemOutputDevice`；监听输出固定使用切换前的默认媒体输出。源设备或监听设备断开、系统睡眠、磁盘写入失败或实时缓冲溢出均应汇入同一个幂等停止流程并恢复原输出。
+
+Widget 只通过 App Group 读取 `RecordingSessionSnapshot` 并打开 `getoudio://recording/toggle`，不能持有音频引擎。录音临时文件位于共享容器的 `Library/Caches/Recordings`；自定义目录必须使用 security-scoped bookmark，转移失败时保留缓存成品。剪贴板写文件 URL，不写整份 PCM 数据。
+
 ## Finder Sync
 
 Finder Sync 的可见性首先由 `FIFinderSyncController.default().directoryURLs` 的监听目录决定，并不像 Share Extension 那样按内容类型精确激活；`menu(for:)` 是最终菜单可见性边界。选择项经 `FileCategory.classify(_:)` 过滤后若没有可处理的 audio、video 或 ncm 文件，必须返回 `nil`，不能返回带禁用项的 `NSMenu`。目录背景、侧边栏和其他非文件选择默认同样返回 `nil`；混选可仅处理支持文件，但不能扩大到目录、压缩包或普通文档。

@@ -3,6 +3,260 @@ import XCTest
 @testable import GetOudioCore
 
 final class GetOudioCoreTests: XCTestCase {
+    func testSupportedAudioBridgeRequiresKnownStereoDevice() {
+        XCTAssertTrue(AudioDeviceDescriptor(
+            uid: "bridge-a",
+            name: "Pro Tools Audio Bridge 2-A",
+            inputChannelCount: 2,
+            outputChannelCount: 2,
+            nominalSampleRate: 48_000
+        ).isSupportedProToolsAudioBridge)
+        XCTAssertFalse(AudioDeviceDescriptor(
+            uid: "bridge-16",
+            name: "Pro Tools Audio Bridge 16",
+            inputChannelCount: 16,
+            outputChannelCount: 16,
+            nominalSampleRate: 48_000
+        ).isSupportedProToolsAudioBridge)
+    }
+
+    func testRecordingControlStorePersistsStateAndDrainsCommandsOnce() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = try RecordingControlStore(rootURL: root)
+        let snapshot = RecordingSessionSnapshot(phase: .recording, runnerPID: 42)
+        try store.save(snapshot)
+        try store.enqueue(.start)
+        try store.enqueue(.stop)
+
+        XCTAssertEqual(store.snapshot(), snapshot)
+        XCTAssertEqual(store.drainCommands().map(\.kind), [.start, .stop])
+        XCTAssertTrue(store.drainCommands().isEmpty)
+    }
+
+    func testRecordingControlStoreReservesOnlyOneConcurrentStart() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let firstStore = try RecordingControlStore(rootURL: root)
+        let secondStore = try RecordingControlStore(rootURL: root)
+
+        let reservation = try XCTUnwrap(firstStore.reserveStart())
+        XCTAssertEqual(reservation.phase, .starting)
+        XCTAssertEqual(secondStore.snapshot(), reservation)
+        XCTAssertNil(try secondStore.reserveStart())
+        XCTAssertEqual(secondStore.drainCommands().map(\.kind), [.start])
+        XCTAssertTrue(firstStore.drainCommands().isEmpty)
+    }
+
+    func testRecordingCacheEvictsOldestCompletedFile() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let cache = try RecordingCacheStore(directoryURL: root)
+        let old = root.appendingPathComponent("old.wav")
+        let current = root.appendingPathComponent("current.wav")
+        try Data(repeating: 1, count: 8).write(to: old)
+        try Data(repeating: 2, count: 8).write(to: current)
+        try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSince1970: 1)], ofItemAtPath: old.path)
+
+        let removed = cache.enforceLimit(8, protecting: current)
+        XCTAssertEqual(removed.map(\.lastPathComponent), [old.lastPathComponent])
+        XCTAssertFalse(FileManager.default.fileExists(atPath: old.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: current.path))
+    }
+
+    func testRecordingCacheUsesCompactTimestampAndUUIDPrefixInTemporaryFileName() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let cache = try RecordingCacheStore(directoryURL: root)
+        let now = try XCTUnwrap(Calendar.current.date(from: DateComponents(
+            year: 2026,
+            month: 7,
+            day: 13,
+            hour: 14,
+            minute: 30,
+            second: 45
+        )))
+        let id = try XCTUnwrap(UUID(uuidString: "A1B2C3D4-E5F6-4718-9ABC-DEF012345678"))
+
+        let url = cache.makeTemporaryFileURL(now: now, id: id)
+
+        XCTAssertEqual(url.lastPathComponent, "260713-143045 [GetOudioRec. A1B2C3D4].wav.part")
+    }
+
+    func testRecordingCacheAtomicallyReplacesOnlyAfterProcessedStagingExists() throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let cache = try RecordingCacheStore(directoryURL: root)
+        let original = root.appendingPathComponent("recording.wav")
+        let staging = root.appendingPathComponent(".recording.wav.processing")
+        try Data("raw".utf8).write(to: original)
+        try Data("processed".utf8).write(to: staging)
+
+        let result = try cache.replaceCompletedFile(at: original, with: staging)
+
+        XCTAssertEqual(result, original)
+        XCTAssertEqual(try Data(contentsOf: original), Data("processed".utf8))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: staging.path))
+        XCTAssertFalse(try FileManager.default.contentsOfDirectory(atPath: root.path).contains { $0.contains("raw-backup") })
+    }
+
+    func testRecordingWAVWriterCreatesRecoverable24BitHeader() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let url = root.appendingPathComponent("recording.wav.part")
+        let writer = try RecordingWAVWriter(url: url, sampleRate: 48_000, channelCount: 2)
+        let samples: [Float] = [0, 0.5, -0.5, 0.25]
+        try samples.withUnsafeBufferPointer {
+            try writer.write(planarSamples: $0.baseAddress!, frameCount: 2, planeStride: 2)
+        }
+        try writer.finalize()
+
+        let data = try Data(contentsOf: url)
+        XCTAssertEqual(String(data: data[0..<4], encoding: .ascii), "RIFF")
+        XCTAssertEqual(String(data: data[48..<52], encoding: .ascii), "fmt ")
+        XCTAssertEqual(String(data: data[72..<76], encoding: .ascii), "data")
+        XCTAssertEqual(data.count, Int(RecordingWAVWriter.headerSize) + 12)
+    }
+
+    func testRecordingWAVWriterUsesRF64ForLargePayloads() throws {
+        let header = try RecordingWAVWriter.headerData(
+            dataByteCount: UInt64(UInt32.max),
+            sampleRate: 48_000,
+            channelCount: 2
+        )
+        XCTAssertEqual(String(data: header[0..<4], encoding: .ascii), "RF64")
+        XCTAssertEqual(String(data: header[12..<16], encoding: .ascii), "ds64")
+        XCTAssertEqual(header[4..<8], Data(repeating: 0xFF, count: 4))
+        XCTAssertEqual(header[76..<80], Data(repeating: 0xFF, count: 4))
+    }
+
+    func testRecordingPostProcessingOptionsPersistAndClampValues() {
+        let suiteName = "GetOudioCoreTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let store = SettingsStore(defaults: defaults)
+
+        XCTAssertEqual(store.recordingPostProcessingOptions, RecordingPostProcessingOptions())
+        store.recordingPostProcessingOptions = RecordingPostProcessingOptions(
+            trimsSilence: true,
+            normalizesPeak: true,
+            silenceThresholdDBFS: -140,
+            silencePaddingMilliseconds: 4_000
+        )
+
+        XCTAssertEqual(store.recordingPostProcessingOptions.trimsSilence, true)
+        XCTAssertEqual(store.recordingPostProcessingOptions.normalizesPeak, true)
+        XCTAssertEqual(store.recordingPostProcessingOptions.silenceThresholdDBFS, -90)
+        XCTAssertEqual(store.recordingPostProcessingOptions.silencePaddingMilliseconds, 1_000)
+        XCTAssertEqual(RecordingPostProcessingOptions(silenceThresholdDBFS: 10).silenceThresholdDBFS, 0)
+    }
+
+    func testRecordingPostProcessorTrimsOnlyOuterSilenceAndKeepsPadding() throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let input = root.appendingPathComponent("recording.wav")
+        try writePCM24Recording(
+            at: input,
+            sampleRate: 1_000,
+            frames: [[0, 0], [0, 0], [0, 0], [100_000, 0], [0, -150_000], [0, 0], [0, 0], [0, 0]]
+        )
+
+        let result = RecordingPostProcessor().process(
+            recordingURL: input,
+            options: RecordingPostProcessingOptions(
+                trimsSilence: true,
+                silencePaddingMilliseconds: 1
+            )
+        )
+        let output = try processedURL(from: result)
+        defer { try? FileManager.default.removeItem(at: output) }
+
+        XCTAssertEqual(readPCM24Frames(at: output), [[0, 0], [100_000, 0], [0, -150_000], [0, 0]])
+    }
+
+    func testRecordingPostProcessorTreatsFrameAsSilentOnlyWhenAllChannelsAreBelowThreshold() throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let input = root.appendingPathComponent("recording.wav")
+        try writePCM24Recording(at: input, sampleRate: 1_000, frames: [[0, 0], [80_000, 0], [0, 0]])
+
+        let result = RecordingPostProcessor().process(
+            recordingURL: input,
+            options: RecordingPostProcessingOptions(trimsSilence: true, silencePaddingMilliseconds: 0)
+        )
+        let output = try processedURL(from: result)
+        defer { try? FileManager.default.removeItem(at: output) }
+
+        XCTAssertEqual(readPCM24Frames(at: output), [[80_000, 0]])
+    }
+
+    func testRecordingPostProcessorNormalizesPeakWithoutClipping() throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let input = root.appendingPathComponent("recording.wav")
+        try writePCM24Recording(at: input, sampleRate: 48_000, frames: [[1_000, -2_000], [4_000, -3_000]])
+
+        let result = RecordingPostProcessor().process(
+            recordingURL: input,
+            options: RecordingPostProcessingOptions(normalizesPeak: true)
+        )
+        let output = try processedURL(from: result)
+        defer { try? FileManager.default.removeItem(at: output) }
+
+        let peak = readPCM24Frames(at: output).flatMap { $0 }.map { abs(Int($0)) }.max()!
+        let expected = Int((pow(10, RecordingPostProcessingOptions.normalizedPeakDBFS / 20) * 8_388_608).rounded())
+        XCTAssertLessThanOrEqual(abs(peak - expected), 1)
+        XCTAssertLessThanOrEqual(peak, 8_388_607)
+    }
+
+    func testRecordingPostProcessorKeepsOriginalForAllSilentOrInvalidInput() throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let silent = root.appendingPathComponent("silent.wav")
+        try writePCM24Recording(at: silent, sampleRate: 48_000, frames: [[0, 0], [0, 0]])
+        let originalData = try Data(contentsOf: silent)
+        let options = RecordingPostProcessingOptions(trimsSilence: true, normalizesPeak: true)
+
+        let silentResult = RecordingPostProcessor().process(recordingURL: silent, options: options)
+        XCTAssertEqual(silentResult, .keptOriginal(message: "检测到全程静音，已保留原始录音。"))
+        XCTAssertEqual(try Data(contentsOf: silent), originalData)
+
+        let invalid = root.appendingPathComponent("invalid.wav")
+        try Data("invalid".utf8).write(to: invalid)
+        guard case .keptOriginal(let message) = RecordingPostProcessor().process(recordingURL: invalid, options: options) else {
+            return XCTFail("Invalid input must retain the original file")
+        }
+        XCTAssertTrue(message?.contains("已保留原始录音") == true)
+    }
+
+    func testRecordingPostProcessorLeavesRecordingUntouchedWhenDisabled() throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let input = root.appendingPathComponent("recording.wav")
+        try writePCM24Recording(at: input, sampleRate: 48_000, frames: [[100_000, -100_000]])
+        let originalData = try Data(contentsOf: input)
+
+        let result = RecordingPostProcessor().process(recordingURL: input, options: RecordingPostProcessingOptions())
+
+        XCTAssertEqual(result, .keptOriginal(message: nil))
+        XCTAssertEqual(try Data(contentsOf: input), originalData)
+    }
+
+    func testRecordingPostProcessorAcceptsRF64Header() throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let input = root.appendingPathComponent("recording.wav")
+        try writePCM24Recording(at: input, sampleRate: 48_000, frames: [[8_000, 0]], asRF64: true)
+
+        let result = RecordingPostProcessor().process(
+            recordingURL: input,
+            options: RecordingPostProcessingOptions(normalizesPeak: true)
+        )
+        let output = try processedURL(from: result)
+        defer { try? FileManager.default.removeItem(at: output) }
+        XCTAssertEqual(readPCM24Frames(at: output).count, 1)
+    }
     func testAACPresetBuildsExpectedOutputAndArguments() throws {
         let input = URL(fileURLWithPath: "/tmp/song.flac")
         let preset = ConversionPreset.aac320
@@ -913,6 +1167,13 @@ final class GetOudioCoreTests: XCTestCase {
         XCTAssertEqual(manager.runtimeEnvironment()["LIMA_HOME"], limaHome.path)
     }
 
+    func testAppleMusicRuntimeUsesPersistentShortApplicationSupportDirectoryForVMState() {
+        let expected = SettingsStore.realUserHomeDirectory()
+            .appendingPathComponent("Library/Application Support/GetOudio/AM", isDirectory: true)
+
+        XCTAssertEqual(AppleMusicRuntimeManager.defaultVMStateRootURL, expected)
+    }
+
     func testAppleMusicRuntimeHasOfficialDefaultGPACPackage() {
         XCTAssertEqual(
             AppleMusicRuntimeManager.gpacDefaultPackageURL.absoluteString,
@@ -1166,5 +1427,71 @@ final class GetOudioCoreTests: XCTestCase {
 
         XCTAssertNotNil(applicationURL)
         XCTAssertEqual(applicationURL?.lastPathComponent, AppleMusicRuntimeAgentClient.applicationBundleName)
+    }
+
+    private func makeTemporaryDirectory() throws -> URL {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+
+    private func writePCM24Recording(
+        at url: URL,
+        sampleRate: Double,
+        frames: [[Int32]],
+        asRF64: Bool = false
+    ) throws {
+        let channelCount = try XCTUnwrap(frames.first?.count)
+        XCTAssertTrue(frames.allSatisfy { $0.count == channelCount })
+        var payload = Data()
+        for frame in frames {
+            for sample in frame {
+                payload.append(UInt8(truncatingIfNeeded: sample))
+                payload.append(UInt8(truncatingIfNeeded: sample >> 8))
+                payload.append(UInt8(truncatingIfNeeded: sample >> 16))
+            }
+        }
+        var header: Data
+        if asRF64 {
+            header = try RecordingWAVWriter.headerData(
+                dataByteCount: UInt64(UInt32.max),
+                sampleRate: sampleRate,
+                channelCount: channelCount
+            )
+            writeUInt64LE(UInt64(payload.count), into: &header, at: 28)
+        } else {
+            header = try RecordingWAVWriter.headerData(
+                dataByteCount: UInt64(payload.count),
+                sampleRate: sampleRate,
+                channelCount: channelCount
+            )
+        }
+        header.append(payload)
+        try header.write(to: url)
+    }
+
+    private func readPCM24Frames(at url: URL) -> [[Int32]] {
+        let data = try! Data(contentsOf: url)
+        let channelCount = Int(UInt16(data[58]) | UInt16(data[59]) << 8)
+        return stride(from: Int(RecordingWAVWriter.headerSize), to: data.count, by: channelCount * 3).map { frameOffset in
+            (0..<channelCount).map { channel in
+                let offset = frameOffset + channel * 3
+                let value = Int32(data[offset]) | Int32(data[offset + 1]) << 8 | Int32(data[offset + 2]) << 16
+                return value & 0x80_0000 == 0 ? value : value | ~0xFF_FFFF
+            }
+        }
+    }
+
+    private func processedURL(from result: RecordingPostProcessingResult) throws -> URL {
+        guard case .processed(let url) = result else {
+            throw XCTSkip("Expected a processed recording, received \(result)")
+        }
+        return url
+    }
+
+    private func writeUInt64LE(_ value: UInt64, into data: inout Data, at offset: Int) {
+        for index in 0..<8 {
+            data[offset + index] = UInt8(truncatingIfNeeded: value >> UInt64(index * 8))
+        }
     }
 }

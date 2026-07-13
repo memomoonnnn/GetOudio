@@ -13,12 +13,16 @@
 		0D20ED1C18BE4AAD9EE1311C /* NotificationEventQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21A23B92406F8183901D2051 /* NotificationEventQueue.swift */; };
 		0E537BFEFE1F926149378250 /* MainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DC8B37B7E84B3163CBDECF5 /* MainView.swift */; };
 		10E03364A2A9B61054AF7D07 /* FinderDirectorySettingsModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A94521F544FCDABB87C3F99 /* FinderDirectorySettingsModel.swift */; };
+		121D90F7D8FBF9A113ADF5C5 /* RecordingDeviceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9F6F4CA81B28E94AA9E564E /* RecordingDeviceService.swift */; };
 		1275386606BDFC5FA9E31D62 /* GetOudioCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 49BFF2708ED14CF05FA36161 /* GetOudioCore.framework */; };
 		1361F214AA8EAF0ACE04658B /* DefaultOpenWithService.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECC45B39B4FFC5F6D7ECA9FE /* DefaultOpenWithService.swift */; };
 		1830DE3F5D6F7D43C5BC7923 /* NCMConversionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5824B80AB71359FF2011C2E0 /* NCMConversionService.swift */; };
 		1A5F3EF77607777EBD03007A /* AppleMusicDownloaderProgressParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = C74C0865C3389B8416877170 /* AppleMusicDownloaderProgressParser.swift */; };
 		1E2BA6165226BFEB0082B779 /* SettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 277323E37349CB4F0E1FDA52 /* SettingsStore.swift */; };
 		1E4668A8BDB0F2F9431B77C9 /* SharedContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07E142F989021D191723AA81 /* SharedContainer.swift */; };
+		1E9191B3E677C0102F72FD37 /* RecordingControlSignal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48883A23F3BC9324B757C5A7 /* RecordingControlSignal.swift */; };
+		1E9E000750F0441C8B6E597C /* RecordingRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD195C4FD5DAEAF01DF5F7F8 /* RecordingRunner.swift */; };
+		2016D2B8F9510905D707F2FD /* RecordingControlStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B593C74C28A406CC8D596CF7 /* RecordingControlStore.swift */; };
 		21909135C633A36CA4A2EBCA /* SettingsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E935EA0A23172AF7AE10BEB /* SettingsViewModel.swift */; };
 		28D57F1082E7B71F53AB415F /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CEC2CD73CA5DB57DD39B2D2 /* DashboardView.swift */; };
 		299ADABA555847D6E5F92734 /* GetOudioCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 49BFF2708ED14CF05FA36161 /* GetOudioCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -27,11 +31,16 @@
 		2F9FB03C3C2FD83ADA63BE09 /* HeadlessRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1435730CBD8D1117C241A57D /* HeadlessRunner.swift */; };
 		3588567EC971BABD0CD8BDEE /* AppleMusicWrapperRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCD1166F4ECCEF206816E275 /* AppleMusicWrapperRuntime.swift */; };
 		3629BE86D263E7B1F003F248 /* AgentMain.swift in Sources */ = {isa = PBXBuildFile; fileRef = F194F1D1BF8520F04C51A8C1 /* AgentMain.swift */; };
+		36ADCAFBE37257E1CF3D1A98 /* GetOudioRecordingWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 02A2B6CA70B65148819F2CF4 /* GetOudioRecordingWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		38433545DB5236C9997DC357 /* JobIntake.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6C5A2F4790C8793FAFE44BD /* JobIntake.swift */; };
 		3AD5723738429067C46F5E53 /* apple-music-downloader in Resources */ = {isa = PBXBuildFile; fileRef = 944D0886B6ADDE240A0D8BFB /* apple-music-downloader */; };
 		3C4CA233D572B5BA3D1A397F /* ncmdump in Resources */ = {isa = PBXBuildFile; fileRef = F806E2D0D02BD05E19A347FF /* ncmdump */; };
+		3DE68FDA8368952A53A2EE42 /* RecordingPostProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2899287901CD702A941CC53 /* RecordingPostProcessor.swift */; };
 		4033D26C1DA591C4CEBBD6CC /* GetOudioCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 49BFF2708ED14CF05FA36161 /* GetOudioCore.framework */; };
+		4709C5E1FD137B4268A82CDA /* GetOudioCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 49BFF2708ED14CF05FA36161 /* GetOudioCore.framework */; };
 		4AA1533CE03FF44C8D8BAA04 /* GetOudioShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 43638432B32307180F0DC2FD /* GetOudioShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		4AE0B79B95D90362389C3B5B /* RecordingAudioSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77EEDFE3B80A0F69EECC7FD9 /* RecordingAudioSession.swift */; };
+		4C783E5BB49510ECF7C5ACE6 /* RecordingCacheStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FC52E3CF16013007C7B9E39 /* RecordingCacheStore.swift */; };
 		4C929C5B97ADD1C16FFF5544 /* GetOudioCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 49BFF2708ED14CF05FA36161 /* GetOudioCore.framework */; };
 		4F57CEC14D119E7A78D11488 /* NCMFileIcon.icns in Resources */ = {isa = PBXBuildFile; fileRef = 7277FA0381ED5023AA2D587E /* NCMFileIcon.icns */; };
 		4F96746273724F3BDA14439E /* AppleMusicShareDownloadCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 730C0C3FEA5DE504A597E570 /* AppleMusicShareDownloadCoordinator.swift */; };
@@ -39,7 +48,9 @@
 		553A9EBFF18953287DAE4119 /* FinderSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 260A59E1B28DDC4E921E9C39 /* FinderSync.swift */; };
 		5AF71DB85909A76FAC7A896C /* icon.icns in Resources */ = {isa = PBXBuildFile; fileRef = 4FA258C519946194B2323E80 /* icon.icns */; };
 		627CEBE7088E7474514D3D37 /* GetOudioCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 49BFF2708ED14CF05FA36161 /* GetOudioCore.framework */; };
+		6785036FFE17401D61B71443 /* RecordingModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = D94A0E0E7F949921430BF7D1 /* RecordingModels.swift */; };
 		6E9FE41DFB6BDAA6FB845C9A /* DefaultOpenWithSettingsModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A7B57EFCFA3995627C9AC08 /* DefaultOpenWithSettingsModel.swift */; };
+		7C73FEDF4413764535AACF08 /* RecordingControlCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A95CE7C9241DA7A29C3C277 /* RecordingControlCoordinator.swift */; };
 		7E091D7050D2D90DC030B7FA /* ProcessRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D9341EFFB773C117429DF56 /* ProcessRunner.swift */; };
 		7E4140D91A905E5B8076794C /* AppConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74D3AADF75639B9295A0B4BF /* AppConstants.swift */; };
 		7ED8DE418C76BCDE5276D98A /* AppleMusicRuntimeAgentLauncher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24D6241F048302C55FF222E9 /* AppleMusicRuntimeAgentLauncher.swift */; };
@@ -52,6 +63,7 @@
 		91E4AFF82D841A7EC3CAEE5C /* FileCategory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4092C290A220FE1E53D899C9 /* FileCategory.swift */; };
 		93C6BE7D8BA717C02E07961C /* GetOudioCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 49BFF2708ED14CF05FA36161 /* GetOudioCore.framework */; };
 		9592ABD5238190A0FECF2673 /* AppleMusicRuntimeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9C68E3D12622013AF3CB161 /* AppleMusicRuntimeManager.swift */; };
+		9842A7C37AD50688EED63C16 /* RecordingWAVWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7A6DA16595F336C14E58DFD /* RecordingWAVWriter.swift */; };
 		995A3254ABC5325D7D583905 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D84480E867AAD02E3F55067 /* main.swift */; };
 		9A58A40606282A3F920A071F /* MainSettingsPages.swift in Sources */ = {isa = PBXBuildFile; fileRef = C63E67A469198DCFAAEF52A5 /* MainSettingsPages.swift */; };
 		A111098435FEDCDDCA524720 /* LayoutConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76995440FD4DFA28DBA35A05 /* LayoutConstants.swift */; };
@@ -70,6 +82,8 @@
 		D0471A3CCE40DBACF8511587 /* ffmpeg in Resources */ = {isa = PBXBuildFile; fileRef = 4AD5E91E2A5C903C19F28C4E /* ffmpeg */; };
 		D3B2A574D58BB6A994DDC271 /* Dependency.swift in Sources */ = {isa = PBXBuildFile; fileRef = 218718BFCE1EB8C4B99AED9F /* Dependency.swift */; };
 		D52AE571DC64BBCF63A285E3 /* MediaExtractionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF11B1E80B3F43236531D6A8 /* MediaExtractionService.swift */; };
+		D58FF2BD12778EF0B6E674D5 /* RecordingWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11CE5B6DE261238024CBD28E /* RecordingWidget.swift */; };
+		D77ABFA086DA60B93B9E7633 /* RecordingSettingsModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 435B034A4E419E3458A83202 /* RecordingSettingsModel.swift */; };
 		DD1D825184E9AD2BDC9822F4 /* AppleMusicSettingsModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4EDD5FB0848FAF0C36888A6 /* AppleMusicSettingsModel.swift */; };
 		DE31BC37B7DA0B57A7594782 /* AppleMusicDownloadService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BB207379790847AB20869D3 /* AppleMusicDownloadService.swift */; };
 		DE40E324B1CCD0A87D29DBD9 /* ShareEventQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6687368FC009B08493D049E3 /* ShareEventQueue.swift */; };
@@ -92,12 +106,26 @@
 			remoteGlobalIDString = DCCB63A986CE40B8EBFBE2CF;
 			remoteInfo = GetOudioFinderExtension;
 		};
+		1079703D2D911B2CA5B3EE92 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 765A5E52E8CEDAD270702356 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = F9246AF6FE72CF2A656008F0;
+			remoteInfo = GetOudioCore;
+		};
 		4C06EF9BE372E507D05BE5FE /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 765A5E52E8CEDAD270702356 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = F9246AF6FE72CF2A656008F0;
 			remoteInfo = GetOudioCore;
+		};
+		56427D69D8E38127E26243A5 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 765A5E52E8CEDAD270702356 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = FA5B60D0E1543BDB366F8B32;
+			remoteInfo = GetOudioRecordingWidget;
 		};
 		AE19CF3B690919C60D79BBC8 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -174,6 +202,7 @@
 			files = (
 				80A877F95C99E226655664B6 /* GetOudioFinderExtension.appex in Embed Foundation Extensions */,
 				4AA1533CE03FF44C8D8BAA04 /* GetOudioShareExtension.appex in Embed Foundation Extensions */,
+				36ADCAFBE37257E1CF3D1A98 /* GetOudioRecordingWidget.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -192,11 +221,13 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		02A2B6CA70B65148819F2CF4 /* GetOudioRecordingWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = GetOudioRecordingWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		0709132ABB400330E134F753 /* GetOudio.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GetOudio.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		07A513B3F5F8C121D7D1145B /* ShareExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareExtension.swift; sourceTree = "<group>"; };
 		07E142F989021D191723AA81 /* SharedContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedContainer.swift; sourceTree = "<group>"; };
 		0BB207379790847AB20869D3 /* AppleMusicDownloadService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleMusicDownloadService.swift; sourceTree = "<group>"; };
 		0DC8B37B7E84B3163CBDECF5 /* MainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainView.swift; sourceTree = "<group>"; };
+		11CE5B6DE261238024CBD28E /* RecordingWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingWidget.swift; sourceTree = "<group>"; };
 		13B4DFE9D95E437DC5C2FDBF /* ConversionActionFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversionActionFactory.swift; sourceTree = "<group>"; };
 		1435730CBD8D1117C241A57D /* HeadlessRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeadlessRunner.swift; sourceTree = "<group>"; };
 		1A77C371986D7FC6E0D024B5 /* OpenWithPresetMenuController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenWithPresetMenuController.swift; sourceTree = "<group>"; };
@@ -209,12 +240,16 @@
 		280B0F7AC8A13D4928A4F3EF /* SystemExtensionSettingsModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemExtensionSettingsModel.swift; sourceTree = "<group>"; };
 		2D140BDEF696D4BCE7EDDCBB /* NCMSettingsModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NCMSettingsModel.swift; sourceTree = "<group>"; };
 		2D84480E867AAD02E3F55067 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
+		2FC52E3CF16013007C7B9E39 /* RecordingCacheStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingCacheStore.swift; sourceTree = "<group>"; };
 		323FD01C817E384689C4EAA8 /* AppleMusicRuntimeAgentClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleMusicRuntimeAgentClient.swift; sourceTree = "<group>"; };
 		3478CDBAC14F45447AB23C23 /* Fonts */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Fonts; path = GetOudio/Resources/Fonts; sourceTree = SOURCE_ROOT; };
 		4092C290A220FE1E53D899C9 /* FileCategory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileCategory.swift; sourceTree = "<group>"; };
+		435B034A4E419E3458A83202 /* RecordingSettingsModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingSettingsModel.swift; sourceTree = "<group>"; };
 		43638432B32307180F0DC2FD /* GetOudioShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = GetOudioShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		45B8F600ED7CF7F3BC4E8D67 /* DirectoryChooser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DirectoryChooser.swift; sourceTree = "<group>"; };
+		48883A23F3BC9324B757C5A7 /* RecordingControlSignal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingControlSignal.swift; sourceTree = "<group>"; };
 		49BFF2708ED14CF05FA36161 /* GetOudioCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = GetOudioCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		4A95CE7C9241DA7A29C3C277 /* RecordingControlCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingControlCoordinator.swift; sourceTree = "<group>"; };
 		4AD5E91E2A5C903C19F28C4E /* ffmpeg */ = {isa = PBXFileReference; lastKnownFileType = folder; name = ffmpeg; path = GetOudio/Resources/ThirdParty/ffmpeg; sourceTree = SOURCE_ROOT; };
 		4BF24B8150C8DA146AEE6312 /* GetOudioCoreTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GetOudioCoreTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		4FA258C519946194B2323E80 /* icon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = icon.icns; sourceTree = "<group>"; };
@@ -230,6 +265,7 @@
 		730C0C3FEA5DE504A597E570 /* AppleMusicShareDownloadCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleMusicShareDownloadCoordinator.swift; sourceTree = "<group>"; };
 		74D3AADF75639B9295A0B4BF /* AppConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConstants.swift; sourceTree = "<group>"; };
 		76995440FD4DFA28DBA35A05 /* LayoutConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayoutConstants.swift; sourceTree = "<group>"; };
+		77EEDFE3B80A0F69EECC7FD9 /* RecordingAudioSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingAudioSession.swift; sourceTree = "<group>"; };
 		78BBD92AC5CAECA405A07511 /* Documentation */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Documentation; path = GetOudio/Resources/Documentation; sourceTree = SOURCE_ROOT; };
 		7E935EA0A23172AF7AE10BEB /* SettingsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsViewModel.swift; sourceTree = "<group>"; };
 		7F29A548AD0635BE90D34456 /* JobQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JobQueue.swift; sourceTree = "<group>"; };
@@ -248,13 +284,19 @@
 		96C485724CAA57FDA4F744D0 /* ConversionPreset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversionPreset.swift; sourceTree = "<group>"; };
 		9CEC2CD73CA5DB57DD39B2D2 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
 		A31E47AC388151B7BA99BFE6 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
+		A7A6DA16595F336C14E58DFD /* RecordingWAVWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingWAVWriter.swift; sourceTree = "<group>"; };
+		B593C74C28A406CC8D596CF7 /* RecordingControlStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingControlStore.swift; sourceTree = "<group>"; };
 		B9C68E3D12622013AF3CB161 /* AppleMusicRuntimeManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleMusicRuntimeManager.swift; sourceTree = "<group>"; };
+		B9F6F4CA81B28E94AA9E564E /* RecordingDeviceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingDeviceService.swift; sourceTree = "<group>"; };
 		C43975B92D52741C9A75DC77 /* GetOudioCoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GetOudioCoreTests.swift; sourceTree = "<group>"; };
 		C63E67A469198DCFAAEF52A5 /* MainSettingsPages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainSettingsPages.swift; sourceTree = "<group>"; };
 		C74C0865C3389B8416877170 /* AppleMusicDownloaderProgressParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleMusicDownloaderProgressParser.swift; sourceTree = "<group>"; };
+		D94A0E0E7F949921430BF7D1 /* RecordingModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingModels.swift; sourceTree = "<group>"; };
 		DBB5D4A69A9524F2BF4087DB /* PresetSettingsModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresetSettingsModel.swift; sourceTree = "<group>"; };
 		DCD1166F4ECCEF206816E275 /* AppleMusicWrapperRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleMusicWrapperRuntime.swift; sourceTree = "<group>"; };
+		DD195C4FD5DAEAF01DF5F7F8 /* RecordingRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingRunner.swift; sourceTree = "<group>"; };
 		DF11B1E80B3F43236531D6A8 /* MediaExtractionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaExtractionService.swift; sourceTree = "<group>"; };
+		E2899287901CD702A941CC53 /* RecordingPostProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingPostProcessor.swift; sourceTree = "<group>"; };
 		E6C5A2F4790C8793FAFE44BD /* JobIntake.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JobIntake.swift; sourceTree = "<group>"; };
 		E71B1DAE2F34CAAE4261B2F0 /* GetOudioFinderExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = GetOudioFinderExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		ECC45B39B4FFC5F6D7ECA9FE /* DefaultOpenWithService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefaultOpenWithService.swift; sourceTree = "<group>"; };
@@ -267,6 +309,14 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		0B8A49D27D64727331670B93 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4709C5E1FD137B4268A82CDA /* GetOudioCore.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		6792A374FE018BEA645D12FC /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -337,6 +387,8 @@
 				8E1B72668091E326BEC5A293 /* Notifications.swift */,
 				8D142844D21B63D852AD8F4B /* OpenWithJobDispatcher.swift */,
 				1A77C371986D7FC6E0D024B5 /* OpenWithPresetMenuController.swift */,
+				77EEDFE3B80A0F69EECC7FD9 /* RecordingAudioSession.swift */,
+				DD195C4FD5DAEAF01DF5F7F8 /* RecordingRunner.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -349,6 +401,7 @@
 				4092C290A220FE1E53D899C9 /* FileCategory.swift */,
 				968CA7DFC4B0913F91E093B7 /* JobProgressPhase.swift */,
 				830E304F412F81F410B833C8 /* JobRequest.swift */,
+				D94A0E0E7F949921430BF7D1 /* RecordingModels.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -370,6 +423,7 @@
 				49BFF2708ED14CF05FA36161 /* GetOudioCore.framework */,
 				4BF24B8150C8DA146AEE6312 /* GetOudioCoreTests.xctest */,
 				E71B1DAE2F34CAAE4261B2F0 /* GetOudioFinderExtension.appex */,
+				02A2B6CA70B65148819F2CF4 /* GetOudioRecordingWidget.appex */,
 				43638432B32307180F0DC2FD /* GetOudioShareExtension.appex */,
 			);
 			name = Products;
@@ -402,6 +456,7 @@
 				102DB913D423C375B2A61053 /* GetOudioAMRuntimeAgent */,
 				3D8FEB326FADC416A892FA56 /* GetOudioCore */,
 				7F17B539629433A1A728EEE5 /* GetOudioFinderExtension */,
+				7B47EF2B719E376B3335A0FB /* GetOudioRecordingWidget */,
 				BF7D3B8E69C5A4127940CBC2 /* GetOudioShareExtension */,
 				3DF77C990D8B349B2D007F07 /* Products */,
 			);
@@ -414,6 +469,14 @@
 				4FA258C519946194B2323E80 /* icon.icns */,
 			);
 			path = Resources;
+			sourceTree = "<group>";
+		};
+		5E8AD2939739349216FF209C /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				11CE5B6DE261238024CBD28E /* RecordingWidget.swift */,
+			);
+			path = Sources;
 			sourceTree = "<group>";
 		};
 		64FBBF7F800201068EC00DBE /* Services */ = {
@@ -439,6 +502,10 @@
 				A31E47AC388151B7BA99BFE6 /* NotificationService.swift */,
 				8E499867F50B2D0BF3348EE4 /* PendingAppleMusicDownloadStore.swift */,
 				8D9341EFFB773C117429DF56 /* ProcessRunner.swift */,
+				2FC52E3CF16013007C7B9E39 /* RecordingCacheStore.swift */,
+				B593C74C28A406CC8D596CF7 /* RecordingControlStore.swift */,
+				E2899287901CD702A941CC53 /* RecordingPostProcessor.swift */,
+				A7A6DA16595F336C14E58DFD /* RecordingWAVWriter.swift */,
 				277323E37349CB4F0E1FDA52 /* SettingsStore.swift */,
 				6687368FC009B08493D049E3 /* ShareEventQueue.swift */,
 			);
@@ -454,6 +521,14 @@
 				AC8830FC087B510324BC7887 /* Views */,
 			);
 			path = GetOudio;
+			sourceTree = "<group>";
+		};
+		7B47EF2B719E376B3335A0FB /* GetOudioRecordingWidget */ = {
+			isa = PBXGroup;
+			children = (
+				5E8AD2939739349216FF209C /* Sources */,
+			);
+			path = GetOudioRecordingWidget;
 			sourceTree = "<group>";
 		};
 		7F17B539629433A1A728EEE5 /* GetOudioFinderExtension */ = {
@@ -478,6 +553,10 @@
 				6443C0992771CFEA49338C37 /* KeychainService.swift */,
 				2D140BDEF696D4BCE7EDDCBB /* NCMSettingsModel.swift */,
 				DBB5D4A69A9524F2BF4087DB /* PresetSettingsModel.swift */,
+				4A95CE7C9241DA7A29C3C277 /* RecordingControlCoordinator.swift */,
+				48883A23F3BC9324B757C5A7 /* RecordingControlSignal.swift */,
+				B9F6F4CA81B28E94AA9E564E /* RecordingDeviceService.swift */,
+				435B034A4E419E3458A83202 /* RecordingSettingsModel.swift */,
 				7E935EA0A23172AF7AE10BEB /* SettingsViewModel.swift */,
 				280B0F7AC8A13D4928A4F3EF /* SystemExtensionSettingsModel.swift */,
 			);
@@ -617,6 +696,7 @@
 				641482CA6AE43AF361E9E9F8 /* PBXTargetDependency */,
 				638AEA41CE95486B4AAD9156 /* PBXTargetDependency */,
 				F3CE56CD2AEBBC9217225D3E /* PBXTargetDependency */,
+				9433BD479D19700B84C7469C /* PBXTargetDependency */,
 			);
 			name = GetOudio;
 			packageProductDependencies = (
@@ -681,6 +761,25 @@
 			productReference = 49BFF2708ED14CF05FA36161 /* GetOudioCore.framework */;
 			productType = "com.apple.product-type.framework";
 		};
+		FA5B60D0E1543BDB366F8B32 /* GetOudioRecordingWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 6AB7432D75366603E0650E6C /* Build configuration list for PBXNativeTarget "GetOudioRecordingWidget" */;
+			buildPhases = (
+				7B0008F8E5F4A6BF457D4595 /* Sources */,
+				0B8A49D27D64727331670B93 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				0A4674B3189109D500AA328F /* PBXTargetDependency */,
+			);
+			name = GetOudioRecordingWidget;
+			packageProductDependencies = (
+			);
+			productName = GetOudioRecordingWidget;
+			productReference = 02A2B6CA70B65148819F2CF4 /* GetOudioRecordingWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -714,6 +813,10 @@
 						DevelopmentTeam = ZWNUJ64F36;
 						ProvisioningStyle = Automatic;
 					};
+					FA5B60D0E1543BDB366F8B32 = {
+						DevelopmentTeam = ZWNUJ64F36;
+						ProvisioningStyle = Automatic;
+					};
 				};
 			};
 			buildConfigurationList = 29D2FF29FEECD70D405581B6 /* Build configuration list for PBXProject "GetOudio" */;
@@ -735,6 +838,7 @@
 				F9246AF6FE72CF2A656008F0 /* GetOudioCore */,
 				14A0FE9FE15B05CBFDBA438B /* GetOudioCoreTests */,
 				DCCB63A986CE40B8EBFBE2CF /* GetOudioFinderExtension */,
+				FA5B60D0E1543BDB366F8B32 /* GetOudioRecordingWidget */,
 				E816029425E0A3BCF18A3C31 /* GetOudioShareExtension */,
 			);
 		};
@@ -829,6 +933,11 @@
 				A284874C51E3738AEDC9BC65 /* NotificationService.swift in Sources */,
 				EF31BFBD5ED668E16699BCD0 /* PendingAppleMusicDownloadStore.swift in Sources */,
 				7E091D7050D2D90DC030B7FA /* ProcessRunner.swift in Sources */,
+				4C783E5BB49510ECF7C5ACE6 /* RecordingCacheStore.swift in Sources */,
+				2016D2B8F9510905D707F2FD /* RecordingControlStore.swift in Sources */,
+				6785036FFE17401D61B71443 /* RecordingModels.swift in Sources */,
+				3DE68FDA8368952A53A2EE42 /* RecordingPostProcessor.swift in Sources */,
+				9842A7C37AD50688EED63C16 /* RecordingWAVWriter.swift in Sources */,
 				1E2BA6165226BFEB0082B779 /* SettingsStore.swift in Sources */,
 				DE40E324B1CCD0A87D29DBD9 /* ShareEventQueue.swift in Sources */,
 				1E4668A8BDB0F2F9431B77C9 /* SharedContainer.swift in Sources */,
@@ -857,10 +966,24 @@
 				2B42E847986CC7B87B603885 /* OpenWithJobDispatcher.swift in Sources */,
 				F87C352EC57D852A187D0EAF /* OpenWithPresetMenuController.swift in Sources */,
 				A244B0BDB474A7B4712BD80F /* PresetSettingsModel.swift in Sources */,
+				4AE0B79B95D90362389C3B5B /* RecordingAudioSession.swift in Sources */,
+				7C73FEDF4413764535AACF08 /* RecordingControlCoordinator.swift in Sources */,
+				1E9191B3E677C0102F72FD37 /* RecordingControlSignal.swift in Sources */,
+				121D90F7D8FBF9A113ADF5C5 /* RecordingDeviceService.swift in Sources */,
+				1E9E000750F0441C8B6E597C /* RecordingRunner.swift in Sources */,
+				D77ABFA086DA60B93B9E7633 /* RecordingSettingsModel.swift in Sources */,
 				0BEB235A871AD3566C4C1F7E /* SettingsDocumentationView.swift in Sources */,
 				21909135C633A36CA4A2EBCA /* SettingsViewModel.swift in Sources */,
 				893000D007353B9BF9F71CBC /* SystemExtensionSettingsModel.swift in Sources */,
 				995A3254ABC5325D7D583905 /* main.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		7B0008F8E5F4A6BF457D4595 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D58FF2BD12778EF0B6E674D5 /* RecordingWidget.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -891,6 +1014,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		0A4674B3189109D500AA328F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = F9246AF6FE72CF2A656008F0 /* GetOudioCore */;
+			targetProxy = 1079703D2D911B2CA5B3EE92 /* PBXContainerItemProxy */;
+		};
 		0DE09F2C216743325BA20250 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = F9246AF6FE72CF2A656008F0 /* GetOudioCore */;
@@ -915,6 +1043,11 @@
 			isa = PBXTargetDependency;
 			target = F9246AF6FE72CF2A656008F0 /* GetOudioCore */;
 			targetProxy = EE73AFC0232840C678004846 /* PBXContainerItemProxy */;
+		};
+		9433BD479D19700B84C7469C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = FA5B60D0E1543BDB366F8B32 /* GetOudioRecordingWidget */;
+			targetProxy = 56427D69D8E38127E26243A5 /* PBXContainerItemProxy */;
 		};
 		95C91FBF2F6B8C08E42B911D /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -1047,6 +1180,25 @@
 			};
 			name = Debug;
 		};
+		40E484153586FCAB54D2CD18 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = GetOudioRecordingWidget/GetOudioRecordingWidget.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_APP_SANDBOX = YES;
+				INFOPLIST_FILE = GetOudioRecordingWidget/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.shengjiacheng.GetOudio.RecordingWidget;
+				PRODUCT_NAME = GetOudioRecordingWidget;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
 		4B6F299545EAC8C798088E6D /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -1083,7 +1235,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 3;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = ZWNUJ64F36;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -1103,7 +1255,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1.1;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -1151,7 +1303,7 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 3;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = ZWNUJ64F36;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -1165,7 +1317,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.1.1;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -1247,6 +1399,25 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.shengjiacheng.GetOudio.FinderExtension;
 				PRODUCT_NAME = GetOudioFinderExtension;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		E03192D041807ACA5A7C23F3 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = GetOudioRecordingWidget/GetOudioRecordingWidget.entitlements;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_APP_SANDBOX = YES;
+				INFOPLIST_FILE = GetOudioRecordingWidget/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.shengjiacheng.GetOudio.RecordingWidget;
+				PRODUCT_NAME = GetOudioRecordingWidget;
 				SDKROOT = macosx;
 			};
 			name = Release;
@@ -1344,6 +1515,15 @@
 			buildConfigurations = (
 				1782ECA77FEC4CB44DB3B8B2 /* Debug */,
 				05F07F816C39725C26F3F1DE /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		6AB7432D75366603E0650E6C /* Build configuration list for PBXNativeTarget "GetOudioRecordingWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				40E484153586FCAB54D2CD18 /* Debug */,
+				E03192D041807ACA5A7C23F3 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

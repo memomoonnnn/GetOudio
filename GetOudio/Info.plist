@@ -80,6 +80,8 @@
 	<true/>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>Get Oudio 需要重启 Finder，以便新启用的 Finder Sync 菜单拓展生效。</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Get Oudio 需要读取 Pro Tools Audio Bridge 的输入信号以录制 PCM 音频。</string>
 	<key>UTExportedTypeDeclarations</key>
 	<array>
 		<dict>

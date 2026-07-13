@@ -5,6 +5,8 @@ public enum AppConstants {
     public static let appURLScheme = "getoudio"
     public static let bundleIdentifier = "com.shengjiacheng.GetOudio"
     public static let telemetrySubsystem = "com.shengjiacheng.GetOudio"
+    public static let recordingWidgetKind = "GetOudioRecordingWidget"
+    public static let recordingControlNotification = "com.shengjiacheng.GetOudio.recording-control"
 
     /// Shared UserDefaults key: set by extensions before launching the main app.
     /// Indicates the main app was launched by an extension (Finder Sync / Share).
@@ -27,4 +29,6 @@ public enum LaunchSource: String, Sendable {
     case shareExtension
     /// Launched only to dispatch pending notification events.
     case notificationDispatch
+    /// Launched as the long-lived, windowless Audio Bridge recording runner.
+    case recording
 }

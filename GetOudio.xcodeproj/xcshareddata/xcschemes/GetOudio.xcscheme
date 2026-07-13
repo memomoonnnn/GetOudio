@@ -71,6 +71,20 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
+               BlueprintIdentifier = "FA5B60D0E1543BDB366F8B32"
+               BuildableName = "GetOudioRecordingWidget.appex"
+               BlueprintName = "GetOudioRecordingWidget"
+               ReferencedContainer = "container:GetOudio.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
                BlueprintIdentifier = "E816029425E0A3BCF18A3C31"
                BuildableName = "GetOudioShareExtension.appex"
                BlueprintName = "GetOudioShareExtension"

@@ -84,7 +84,7 @@ public final class AppleMusicRuntimeManager {
 
     public static var defaultVMStateRootURL: URL {
         SettingsStore.realUserHomeDirectory()
-            .appendingPathComponent("Library/Caches/GetOudio", isDirectory: true)
+            .appendingPathComponent("Library/Application Support/GetOudio/AM", isDirectory: true)
     }
 
     private let fileManager: FileManager

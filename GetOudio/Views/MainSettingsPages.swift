@@ -12,6 +12,169 @@ private enum SettingsMetrics {
     static let groupTitleFont = Font.system(size: 12.5, weight: .semibold)
 }
 
+// MARK: - Audio Bridge Recording Settings
+
+struct RecordingSettingsPage: View {
+    @ObservedObject var viewModel: RecordingSettingsModel
+
+    var body: some View {
+        SettingsForm {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Audio Bridge Recorder")
+                    .font(.system(size: 26, weight: .bold))
+                Text("桌面组件会把默认媒体输出切换到 Pro Tools Audio Bridge，并从切换前的播放设备实时监听。系统提醒音不会进入录音。")
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            SettingsSection("输入与权限", systemImage: "waveform.badge.mic") {
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack {
+                        Text("Audio Bridge")
+                        Spacer()
+                        Picker("", selection: Binding(
+                            get: { viewModel.selectedBridgeUID },
+                            set: { viewModel.selectBridge($0) }
+                        )) {
+                            Text("未选择").tag(String?.none)
+                            ForEach(viewModel.bridgeDevices) { device in
+                                Text("\(device.name) · \(Int(device.nominalSampleRate)) Hz")
+                                    .tag(Optional(device.uid))
+                            }
+                        }
+                        .labelsHidden()
+                        .frame(maxWidth: 320)
+                    }
+
+                    HStack {
+                        Label(
+                            viewModel.microphoneAuthorized ? "音频输入权限已启用" : "需要音频输入权限",
+                            systemImage: viewModel.microphoneAuthorized ? "checkmark.circle.fill" : "exclamationmark.circle"
+                        )
+                        .foregroundStyle(viewModel.microphoneAuthorized ? .green : .secondary)
+                        Spacer()
+                        if !viewModel.microphoneAuthorized {
+                            Button("授权") { viewModel.requestMicrophonePermission() }
+                        }
+                        Button("刷新设备") { viewModel.refresh() }
+                    }
+                }
+            }
+
+            SettingsSection("文件与缓存", systemImage: "externaldrive") {
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack {
+                        Text("缓存上限")
+                        Spacer()
+                        Picker("", selection: Binding(
+                            get: { viewModel.cacheLimitBytes },
+                            set: { viewModel.setCacheLimit($0) }
+                        )) {
+                            ForEach(RecordingSettingsModel.cacheLimitOptions) { option in
+                                Text(option.title).tag(option.bytes)
+                            }
+                        }
+                        .labelsHidden()
+                    }
+
+                    HStack {
+                        Text("当前缓存")
+                            .foregroundStyle(.secondary)
+                        Text(viewModel.cacheSizeText)
+                            .font(.body.monospacedDigit())
+                        Spacer()
+                        Button("清理") { viewModel.clearCache() }
+                    }
+
+                    Divider()
+
+                    Toggle("完成后移动到指定目录", isOn: Binding(
+                        get: { viewModel.usesCustomOutputDirectory },
+                        set: { viewModel.setUsesCustomOutputDirectory($0) }
+                    ))
+
+                    HStack {
+                        Text(viewModel.customOutputDirectoryName)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                        Spacer()
+                        Button("选择目录") { viewModel.chooseOutputDirectory() }
+                    }
+                    .disabled(!viewModel.usesCustomOutputDirectory)
+                }
+            }
+
+            SettingsSection("录后处理", systemImage: "waveform.path.ecg") {
+                VStack(alignment: .leading, spacing: 14) {
+                    Toggle("峰值标准化", isOn: Binding(
+                        get: { viewModel.normalizesPeak },
+                        set: { viewModel.setNormalizesPeak($0) }
+                    ))
+                    .toggleStyle(.switch)
+
+                    Toggle("去除头尾的无声片段", isOn: Binding(
+                        get: { viewModel.trimsSilence },
+                        set: { viewModel.setTrimsSilence($0) }
+                    ))
+                    .toggleStyle(.switch)
+
+                    VStack(spacing: 0) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text("阈值")
+                                Spacer()
+                                Text("\(viewModel.silenceThresholdDBFS, format: .number.precision(.fractionLength(0...1))) dBFS")
+                                    .foregroundStyle(.secondary)
+                            }
+                            Slider(
+                                value: Binding(
+                                    get: { viewModel.silenceThresholdDBFS },
+                                    set: { viewModel.setSilenceThresholdDBFS($0) }
+                                ),
+                                in: -90...0,
+                                step: 1
+                            )
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+
+                        Divider()
+                            .padding(.leading, 12)
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text("额外垫付")
+                                Spacer()
+                                Text("\(viewModel.silencePaddingMilliseconds) ms")
+                                    .foregroundStyle(.secondary)
+                            }
+                            Slider(
+                                value: Binding(
+                                    get: { Double(viewModel.silencePaddingMilliseconds) },
+                                    set: { viewModel.setSilencePaddingMilliseconds(Int($0.rounded())) }
+                                ),
+                                in: 0...1_000,
+                                step: 10
+                            )
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                    }
+                    .settingsGroupedRowBackground()
+                    .disabled(!viewModel.trimsSilence)
+                    .opacity(viewModel.trimsSilence ? 1 : 0.45)
+                }
+            }
+
+            if !viewModel.message.isEmpty {
+                Label(viewModel.message, systemImage: "info.circle")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
 private enum SettingsSurface {
     static func pageTint(for scheme: ColorScheme) -> Color {
         scheme == .light ? Color.black.opacity(0.025) : Color.white.opacity(0.035)

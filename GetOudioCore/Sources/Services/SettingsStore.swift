@@ -12,6 +12,14 @@ public final class SettingsStore {
         public static let isAppleMusicDownloadEnabled = "isAppleMusicDownloadEnabled"
         public static let appleMusicUseSystemProxy = "appleMusicUseSystemProxy"
         public static let defaultAudioPlayerPath = "defaultAudioPlayerPath"
+        public static let recordingBridgeDeviceUID = "recordingBridgeDeviceUID"
+        public static let recordingCacheLimitBytes = "recordingCacheLimitBytes"
+        public static let recordingCustomOutputBookmark = "recordingCustomOutputBookmark"
+        public static let recordingUsesCustomOutputDirectory = "recordingUsesCustomOutputDirectory"
+        public static let recordingTrimsSilence = "recordingTrimsSilence"
+        public static let recordingNormalizesPeak = "recordingNormalizesPeak"
+        public static let recordingSilenceThresholdDBFS = "recordingSilenceThresholdDBFS"
+        public static let recordingSilencePaddingMilliseconds = "recordingSilencePaddingMilliseconds"
     }
 
     private let defaults: UserDefaults
@@ -105,6 +113,46 @@ public final class SettingsStore {
         }
         set {
             defaults.set(newValue?.path, forKey: Keys.defaultAudioPlayerPath)
+        }
+    }
+
+    public var recordingBridgeDeviceUID: String? {
+        get { defaults.string(forKey: Keys.recordingBridgeDeviceUID) }
+        set { defaults.set(newValue, forKey: Keys.recordingBridgeDeviceUID) }
+    }
+
+    public var recordingCacheLimitBytes: Int64 {
+        get {
+            let value = defaults.object(forKey: Keys.recordingCacheLimitBytes) as? NSNumber
+            return value?.int64Value ?? 1_073_741_824
+        }
+        set { defaults.set(NSNumber(value: newValue), forKey: Keys.recordingCacheLimitBytes) }
+    }
+
+    public var recordingCustomOutputBookmarkData: Data? {
+        get { defaults.data(forKey: Keys.recordingCustomOutputBookmark) }
+        set { defaults.set(newValue, forKey: Keys.recordingCustomOutputBookmark) }
+    }
+
+    public var recordingUsesCustomOutputDirectory: Bool {
+        get { defaults.bool(forKey: Keys.recordingUsesCustomOutputDirectory) }
+        set { defaults.set(newValue, forKey: Keys.recordingUsesCustomOutputDirectory) }
+    }
+
+    public var recordingPostProcessingOptions: RecordingPostProcessingOptions {
+        get {
+            RecordingPostProcessingOptions(
+                trimsSilence: defaults.bool(forKey: Keys.recordingTrimsSilence),
+                normalizesPeak: defaults.bool(forKey: Keys.recordingNormalizesPeak),
+                silenceThresholdDBFS: defaults.object(forKey: Keys.recordingSilenceThresholdDBFS) as? Double ?? RecordingPostProcessingOptions.defaultSilenceThresholdDBFS,
+                silencePaddingMilliseconds: defaults.object(forKey: Keys.recordingSilencePaddingMilliseconds) as? Int ?? RecordingPostProcessingOptions.defaultSilencePaddingMilliseconds
+            )
+        }
+        set {
+            defaults.set(newValue.trimsSilence, forKey: Keys.recordingTrimsSilence)
+            defaults.set(newValue.normalizesPeak, forKey: Keys.recordingNormalizesPeak)
+            defaults.set(newValue.silenceThresholdDBFS, forKey: Keys.recordingSilenceThresholdDBFS)
+            defaults.set(newValue.silencePaddingMilliseconds, forKey: Keys.recordingSilencePaddingMilliseconds)
         }
     }
 

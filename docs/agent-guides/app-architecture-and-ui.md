@@ -8,6 +8,8 @@
 
 `NormalLauncher` 默认保持 accessory，只有确认显示直接启动的设置窗口时才升为 regular，使设置窗口在 Dock 中出现。Open With 音频菜单、NCM 入队、URL wake、notification dispatch 和 `HeadlessRunner` 应保持无 Dock、无设置窗口。`NormalLauncher` 只处理直接启动设置窗口、Open With 音频菜单式预设选择、NCM Open With 入队和向 `HeadlessRunner` 转交任务，不能承接日常转换。
 
+Audio Bridge 录音由 `getoudio://recording/toggle` 触发。`NormalLauncher` 只负责校验配置、写共享录音命令、启动新的 `RecordingRunner` 实例并在录音期间监督其 PID；实时采集、设备切换、WAV 写入、剪贴板和完成通知均由无窗口 `RecordingRunner` 执行。录音进程异常退出时监督实例依据共享快照恢复原输出并修复临时 WAV，不得把实时音频处理放入设置窗口或 Widget Extension。
+
 Open With 音频不是常规窗口。`application(_:openFiles:)` 对全音频选择应显示 `OpenWithPresetMenuController` 的一次性 `NSMenu`，选择后由 `OpenWithJobDispatcher` 生成 `.transcode(preset)` jobs、入队、设置 `LaunchSource.openWithAudio` marker 并启动新的 headless 实例；全 NCM 选择生成 `.convertNCM` jobs 并使用 `LaunchSource.openWithNCM`。混合、视频或 unsupported 输入应 `reply(.failure)` 并记录诊断日志，不得打开设置窗口。不得把菜单退回 `NSPanel`、SwiftUI 浮窗或 `WindowGroup`，也不得移除维持这条边界的 `LSUIElement = true`。
 
 ## Settings Models
