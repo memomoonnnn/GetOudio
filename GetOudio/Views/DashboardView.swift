@@ -4,6 +4,7 @@ struct DashboardView: View {
     @ObservedObject var finderSettings: FinderDirectorySettingsModel
     @ObservedObject var systemExtensionSettings: SystemExtensionSettingsModel
     @ObservedObject var recordingSettings: RecordingSettingsModel
+    let checkForUpdates: () -> Void
 
     var body: some View {
         SettingsForm {
@@ -125,6 +126,12 @@ struct DashboardView: View {
                     Spacer(minLength: 0)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+
+                Button {
+                    checkForUpdates()
+                } label: {
+                    Label("检查更新", systemImage: "arrow.triangle.2.circlepath")
+                }
             }
 
             MarkdownDocumentView(.overview)

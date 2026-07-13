@@ -5,10 +5,16 @@ import SwiftUI
 struct MainView: View {
     @StateObject private var settingsViewModel: SettingsViewModel
     @State private var selection: MainSidebarItem? = .overview
+    private let checkForUpdates: () -> Void
 
-    init(container: SharedContainer, initialRecordingPage: Bool = false) {
+    init(
+        container: SharedContainer,
+        initialRecordingPage: Bool = false,
+        checkForUpdates: @escaping () -> Void
+    ) {
         _settingsViewModel = StateObject(wrappedValue: SettingsViewModel(container: container))
         _selection = State(initialValue: initialRecordingPage ? .recording : .overview)
+        self.checkForUpdates = checkForUpdates
     }
 
     var body: some View {
@@ -84,7 +90,8 @@ struct MainView: View {
             DashboardView(
                 finderSettings: settingsViewModel.finderSettings,
                 systemExtensionSettings: settingsViewModel.systemExtensionSettings,
-                recordingSettings: settingsViewModel.recordingSettings
+                recordingSettings: settingsViewModel.recordingSettings,
+                checkForUpdates: checkForUpdates
             )
         case .transcoding:
             TranscodingSettingsPage(

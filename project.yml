@@ -24,6 +24,10 @@ settings:
 configs:
   Debug: debug
   Release: release
+packages:
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: 2.9.4
 targets:
   GetOudioCore:
     type: framework
@@ -69,6 +73,8 @@ targets:
         buildPhase: resources
     dependencies:
       - target: GetOudioCore
+      - package: Sparkle
+        product: Sparkle
       - target: GetOudioAMRuntimeAgent
         embed: false
         link: false
@@ -85,6 +91,11 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSUIElement: true
         CFBundleIconName: AppIcon
+        SUFeedURL: https://raw.githubusercontent.com/memomoonnnn/GetOudio/main/appcast.xml
+        SUPublicEDKey: psHCoR2oe7hrdR+F6gAOUB6yQzi/ci+pC002hDKvYu8=
+        SUEnableAutomaticChecks: true
+        SUAutomaticallyUpdate: false
+        SUEnableInstallerLauncherService: true
         ATSApplicationFontsPath: Fonts
         NSAppleEventsUsageDescription: Get Oudio 需要重启 Finder，以便新启用的 Finder Sync 菜单拓展生效。
         NSMicrophoneUsageDescription: Get Oudio 需要读取 Pro Tools Audio Bridge 的输入信号以录制 PCM 音频。
@@ -142,6 +153,9 @@ targets:
         com.apple.security.files.pictures.read-write: true
         com.apple.security.network.client: true
         com.apple.security.network.server: true
+        com.apple.security.temporary-exception.mach-lookup.global-name:
+          - $(PRODUCT_BUNDLE_IDENTIFIER)-spks
+          - $(PRODUCT_BUNDLE_IDENTIFIER)-spki
         com.apple.security.device.audio-input: true
         com.apple.security.application-groups:
           - group.com.shengjiacheng.GetOudio

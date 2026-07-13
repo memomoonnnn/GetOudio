@@ -1,5 +1,6 @@
 import AppKit
 import GetOudioCore
+import Sparkle
 import SwiftUI
 import UserNotifications
 
@@ -29,6 +30,7 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
     private let notificationService: NotificationService
     private let openWithDispatcher: OpenWithJobDispatcher
     private let recordingControl: RecordingControlCoordinator
+    private let updaterController: SPUStandardUpdaterController
     private let openWithMenuController = OpenWithPresetMenuController()
     private var launchIntent: LaunchIntent = .undecided
     private var activeNotificationResponses = 0
@@ -42,6 +44,11 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
         notificationService = NotificationService(container: container)
         openWithDispatcher = OpenWithJobDispatcher(container: container)
         recordingControl = RecordingControlCoordinator(container: container)
+        updaterController = SPUStandardUpdaterController(
+            startingUpdater: true,
+            updaterDelegate: nil,
+            userDriverDelegate: nil
+        )
         super.init()
     }
 
@@ -150,7 +157,11 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
         }
         NSApp.setActivationPolicy(.regular)
         let hostingController = NSHostingController(
-            rootView: MainView(container: container, initialRecordingPage: recordingPage)
+            rootView: MainView(
+                container: container,
+                initialRecordingPage: recordingPage,
+                checkForUpdates: { [weak self] in self?.updaterController.checkForUpdates(nil) }
+            )
         )
         hostingController.safeAreaRegions = []
 
