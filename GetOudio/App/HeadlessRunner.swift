@@ -244,6 +244,7 @@ final class HeadlessRunner: NSObject, NSApplicationDelegate, UNUserNotificationC
         }
         if !amJobs.isEmpty {
             try? await appleMusicAgentLauncher.ensureRunning()
+            await notificationService.notifyAppleMusicDownloadStarted()
             let s = await amService.download(amJobs)
             totalSuccess += s.successCount; totalFailure += s.failureCount; messages += s.messages
         }

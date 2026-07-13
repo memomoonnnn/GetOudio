@@ -5,7 +5,7 @@ import Foundation
 /// SwiftUI views reference the same values to ensure alignment.
 public enum LayoutConstants {
     /// Corner radius applied to the settings window and main content clip shape.
-    public static let windowCornerRadius: CGFloat = 26
+    public static let windowCornerRadius: CGFloat = 27
     /// Corner radius applied to the settings sidebar background.
     public static let sidebarCornerRadius: CGFloat = 20
     /// Horizontal margin between window edge and content, and between sidebar and detail panel.

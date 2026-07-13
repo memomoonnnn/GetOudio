@@ -176,6 +176,7 @@ final class RecordingRunner: NSObject, NSApplicationDelegate, UNUserNotification
         snapshot.phase = .recording
         try controlStore.save(snapshot)
         reloadWidget()
+        await notificationService.notifyRecordingStarted()
         beginHealthChecks()
         DiagnosticLog.append("[Recording] recording started bridge=\(bridge.name) sampleRate=\(audioSession.sampleRate) channels=\(audioSession.channelCount)")
     }

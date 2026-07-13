@@ -61,14 +61,14 @@ public final class RecordingPostProcessor {
             let format = try readFormat(at: recordingURL)
             let scan = try scan(recordingURL: recordingURL, format: format, thresholdDBFS: options.silenceThresholdDBFS)
             guard scan.peakSample > 0 else {
-                return .keptOriginal(message: "检测到全程静音，已保留原始录音。")
+                return .keptOriginal(message: "检测到全程无声。")
             }
 
             let firstAudibleFrame: UInt64
             let lastAudibleFrame: UInt64
             if options.trimsSilence {
                 guard let first = scan.firstAudibleFrame, let last = scan.lastAudibleFrame else {
-                    return .keptOriginal(message: "检测到开头和末尾均低于静音阈值，已保留原始录音。")
+                    return .keptOriginal(message: "检测到头尾均低于无声阈值。")
                 }
                 firstAudibleFrame = first
                 lastAudibleFrame = last
@@ -99,7 +99,7 @@ public final class RecordingPostProcessor {
             return .processed(stagingURL: stagingURL)
         } catch {
             try? fileManager.removeItem(at: stagingURL)
-            return .keptOriginal(message: "录后处理失败，已保留原始录音：\(error.localizedDescription)")
+            return .keptOriginal(message: "后处理失败，但保留了原始录音：\(error.localizedDescription)")
         }
     }
 
@@ -297,8 +297,8 @@ private enum ProcessingError: LocalizedError {
         switch self {
         case .unsupportedRecording: return "录音文件不是受支持的 24-bit PCM WAV"
         case .truncatedRecording: return "录音文件不完整"
-        case .emptyOutput: return "录后处理没有生成音频帧"
-        case .outputVerificationFailed: return "录后处理成品校验失败"
+        case .emptyOutput: return "后处理没有生成音频帧"
+        case .outputVerificationFailed: return "后处理校验失败"
         }
     }
 }

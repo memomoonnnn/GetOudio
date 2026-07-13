@@ -19,13 +19,15 @@ struct RecordingSettingsPage: View {
 
     var body: some View {
         SettingsForm {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Audio Bridge Recorder")
-                    .font(.system(size: 26, weight: .bold))
-                Text("桌面组件会把默认媒体输出切换到 Pro Tools Audio Bridge，并从切换前的播放设备实时监听。系统提醒音不会进入录音。")
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            MarkdownDocumentView(.recording)
+
+            // VStack(alignment: .leading, spacing: 8) {
+            //     Text("Audio Bridge Recorder")
+            //         .font(.system(size: 26, weight: .bold))
+            //     Text("桌面组件会把默认媒体输出切换到 Pro Tools Audio Bridge，并从切换前的播放设备实时监听。系统提醒音不会进入录音。")
+            //         .foregroundStyle(.secondary)
+            //         .fixedSize(horizontal: false, vertical: true)
+            // }
 
             SettingsSection("输入与权限", systemImage: "waveform.badge.mic") {
                 VStack(alignment: .leading, spacing: 14) {
@@ -104,7 +106,7 @@ struct RecordingSettingsPage: View {
                 }
             }
 
-            SettingsSection("录后处理", systemImage: "waveform.path.ecg") {
+            SettingsSection("后处理", systemImage: "waveform.path.ecg") {
                 VStack(alignment: .leading, spacing: 14) {
                     Toggle("峰值标准化", isOn: Binding(
                         get: { viewModel.normalizesPeak },

@@ -11,10 +11,11 @@ private enum MarkdownTypography {
 }
 
 enum SettingsDocumentSectionID: String, CaseIterable, Hashable {
-    case overview = "概览"
-    case transcoding = "Re-Encoding"
-    case ncm = "NCM Transcoder"
-    case appleMusic = "Apple Music Downloader"
+    case overview = "授权/关于"
+    case transcoding = "音频重编码"
+    case ncm = "NCM 解密"
+    case appleMusic = "Apple Music 下载"
+    case recording = "录音"
 }
 
 struct SettingsDocumentSection {

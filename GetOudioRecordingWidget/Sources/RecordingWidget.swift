@@ -97,8 +97,8 @@ private struct GetOudioRecordingWidget: Widget {
         StaticConfiguration(kind: kind, provider: RecordingWidgetProvider()) { entry in
             RecordingWidgetView(entry: entry)
         }
-        .configurationDisplayName("Audio Bridge Recorder")
-        .description("开始或停止 Pro Tools Audio Bridge 录音。")
+        .configurationDisplayName("Recorder")
+        .description("开始或停止录音。")
         .supportedFamilies([.systemSmall])
         .contentMarginsDisabled()
     }

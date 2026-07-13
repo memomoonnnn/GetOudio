@@ -87,25 +87,35 @@ public final class NotificationService {
     }
 
     public func notifyAppleMusicInactive() async {
-        await notify(title: "Get Oudio", body: "该功能尚未激活")
+        await notify(body: "该功能尚未激活")
+    }
+
+    public func notifyAppleMusicDownloadStarted() async {
+        await notify(body: "下载Start！", sound: nil)
+    }
+
+    public func notifyRecordingStarted() async {
+        await notify(body: "录音Start！", sound: nil)
     }
 
     public func notifyRecordingFinished(fileURL: URL?, message: String? = nil) async {
-        let title = fileURL == nil ? "录音未完成" : "录音完成"
-        let fallback = fileURL.map { "已复制 \($0.lastPathComponent) 到剪贴板。" } ?? "没有生成可用的录音文件。"
-        let body = message.flatMap { $0.isEmpty ? nil : $0 } ?? fallback
-        await notify(title: title, body: body)
+        let result = fileURL == nil ? "录音失败" : "录音已结束"
+        let fallback = fileURL.map { "复制了 \($0.lastPathComponent) 到剪贴板。" } ?? "没有生成可用的录音文件。"
+        let detail = message.flatMap { $0.isEmpty ? nil : $0 } ?? fallback
+        await notify(body: "\(result)。\(detail)")
     }
 
     public func notifyUnsupportedDownloadSource(urls: [URL]) async {
         let suffix = urls.first.map { " \($0.absoluteString)" } ?? ""
-        await notify(title: "Get Oudio", body: "不支持的下载源...\(suffix)")
+        await notify(body: "不支持的下载源...\(suffix)")
     }
 
     public func notifyAppleMusicFormatSelection(jobCount: Int) async {
         let content = UNMutableNotificationContent()
-        content.title = "选择 Apple Music 下载格式"
-        content.body = jobCount > 1 ? "请选择这 \(jobCount) 个项目的下载格式。" : "请选择这次的下载格式。"
+        content.title = "Get Oudio"
+        content.body = jobCount > 1
+            ? "选择这 \(jobCount) 个项目的下载格式..."
+            : "选择这次的下载格式..."
         content.sound = .default
         content.categoryIdentifier = AppleMusicNotification.formatCategoryIdentifier
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
@@ -119,9 +129,9 @@ public final class NotificationService {
         let elapsedText = minutes > 0 ? "\(minutes)分\(remainingSeconds)秒" : "\(remainingSeconds)秒"
         let detail = progress?.trimmingCharacters(in: .whitespacesAndNewlines)
         if let detail, !detail.isEmpty {
-            await notify(title: "Get Oudio", body: "下载中... \(detail)（已用 \(elapsedText)）")
+            await notify(body: "下载中... \(detail)（已用 \(elapsedText)）")
         } else {
-            await notify(title: "Get Oudio", body: "下载中... 已经过 \(elapsedText)")
+            await notify(body: "下载中... 已经过 \(elapsedText)")
         }
     }
 
@@ -161,6 +171,7 @@ public final class NotificationService {
     public func notifyConversionFinished(summary: ConversionSummary, jobs: [JobRequest] = []) async {
         let content = UNMutableNotificationContent()
         let actionName = Self.actionName(for: jobs)
+        content.title = "Get Oudio"
         content.categoryIdentifier = AppleMusicNotification.completionCategoryIdentifier
         content.sound = .default
         content.userInfo = [
@@ -168,15 +179,12 @@ public final class NotificationService {
         ]
 
         if summary.totalCount == 0 {
-            content.title = "没有文件被处理"
-            content.body = "请确认选择了有效文件。"
+            content.body = "没有文件被处理，请确认选择了有效文件。"
         } else if summary.failureCount == 0 {
-            content.title = "\(actionName)完成"
-            content.body = "成功处理 \(summary.successCount) 个文件。"
+            content.body = "\(actionName)完成，处理了 \(summary.successCount) 个文件。"
         } else {
-            content.title = "\(actionName)完成，但有错误"
             let detail = Self.displayError(summary: summary).map { " \($0)" } ?? ""
-            content.body = "共处理 \(summary.totalCount) 个文件，成功 \(summary.successCount) 个，失败 \(summary.failureCount) 个。\(detail)"
+            content.body = "\(actionName)基本完成，处理了 \(summary.totalCount) 个文件，成功 \(summary.successCount) 个，失败 \(summary.failureCount) 个。\(detail)"
         }
 
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
@@ -186,13 +194,13 @@ public final class NotificationService {
         )
     }
 
-    private func notify(title: String, body: String) async {
+    private func notify(body: String, sound: UNNotificationSound? = .default) async {
         let content = UNMutableNotificationContent()
-        content.title = title
+        content.title = "Get Oudio"
         content.body = body
-        content.sound = .default
+        content.sound = sound
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
-        await send(request, context: "notification title=\(title)")
+        await send(request, context: "notification title=Get Oudio")
     }
 
     private func send(_ request: UNNotificationRequest, context: String) async {

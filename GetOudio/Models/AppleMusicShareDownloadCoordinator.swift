@@ -79,6 +79,7 @@ final class AppleMusicShareDownloadCoordinator {
         let format = forcedFormat ?? settingsStore.appleMusicDownloadFormat
         let resolvedJobs = jobs.map { $0.withAppleMusicDownloadFormat(format == .askEveryTime ? .alac : format) }
         DiagnosticLog.append("share Apple Music download started count=\(resolvedJobs.count) format=\(format.rawValue)")
+        await notificationService.notifyAppleMusicDownloadStarted()
         let progressTask = startProgressNotifications()
         let summary = await downloadService.download(resolvedJobs)
         progressTask.cancel()

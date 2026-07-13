@@ -40,7 +40,7 @@ App Bundle 只携带精简 `ffmpeg`、`ncmdump` 和 `apple-music-downloader`。D
 
 App Group 标识固定为 `group.com.shengjiacheng.GetOudio`。任务队列、共享设置、launch marker、诊断日志、通知事件和 Apple Music runtime 必须通过共享容器或 suite defaults 访问。`SharedContainer.production()` 缺少 App Group URL 或 suite defaults 时应抛出可观察错误并关闭当前入口；`diagnostic(rootURL:defaults:)` 只用于测试或显式 Debug 诊断，Release 不得响应 `GET_OUDIO_DIAGNOSTIC_SHARED_CONTAINER_ROOT`。容器解析失败时先写系统日志，不得调用依赖同一容器的 `DiagnosticLog`。
 
-凭据不得写入 UserDefaults、日志、配置文件或命令诊断输出。完成类通知不得依赖正在等待的窗口或客户端进程，应写入 `NotificationEventQueue`，再由 `NotificationService.dispatchPendingNotificationEvents()` 统一派发；Apple Music Share 下载由 Agent 执行，完成后由 Agent 写事件并唤醒主 App/headless 路径。
+凭据不得写入 UserDefaults、日志、配置文件或命令诊断输出。完成类通知不得依赖正在等待的窗口或客户端进程，应写入 `NotificationEventQueue`，再由 `NotificationService.dispatchPendingNotificationEvents()` 统一派发；Apple Music Share 下载由 Agent 执行，完成后由 Agent 写事件并唤醒主 App/headless 路径。新增任何用户可见的本地通知横幅时，标题必须固定为 `Get Oudio`，状态或操作差异写入正文，不得以标题区分。
 
 必须保留 `GetOudio/Resources/AppIcon.icon` 这一 Icon Composer 源资产。不得替换成手工 `.icns`、静态 `AppIcon.appiconset` 或构建位图；源码 Info.plist 只维护 `CFBundleIconName = AppIcon`。Share Extension 独立使用 `GetOudioShareExtension/Resources/icon.icns`，不得让它编译主 App 图标源。
 

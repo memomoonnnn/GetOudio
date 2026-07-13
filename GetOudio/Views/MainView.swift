@@ -69,7 +69,7 @@ struct MainView: View {
                         .buttonStyle(.plain)
                     }
                 }
-                .padding(.horizontal, SidebarLayout.contentHorizontalInset)
+                .padding(.horizontal, SidebarLayout.navigationHorizontalInset)
 
                 Spacer(minLength: 0)
             }
@@ -193,6 +193,7 @@ private struct MainSidebarRow: View {
 
 private enum SidebarLayout {
     static let contentHorizontalInset: CGFloat = 18
+    static let navigationHorizontalInset: CGFloat = 16
     static let windowControlTopInset: CGFloat = 16
     static let windowControlSize: CGFloat = 14
     static let windowControlSymbolSize: CGFloat = 8
@@ -217,7 +218,7 @@ private enum MainSidebarItem: String, CaseIterable, Identifiable {
         switch self {
         case .overview: return "授权/关于"
         case .transcoding: return "音频重编码"
-        case .ncm: return "NCM解密"
+        case .ncm: return "NCM 解密"
         case .appleMusic: return "Apple Music 下载"
         case .recording: return "录音"
         }
@@ -225,10 +226,10 @@ private enum MainSidebarItem: String, CaseIterable, Identifiable {
 
     var systemImage: String {
         switch self {
-        case .overview: return "waveform"
-        case .transcoding: return "slider.horizontal.3"
+        case .overview: return "gear"
+        case .transcoding: return "waveform"
         case .ncm: return "music.note"
-        case .appleMusic: return "arrow.down.circle"
+        case .appleMusic: return "square.and.arrow.down"
         case .recording: return "record.circle"
         }
     }
