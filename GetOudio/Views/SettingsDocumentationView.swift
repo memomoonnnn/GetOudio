@@ -187,6 +187,20 @@ enum SettingsDocumentationStore {
 }
 
 struct MarkdownDocumentView: View {
+    let id: SettingsDocumentSectionID
+
+    init(_ id: SettingsDocumentSectionID) {
+        self.id = id
+    }
+
+    var body: some View {
+        SettingsSection("使用说明", systemImage: "text.book.closed") {
+            MarkdownDocumentContent(id)
+        }
+    }
+}
+
+struct MarkdownDocumentContent: View {
     let section: SettingsDocumentSection
 
     init(_ id: SettingsDocumentSectionID) {
@@ -194,7 +208,6 @@ struct MarkdownDocumentView: View {
     }
 
     var body: some View {
-        SettingsSection("使用说明", systemImage: "text.book.closed") {
             VStack(alignment: .leading, spacing: MarkdownTypography.paragraphSpacing) {
                 if let errorMessage = section.errorMessage {
                     Label(errorMessage, systemImage: "exclamationmark.triangle")
@@ -209,7 +222,6 @@ struct MarkdownDocumentView: View {
             .padding(.horizontal, MarkdownTypography.contentHorizontalPadding)
             .padding(.vertical, MarkdownTypography.contentVerticalPadding)
             .textSelection(.enabled)
-        }
     }
 
     @ViewBuilder

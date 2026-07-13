@@ -129,35 +129,20 @@ final class AppleMusicShareDownloadCoordinator {
     }
 
     private func writeConversionLog(summary: ConversionSummary, jobs: [JobRequest]) {
-        do {
-            let logURL = container.url(for: .conversionLog)
-            let timestamp = ISO8601DateFormatter().string(from: Date())
-            var lines = [
-                "===== \(timestamp) (share Apple Music) =====",
-                "Result: success=\(summary.successCount) failure=\(summary.failureCount)"
-            ]
-            for job in jobs {
-                lines.append("Job: \(job.fileURL.absoluteString)")
-            }
-            if summary.messages.isEmpty {
-                lines.append("Messages: <none>")
-            } else {
-                lines.append("Messages:")
-                lines.append(contentsOf: summary.messages)
-            }
-            lines.append("")
-            let data = (lines.joined(separator: "\n")).data(using: .utf8) ?? Data()
-            if FileManager.default.fileExists(atPath: logURL.path) {
-                let handle = try FileHandle(forWritingTo: logURL)
-                try handle.seekToEnd()
-                try handle.write(contentsOf: data)
-                try handle.close()
-            } else {
-                try data.write(to: logURL, options: .atomic)
-            }
-        } catch {
-            DiagnosticLog.append("share Apple Music log write failed: \(error.localizedDescription)")
+        var lines = [
+            "===== share Apple Music =====",
+            "Result: success=\(summary.successCount) failure=\(summary.failureCount)"
+        ]
+        for job in jobs {
+            lines.append("Job: \(job.fileURL.absoluteString)")
         }
+        if summary.messages.isEmpty {
+            lines.append("Messages: <none>")
+        } else {
+            lines.append("Messages:")
+            lines.append(contentsOf: summary.messages)
+        }
+        DiagnosticLog.append(lines.joined(separator: "\n"), level: .info)
     }
 
     private func markShareExtensionHeadlessLaunch() {

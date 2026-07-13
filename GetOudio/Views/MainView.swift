@@ -91,6 +91,7 @@ struct MainView: View {
                 finderSettings: settingsViewModel.finderSettings,
                 systemExtensionSettings: settingsViewModel.systemExtensionSettings,
                 recordingSettings: settingsViewModel.recordingSettings,
+                diagnosticSettings: settingsViewModel.diagnosticSettings,
                 checkForUpdates: checkForUpdates
             )
         case .transcoding:

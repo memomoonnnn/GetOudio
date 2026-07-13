@@ -253,34 +253,19 @@ final class HeadlessRunner: NSObject, NSApplicationDelegate, UNUserNotificationC
     }
 
     private func writeConversionLog(summary: ConversionSummary, jobs: [JobRequest]) {
-        do {
-            let logURL = container.url(for: .conversionLog)
-            let timestamp = ISO8601DateFormatter().string(from: Date())
-            var lines = [
-                "===== \(timestamp) (headless) =====",
-                "Result: success=\(summary.successCount) failure=\(summary.failureCount)"
-            ]
-            for job in jobs {
-                lines.append("Job: \(job.fileURL.path)")
-            }
-            if summary.messages.isEmpty {
-                lines.append("Messages: <none>")
-            } else {
-                lines.append("Messages:")
-                lines.append(contentsOf: summary.messages)
-            }
-            lines.append("")
-            let data = (lines.joined(separator: "\n")).data(using: .utf8) ?? Data()
-            if FileManager.default.fileExists(atPath: logURL.path) {
-                let handle = try FileHandle(forWritingTo: logURL)
-                try handle.seekToEnd()
-                try handle.write(contentsOf: data)
-                try handle.close()
-            } else {
-                try data.write(to: logURL, options: .atomic)
-            }
-        } catch {
-            DiagnosticLog.append("headless log write failed: \(error.localizedDescription)")
+        var lines = [
+            "===== headless =====",
+            "Result: success=\(summary.successCount) failure=\(summary.failureCount)"
+        ]
+        for job in jobs {
+            lines.append("Job: \(job.fileURL.path)")
         }
+        if summary.messages.isEmpty {
+            lines.append("Messages: <none>")
+        } else {
+            lines.append("Messages:")
+            lines.append(contentsOf: summary.messages)
+        }
+        DiagnosticLog.append(lines.joined(separator: "\n"), level: .info)
     }
 }

@@ -78,6 +78,7 @@
 		B8EA68949879206D459B8577 /* DirectoryChooser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45B8F600ED7CF7F3BC4E8D67 /* DirectoryChooser.swift */; };
 		B96987E37666C7F4E82D6AB3 /* GetOudioCoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C43975B92D52741C9A75DC77 /* GetOudioCoreTests.swift */; };
 		BA2B129FF3760A61CFEEF0E2 /* AppleMusicRuntimeAgentClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 323FD01C817E384689C4EAA8 /* AppleMusicRuntimeAgentClient.swift */; };
+		BB3317361DF975A10E064B1A /* DiagnosticSettingsModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4489FB6364BA24DC9F42479D /* DiagnosticSettingsModel.swift */; };
 		CBD2CF1093293B2DB633A1F5 /* ConversionActionFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13B4DFE9D95E437DC5C2FDBF /* ConversionActionFactory.swift */; };
 		CDB96F8DD0D55AE6E4146A47 /* NCMSettingsModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D140BDEF696D4BCE7EDDCBB /* NCMSettingsModel.swift */; };
 		D0471A3CCE40DBACF8511587 /* ffmpeg in Resources */ = {isa = PBXBuildFile; fileRef = 4AD5E91E2A5C903C19F28C4E /* ffmpeg */; };
@@ -247,6 +248,7 @@
 		4092C290A220FE1E53D899C9 /* FileCategory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileCategory.swift; sourceTree = "<group>"; };
 		435B034A4E419E3458A83202 /* RecordingSettingsModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingSettingsModel.swift; sourceTree = "<group>"; };
 		43638432B32307180F0DC2FD /* GetOudioShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = GetOudioShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		4489FB6364BA24DC9F42479D /* DiagnosticSettingsModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticSettingsModel.swift; sourceTree = "<group>"; };
 		45B8F600ED7CF7F3BC4E8D67 /* DirectoryChooser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DirectoryChooser.swift; sourceTree = "<group>"; };
 		48883A23F3BC9324B757C5A7 /* RecordingControlSignal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingControlSignal.swift; sourceTree = "<group>"; };
 		49BFF2708ED14CF05FA36161 /* GetOudioCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = GetOudioCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -550,6 +552,7 @@
 				730C0C3FEA5DE504A597E570 /* AppleMusicShareDownloadCoordinator.swift */,
 				ECC45B39B4FFC5F6D7ECA9FE /* DefaultOpenWithService.swift */,
 				8A7B57EFCFA3995627C9AC08 /* DefaultOpenWithSettingsModel.swift */,
+				4489FB6364BA24DC9F42479D /* DiagnosticSettingsModel.swift */,
 				45B8F600ED7CF7F3BC4E8D67 /* DirectoryChooser.swift */,
 				8A94521F544FCDABB87C3F99 /* FinderDirectorySettingsModel.swift */,
 				6443C0992771CFEA49338C37 /* KeychainService.swift */,
@@ -960,6 +963,7 @@
 				28D57F1082E7B71F53AB415F /* DashboardView.swift in Sources */,
 				1361F214AA8EAF0ACE04658B /* DefaultOpenWithService.swift in Sources */,
 				6E9FE41DFB6BDAA6FB845C9A /* DefaultOpenWithSettingsModel.swift in Sources */,
+				BB3317361DF975A10E064B1A /* DiagnosticSettingsModel.swift in Sources */,
 				B8EA68949879206D459B8577 /* DirectoryChooser.swift in Sources */,
 				10E03364A2A9B61054AF7D07 /* FinderDirectorySettingsModel.swift in Sources */,
 				2F9FB03C3C2FD83ADA63BE09 /* HeadlessRunner.swift in Sources */,

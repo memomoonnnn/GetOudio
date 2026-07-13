@@ -1,9 +1,23 @@
 import SwiftUI
 
+private enum AboutLayout {
+    static let iconSize: CGFloat = 128
+    static let titleFontSize: CGFloat = 36
+    static let titleFontName = "Pally-Bold"
+    static let versionFontSize: CGFloat = 16
+    static let attributionFontSize: CGFloat = 13
+    static let headerSpacing: CGFloat = 16
+    static let contentRowSpacing: CGFloat = 16
+    static let buttonSpacing: CGFloat = 10
+    static let dividerTopSpacing: CGFloat = 24
+    static let githubURL = URL(string: "https://github.com/memomoonnnn/GetOudio")!
+}
+
 struct DashboardView: View {
     @ObservedObject var finderSettings: FinderDirectorySettingsModel
     @ObservedObject var systemExtensionSettings: SystemExtensionSettingsModel
     @ObservedObject var recordingSettings: RecordingSettingsModel
+    @ObservedObject var diagnosticSettings: DiagnosticSettingsModel
     let checkForUpdates: () -> Void
 
     var body: some View {
@@ -69,7 +83,7 @@ struct DashboardView: View {
                         .disabled(systemExtensionSettings.isRestartingFinder)
 
                         VStack(alignment: .leading, spacing: 3) {
-                            Text("上述所有更改均在重启访达后生效")
+                            Text("上述所有更改均需要重启访达")
                                 .font(.callout.weight(.medium))
                             if !systemExtensionSettings.finderRestartMessage.isEmpty {
                                 Text(systemExtensionSettings.finderRestartMessage)
@@ -106,35 +120,79 @@ struct DashboardView: View {
                 }
             }
 
-            SettingsSection("关于 Get Oudio", systemImage: "info.circle") {
-                HStack(alignment: .center, spacing: 16) {
-                    Image(nsImage: NSApp.applicationIconImage)
-                        .resizable()
-                        .frame(width: 72, height: 72)
-
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text("Get! OOOOOOOOOudio")
-                            .font(.title2.weight(.semibold))
-
-                        if let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String,
-                           let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String {
-                            Text("版本 \(version) (\(build))")
-                                .font(.callout)
+            SettingsSection("关于", systemImage: "info.circle") {
+                HStack(alignment: .center, spacing: AboutLayout.headerSpacing) {
+                    VStack(alignment: .leading, spacing: AboutLayout.contentRowSpacing) {
+                        Group {
+                            Text(verbatim: "Get! OOOOOOOOOudio")
+                                .font(.custom(AboutLayout.titleFontName, size: AboutLayout.titleFontSize))
+                            Text(verbatim: versionText)
+                                .font(.system(size: AboutLayout.versionFontSize))
                                 .foregroundStyle(.secondary)
                         }
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel("Get Oudio，\(versionText)")
+
+                        HStack(spacing: AboutLayout.buttonSpacing) {
+                            Button {
+                                checkForUpdates()
+                            } label: {
+                                Label("检查更新", systemImage: "arrow.triangle.2.circlepath")
+                            }
+                            .buttonStyle(.bordered)
+
+                            Link(destination: AboutLayout.githubURL) {
+                                Label("在Github上查看", systemImage: "link")
+                            }
+                            .buttonStyle(.bordered)
+
+                            Text(verbatim: "@紙葉 Shiyō")
+                                .font(.system(size: AboutLayout.attributionFontSize))
+                                .foregroundStyle(.secondary)
+                                .accessibilityLabel("作者：紙葉 Shiyō")
+                        }
                     }
+
                     Spacer(minLength: 0)
+
+                    Image(nsImage: NSApp.applicationIconImage)
+                        .resizable()
+                        .interpolation(.high)
+                        .frame(width: AboutLayout.iconSize, height: AboutLayout.iconSize)
+                        .accessibilityHidden(true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                Button {
-                    checkForUpdates()
-                } label: {
-                    Label("检查更新", systemImage: "arrow.triangle.2.circlepath")
-                }
+                Divider()
+                    .padding(.top, AboutLayout.dividerTopSpacing)
+
+                MarkdownDocumentContent(.overview)
             }
 
-            MarkdownDocumentView(.overview)
+            SettingsSection("高级", systemImage: "slider.horizontal.3") {
+                Toggle(
+                    "记录调试日志",
+                    isOn: Binding(
+                        get: { diagnosticSettings.isDebugLoggingEnabled },
+                        set: { diagnosticSettings.setDebugLoggingEnabled($0) }
+                    )
+                )
+                .toggleStyle(.switch)
+            }
+        }
+    }
+
+    private var versionText: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
+
+        switch (version, build) {
+        case let (.some(version), .some(build)):
+            return "Version \(version) (\(build))"
+        case let (.some(version), .none):
+            return "Version \(version)"
+        default:
+            return "Version —"
         }
     }
 

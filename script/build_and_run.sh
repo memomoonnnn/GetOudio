@@ -9,6 +9,8 @@ BUNDLE_ID="com.shengjiacheng.GetOudio"
 FINDER_EXTENSION_ID="com.shengjiacheng.GetOudio.FinderExtension"
 FINDER_EXTENSION_POINT_ID="com.apple.FinderSync"
 SHARE_EXTENSION_POINT_ID="com.apple.share-services"
+RECORDING_WIDGET_EXTENSION_ID="com.shengjiacheng.GetOudio.RecordingWidget"
+RECORDING_WIDGET_EXTENSION_POINT_ID="com.apple.widgetkit-extension"
 APP_GROUP_ID="group.com.shengjiacheng.GetOudio"
 DIAGNOSTIC_SHARED_CONTAINER_KEY="GET_OUDIO_DIAGNOSTIC_SHARED_CONTAINER_ROOT"
 SHARE_EXTENSION_ID="com.shengjiacheng.GetOudio.ShareExtension"
@@ -21,6 +23,7 @@ INSTALL_APP_BUNDLE="$DERIVED_DATA/Build/Products/$INSTALL_CONFIGURATION/$APP_NAM
 INSTALL_DIR="${INSTALL_DIR:-/Applications}"
 INSTALLED_APP="$INSTALL_DIR/$APP_NAME.app"
 LEGACY_USER_APP="$HOME/Applications/$APP_NAME.app"
+LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Versions/Current/Frameworks/LaunchServices.framework/Versions/Current/Support/lsregister"
 
 cd "$ROOT_DIR"
 
@@ -102,6 +105,7 @@ open_app() {
 
 verify_entitlements() {
   local bundle_path="$1"
+  local requires_bookmark_entitlement="${2:-true}"
   local entitlements_file
   entitlements_file="$(mktemp)"
 
@@ -132,7 +136,8 @@ verify_entitlements() {
     exit 1
   fi
 
-  if ! /usr/bin/grep -q "com.apple.security.files.bookmarks.app-scope" "$entitlements_file"; then
+  if [[ "$requires_bookmark_entitlement" == "true" ]] &&
+     ! /usr/bin/grep -q "com.apple.security.files.bookmarks.app-scope" "$entitlements_file"; then
     echo "missing app-scope bookmark entitlement in $bundle_path" >&2
     /bin/cat "$entitlements_file" >&2
     rm -f "$entitlements_file"
@@ -180,9 +185,12 @@ unregister_existing_plugins() {
   while IFS= read -r bundle_path; do
     [[ -n "$bundle_path" ]] || continue
     pluginkit -r "$bundle_path" >/dev/null 2>&1 || true
+    if [[ "$bundle_path" == *.app ]]; then
+      "$LSREGISTER" -u "$bundle_path" >/dev/null 2>&1 || true
+    fi
   done < <(
     /usr/bin/mdfind \
-      "kMDItemCFBundleIdentifier == '$BUNDLE_ID' || kMDItemCFBundleIdentifier == '$FINDER_EXTENSION_ID' || kMDItemCFBundleIdentifier == '$SHARE_EXTENSION_ID'" \
+      "kMDItemCFBundleIdentifier == '$BUNDLE_ID' || kMDItemCFBundleIdentifier == '$FINDER_EXTENSION_ID' || kMDItemCFBundleIdentifier == '$SHARE_EXTENSION_ID' || kMDItemCFBundleIdentifier == '$RECORDING_WIDGET_EXTENSION_ID'" \
       2>/dev/null || true
   )
 
@@ -199,10 +207,17 @@ unregister_existing_plugins() {
     "$DEBUG_APP_BUNDLE/Contents/PlugIns/GetOudioShareExtension.appex"
     "$INSTALL_APP_BUNDLE/Contents/PlugIns/GetOudioFinderExtension.appex"
     "$INSTALL_APP_BUNDLE/Contents/PlugIns/GetOudioShareExtension.appex"
+    "$INSTALLED_APP/Contents/PlugIns/GetOudioRecordingWidget.appex"
+    "$LEGACY_USER_APP/Contents/PlugIns/GetOudioRecordingWidget.appex"
+    "$DEBUG_APP_BUNDLE/Contents/PlugIns/GetOudioRecordingWidget.appex"
+    "$INSTALL_APP_BUNDLE/Contents/PlugIns/GetOudioRecordingWidget.appex"
   )
 
   for bundle_path in "${candidates[@]}"; do
     pluginkit -r "$bundle_path" >/dev/null 2>&1 || true
+    if [[ "$bundle_path" == *.app ]]; then
+      "$LSREGISTER" -u "$bundle_path" >/dev/null 2>&1 || true
+    fi
   done
 
   /usr/bin/pkill -x pkd >/dev/null 2>&1 || true
@@ -218,19 +233,23 @@ install_app() {
   verify_url_scheme "$INSTALLED_APP"
   verify_extension_point "$INSTALLED_APP/Contents/PlugIns/GetOudioFinderExtension.appex" "$FINDER_EXTENSION_POINT_ID"
   verify_extension_point "$INSTALLED_APP/Contents/PlugIns/GetOudioShareExtension.appex" "$SHARE_EXTENSION_POINT_ID"
+  verify_extension_point "$INSTALLED_APP/Contents/PlugIns/GetOudioRecordingWidget.appex" "$RECORDING_WIDGET_EXTENSION_POINT_ID"
   verify_entitlements "$INSTALLED_APP"
   verify_entitlements "$INSTALLED_APP/Contents/PlugIns/GetOudioFinderExtension.appex"
   verify_entitlements "$INSTALLED_APP/Contents/PlugIns/GetOudioShareExtension.appex"
+  verify_entitlements "$INSTALLED_APP/Contents/PlugIns/GetOudioRecordingWidget.appex" false
   /usr/bin/open -n "$INSTALLED_APP"
-  /System/Library/Frameworks/CoreServices.framework/Versions/Current/Frameworks/LaunchServices.framework/Versions/Current/Support/lsregister -f -R -trusted "$INSTALLED_APP"
+  "$LSREGISTER" -f -R -trusted "$INSTALLED_APP"
   pluginkit -a "$INSTALLED_APP"
   pluginkit -a "$INSTALLED_APP/Contents/PlugIns/GetOudioFinderExtension.appex"
   pluginkit -a "$INSTALLED_APP/Contents/PlugIns/GetOudioShareExtension.appex"
+  pluginkit -a "$INSTALLED_APP/Contents/PlugIns/GetOudioRecordingWidget.appex"
   pluginkit -e use -i "$FINDER_EXTENSION_ID"
   pluginkit -e use -i "$SHARE_EXTENSION_ID"
   killall Finder >/dev/null 2>&1 || true
   pluginkit -m -v -i "$FINDER_EXTENSION_ID"
   pluginkit -m -v -i "$SHARE_EXTENSION_ID"
+  pluginkit -m -v -i "$RECORDING_WIDGET_EXTENSION_ID"
 }
 
 case "$MODE" in
@@ -262,6 +281,7 @@ case "$MODE" in
     killall Finder >/dev/null 2>&1 || true
     pluginkit -m -v -i "$FINDER_EXTENSION_ID"
     pluginkit -m -v -i "$SHARE_EXTENSION_ID"
+    pluginkit -m -v -i "$RECORDING_WIDGET_EXTENSION_ID"
     ;;
   *)
     echo "usage: $0 [run|--verify|--logs|--telemetry|--install|--clean-plugins]" >&2

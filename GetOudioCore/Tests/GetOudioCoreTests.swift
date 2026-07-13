@@ -687,6 +687,30 @@ final class GetOudioCoreTests: XCTestCase {
         XCTAssertEqual(store.enabledPresets, ConversionPreset.defaultEnabled)
     }
 
+    func testDiagnosticLogWritesOnlyWhenDebugLoggingIsEnabled() throws {
+        let rootURL = try makeTemporaryDirectory()
+        let suiteName = "GetOudioCoreTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer {
+            try? FileManager.default.removeItem(at: rootURL)
+            defaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let container = try SharedContainer.diagnostic(rootURL: rootURL, defaults: defaults)
+        let store = SettingsStore(defaults: defaults)
+        let logURL = container.url(for: .conversionLog)
+        DiagnosticLog.configure(container: container)
+
+        DiagnosticLog.append("disabled diagnostic")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: logURL.path))
+
+        store.isDebugLoggingEnabled = true
+        DiagnosticLog.append("enabled diagnostic")
+
+        let log = try String(contentsOf: logURL, encoding: .utf8)
+        XCTAssertTrue(log.contains("[DEBUG] enabled diagnostic"))
+    }
+
     func testSharedContainerProductionFailsWhenAppGroupDirectoryIsUnavailable() {
         XCTAssertThrowsError(try SharedContainer.production(groupIdentifier: "")) { error in
             guard case SharedContainer.AccessError.appGroupDirectoryUnavailable(let groupIdentifier) = error else {

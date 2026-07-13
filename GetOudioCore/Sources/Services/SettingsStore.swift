@@ -20,6 +20,7 @@ public final class SettingsStore {
         public static let recordingNormalizesPeak = "recordingNormalizesPeak"
         public static let recordingSilenceThresholdDBFS = "recordingSilenceThresholdDBFS"
         public static let recordingSilencePaddingMilliseconds = "recordingSilencePaddingMilliseconds"
+        public static let isDebugLoggingEnabled = "isDebugLoggingEnabled"
     }
 
     private let defaults: UserDefaults
@@ -154,6 +155,11 @@ public final class SettingsStore {
             defaults.set(newValue.silenceThresholdDBFS, forKey: Keys.recordingSilenceThresholdDBFS)
             defaults.set(newValue.silencePaddingMilliseconds, forKey: Keys.recordingSilencePaddingMilliseconds)
         }
+    }
+
+    public var isDebugLoggingEnabled: Bool {
+        get { defaults.bool(forKey: Keys.isDebugLoggingEnabled) }
+        set { defaults.set(newValue, forKey: Keys.isDebugLoggingEnabled) }
     }
 
     public static func defaultFinderDirectories() -> [URL] {
