@@ -28,6 +28,20 @@ public final class RecordingCacheStore {
     }
 
     @discardableResult
+    public func replaceCompletedFile(at originalURL: URL, with stagingURL: URL) throws -> URL {
+        let backupName = ".\(originalURL.lastPathComponent).\(UUID().uuidString).raw-backup"
+        let replacedURL = try fileManager.replaceItemAt(
+            originalURL,
+            withItemAt: stagingURL,
+            backupItemName: backupName,
+            options: [.usingNewMetadataOnly]
+        ) ?? originalURL
+        let backupURL = originalURL.deletingLastPathComponent().appendingPathComponent(backupName)
+        try? fileManager.removeItem(at: backupURL)
+        return replacedURL
+    }
+
+    @discardableResult
     public func enforceLimit(_ limitBytes: Int64, protecting protectedURL: URL? = nil) -> [URL] {
         guard limitBytes > 0 else { return [] }
         let entries = completedEntries().filter { $0.url != protectedURL }

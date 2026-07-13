@@ -10,6 +10,7 @@ final class RecordingRunner: NSObject, NSApplicationDelegate, UNUserNotification
     private let controlStore: RecordingControlStore
     private let cacheStore: RecordingCacheStore
     private let notificationService: NotificationService
+    private let postProcessor = RecordingPostProcessor()
     private var session: RecordingAudioSession?
     private var controlSignal: RecordingControlSignal?
     private var stopStarted = false
@@ -212,7 +213,8 @@ final class RecordingRunner: NSObject, NSApplicationDelegate, UNUserNotification
                 if let temporaryURL = snapshot.temporaryFileURL {
                     let cachedURL = self.cacheStore.completedURL(for: temporaryURL)
                     try FileManager.default.moveItem(at: temporaryURL, to: cachedURL)
-                    finalURL = self.moveToCustomDirectoryIfNeeded(cachedURL)
+                    let processedURL = self.processCompletedRecording(cachedURL, message: &finalMessage)
+                    finalURL = self.moveToCustomDirectoryIfNeeded(processedURL)
                 }
             } catch {
                 finalMessage = error.localizedDescription
@@ -259,6 +261,32 @@ final class RecordingRunner: NSObject, NSApplicationDelegate, UNUserNotification
         } catch {
             DiagnosticLog.append("recording custom output fallback: \(error.localizedDescription)")
             return cachedURL
+        }
+    }
+
+    private func processCompletedRecording(_ cachedURL: URL, message: inout String?) -> URL {
+        switch postProcessor.process(recordingURL: cachedURL, options: settings.recordingPostProcessingOptions) {
+        case .processed(let stagingURL):
+            do {
+                return try cacheStore.replaceCompletedFile(at: cachedURL, with: stagingURL)
+            } catch {
+                try? FileManager.default.removeItem(at: stagingURL)
+                appendPostProcessingMessage("录后处理成品替换失败，已保留原始录音：\(error.localizedDescription)", to: &message)
+                return cachedURL
+            }
+        case .keptOriginal(let processingMessage):
+            if let processingMessage {
+                appendPostProcessingMessage(processingMessage, to: &message)
+            }
+            return cachedURL
+        }
+    }
+
+    private func appendPostProcessingMessage(_ newMessage: String, to message: inout String?) {
+        if let existingMessage = message, !existingMessage.isEmpty {
+            message = "\(existingMessage)；\(newMessage)"
+        } else {
+            message = newMessage
         }
     }
 

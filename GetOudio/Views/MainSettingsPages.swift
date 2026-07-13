@@ -104,6 +104,68 @@ struct RecordingSettingsPage: View {
                 }
             }
 
+            SettingsSection("录后处理", systemImage: "waveform.path.ecg") {
+                VStack(alignment: .leading, spacing: 14) {
+                    Toggle("峰值标准化", isOn: Binding(
+                        get: { viewModel.normalizesPeak },
+                        set: { viewModel.setNormalizesPeak($0) }
+                    ))
+                    .toggleStyle(.switch)
+
+                    Toggle("去除头尾的无声片段", isOn: Binding(
+                        get: { viewModel.trimsSilence },
+                        set: { viewModel.setTrimsSilence($0) }
+                    ))
+                    .toggleStyle(.switch)
+
+                    VStack(spacing: 0) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text("阈值")
+                                Spacer()
+                                Text("\(viewModel.silenceThresholdDBFS, format: .number.precision(.fractionLength(0...1))) dBFS")
+                                    .foregroundStyle(.secondary)
+                            }
+                            Slider(
+                                value: Binding(
+                                    get: { viewModel.silenceThresholdDBFS },
+                                    set: { viewModel.setSilenceThresholdDBFS($0) }
+                                ),
+                                in: -90...0,
+                                step: 1
+                            )
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+
+                        Divider()
+                            .padding(.leading, 12)
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text("额外垫付")
+                                Spacer()
+                                Text("\(viewModel.silencePaddingMilliseconds) ms")
+                                    .foregroundStyle(.secondary)
+                            }
+                            Slider(
+                                value: Binding(
+                                    get: { Double(viewModel.silencePaddingMilliseconds) },
+                                    set: { viewModel.setSilencePaddingMilliseconds(Int($0.rounded())) }
+                                ),
+                                in: 0...1_000,
+                                step: 10
+                            )
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                    }
+                    .settingsGroupedRowBackground()
+                    .disabled(!viewModel.trimsSilence)
+                    .opacity(viewModel.trimsSilence ? 1 : 0.45)
+                }
+            }
+
             if !viewModel.message.isEmpty {
                 Label(viewModel.message, systemImage: "info.circle")
                     .font(.caption)

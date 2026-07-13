@@ -28,6 +28,10 @@ final class RecordingSettingsModel: ObservableObject {
     @Published var usesCustomOutputDirectory: Bool
     @Published var customOutputDirectoryName = "未选择"
     @Published var microphoneAuthorized = false
+    @Published var trimsSilence: Bool
+    @Published var normalizesPeak: Bool
+    @Published var silenceThresholdDBFS: Double
+    @Published var silencePaddingMilliseconds: Int
     @Published var message = ""
 
     private let store: SettingsStore
@@ -39,6 +43,11 @@ final class RecordingSettingsModel: ObservableObject {
         selectedBridgeUID = store.recordingBridgeDeviceUID
         cacheLimitBytes = store.recordingCacheLimitBytes
         usesCustomOutputDirectory = store.recordingUsesCustomOutputDirectory
+        let postProcessing = store.recordingPostProcessingOptions
+        trimsSilence = postProcessing.trimsSilence
+        normalizesPeak = postProcessing.normalizesPeak
+        silenceThresholdDBFS = postProcessing.silenceThresholdDBFS
+        silencePaddingMilliseconds = postProcessing.silencePaddingMilliseconds
         refresh()
     }
 
@@ -64,6 +73,26 @@ final class RecordingSettingsModel: ObservableObject {
     func setUsesCustomOutputDirectory(_ enabled: Bool) {
         usesCustomOutputDirectory = enabled
         store.recordingUsesCustomOutputDirectory = enabled
+    }
+
+    func setTrimsSilence(_ enabled: Bool) {
+        trimsSilence = enabled
+        savePostProcessingOptions()
+    }
+
+    func setNormalizesPeak(_ enabled: Bool) {
+        normalizesPeak = enabled
+        savePostProcessingOptions()
+    }
+
+    func setSilenceThresholdDBFS(_ value: Double) {
+        silenceThresholdDBFS = value
+        savePostProcessingOptions()
+    }
+
+    func setSilencePaddingMilliseconds(_ value: Int) {
+        silencePaddingMilliseconds = value
+        savePostProcessingOptions()
     }
 
     func chooseOutputDirectory() {
@@ -103,6 +132,18 @@ final class RecordingSettingsModel: ObservableObject {
         )
     }
 
+    private func savePostProcessingOptions() {
+        let options = RecordingPostProcessingOptions(
+            trimsSilence: trimsSilence,
+            normalizesPeak: normalizesPeak,
+            silenceThresholdDBFS: silenceThresholdDBFS,
+            silencePaddingMilliseconds: silencePaddingMilliseconds
+        )
+        store.recordingPostProcessingOptions = options
+        silenceThresholdDBFS = options.silenceThresholdDBFS
+        silencePaddingMilliseconds = options.silencePaddingMilliseconds
+    }
+
     private func updateCustomDirectoryName() {
         guard let data = store.recordingCustomOutputBookmarkData else {
             customOutputDirectoryName = "未选择"
@@ -117,4 +158,3 @@ final class RecordingSettingsModel: ObservableObject {
         ).lastPathComponent) ?? "目录不可用"
     }
 }
-
