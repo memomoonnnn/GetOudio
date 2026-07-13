@@ -25,8 +25,8 @@ final class RecordingSettingsModel: ObservableObject {
     @Published var selectedBridgeUID: String?
     @Published var cacheLimitBytes: Int64
     @Published var cacheSizeText = "0 MB"
-    @Published var usesCustomOutputDirectory: Bool
-    @Published var customOutputDirectoryName = "未选择"
+    @Published var usesCustomCacheDirectory: Bool
+    @Published var cacheDirectoryPath = ""
     @Published var microphoneAuthorized = false
     @Published var trimsSilence: Bool
     @Published var normalizesPeak: Bool
@@ -34,15 +34,15 @@ final class RecordingSettingsModel: ObservableObject {
     @Published var silencePaddingMilliseconds: Int
     @Published var message = ""
 
+    private let container: SharedContainer
     private let store: SettingsStore
-    private let cacheStore: RecordingCacheStore?
 
     init(container: SharedContainer, store: SettingsStore) {
+        self.container = container
         self.store = store
-        cacheStore = try? RecordingCacheStore(container: container)
         selectedBridgeUID = store.recordingBridgeDeviceUID
         cacheLimitBytes = store.recordingCacheLimitBytes
-        usesCustomOutputDirectory = store.recordingUsesCustomOutputDirectory
+        usesCustomCacheDirectory = store.recordingUsesCustomCacheDirectory
         let postProcessing = store.recordingPostProcessingOptions
         trimsSilence = postProcessing.trimsSilence
         normalizesPeak = postProcessing.normalizesPeak
@@ -54,7 +54,7 @@ final class RecordingSettingsModel: ObservableObject {
     func refresh() {
         bridgeDevices = RecordingDeviceService.devices().filter(\.isSupportedProToolsAudioBridge)
         microphoneAuthorized = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
-        updateCustomDirectoryName()
+        updateCacheDirectoryPath()
         updateCacheSize()
     }
 
@@ -66,13 +66,26 @@ final class RecordingSettingsModel: ObservableObject {
     func setCacheLimit(_ bytes: Int64) {
         cacheLimitBytes = bytes
         store.recordingCacheLimitBytes = bytes
-        cacheStore?.enforceLimit(bytes)
+        cacheAccess()?.store.enforceLimit(bytes)
         updateCacheSize()
     }
 
-    func setUsesCustomOutputDirectory(_ enabled: Bool) {
-        usesCustomOutputDirectory = enabled
-        store.recordingUsesCustomOutputDirectory = enabled
+    func setUsesCustomCacheDirectory(_ enabled: Bool) {
+        guard enabled else {
+            usesCustomCacheDirectory = false
+            store.recordingUsesCustomCacheDirectory = false
+            updateCacheDirectoryPath()
+            updateCacheSize()
+            return
+        }
+        guard store.recordingCustomCacheBookmarkData != nil else {
+            chooseCacheDirectory()
+            return
+        }
+        usesCustomCacheDirectory = true
+        store.recordingUsesCustomCacheDirectory = true
+        updateCacheDirectoryPath()
+        updateCacheSize()
     }
 
     func setTrimsSilence(_ enabled: Bool) {
@@ -95,20 +108,36 @@ final class RecordingSettingsModel: ObservableObject {
         savePostProcessingOptions()
     }
 
-    func chooseOutputDirectory() {
-        guard let url = DirectoryChooser.chooseDirectory(prompt: "选择") else { return }
+    func chooseCacheDirectory() {
+        guard let url = DirectoryChooser.chooseDirectory(prompt: "选择缓存位置") else { return }
         do {
-            store.recordingCustomOutputBookmarkData = try url.bookmarkData(
+            store.recordingCustomCacheBookmarkData = try url.bookmarkData(
                 options: [.withSecurityScope],
                 includingResourceValuesForKeys: nil,
                 relativeTo: nil
             )
-            setUsesCustomOutputDirectory(true)
-            customOutputDirectoryName = url.lastPathComponent
-            message = "录音完成后将移动到 \(url.path)"
+            usesCustomCacheDirectory = true
+            store.recordingUsesCustomCacheDirectory = true
+            updateCacheDirectoryPath()
+            updateCacheSize()
+            message = "录音缓存将保存在 \(url.path)"
         } catch {
             message = error.localizedDescription
         }
+    }
+
+    func restoreDefaultCacheDirectory() {
+        usesCustomCacheDirectory = false
+        store.recordingUsesCustomCacheDirectory = false
+        store.recordingCustomCacheBookmarkData = nil
+        updateCacheDirectoryPath()
+        updateCacheSize()
+        message = "已恢复默认缓存目录；原指定目录中的录音未删除。"
+    }
+
+    func revealCacheDirectory() {
+        guard let access = cacheAccess(reportFailure: true) else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([access.store.directoryURL])
     }
 
     func requestMicrophonePermission() {
@@ -120,16 +149,24 @@ final class RecordingSettingsModel: ObservableObject {
     }
 
     func clearCache() {
-        let count = cacheStore?.clearCompletedFiles().count ?? 0
+        let count = cacheAccess(reportFailure: true)?.store.clearCompletedFiles().count ?? 0
         updateCacheSize()
         message = count == 0 ? "缓存中没有可清理的录音。" : "已清理 \(count) 个录音文件。"
     }
 
     private func updateCacheSize() {
         cacheSizeText = ByteCountFormatter.string(
-            fromByteCount: cacheStore?.completedSize() ?? 0,
+            fromByteCount: cacheAccess()?.store.completedSize() ?? 0,
             countStyle: .file
         )
+    }
+
+    private func updateCacheDirectoryPath() {
+        guard let access = cacheAccess() else {
+            cacheDirectoryPath = "默认缓存目录不可用"
+            return
+        }
+        cacheDirectoryPath = access.store.directoryURL.path
     }
 
     private func savePostProcessingOptions() {
@@ -144,17 +181,18 @@ final class RecordingSettingsModel: ObservableObject {
         silencePaddingMilliseconds = options.silencePaddingMilliseconds
     }
 
-    private func updateCustomDirectoryName() {
-        guard let data = store.recordingCustomOutputBookmarkData else {
-            customOutputDirectoryName = "未选择"
-            return
+    private func cacheAccess(reportFailure: Bool = false) -> RecordingCacheDirectoryAccess? {
+        do {
+            let access = try RecordingCacheDirectoryAccess(container: container, settings: store)
+            if reportFailure, let fallbackMessage = access.fallbackMessage {
+                message = fallbackMessage
+            }
+            return access
+        } catch {
+            if reportFailure {
+                message = "无法访问默认缓存目录：\(error.localizedDescription)"
+            }
+            return nil
         }
-        var stale = false
-        customOutputDirectoryName = (try? URL(
-            resolvingBookmarkData: data,
-            options: [.withSecurityScope],
-            relativeTo: nil,
-            bookmarkDataIsStale: &stale
-        ).lastPathComponent) ?? "目录不可用"
     }
 }

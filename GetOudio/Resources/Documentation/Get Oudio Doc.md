@@ -16,7 +16,7 @@
 
 依靠[FFmpeg](https://github.com/FFmpeg/FFmpeg)，现在仅需在访达中右键支持的音频文件（支持多个），并选择Get Oudio子菜单中的预制，即可重编码到当前目录：
 
-![500](attachments/Get%20Oudio%20Doc/file-20260704034734987.webp)
+![300](attachments/Get%20Oudio%20Doc/file-20260704034734987.webp)
 
 如果是视频文件，则可以提取其音频轨，遵循原始格式：
 
@@ -32,7 +32,7 @@
 
   
 
-![400](attachments/Get%20Oudio%20Doc/file-20260704035158344.webp)
+![300](attachments/Get%20Oudio%20Doc/file-20260704035158344.webp)
 
   
 
@@ -68,7 +68,7 @@
 
   
 
-若将ncm的默认打开方式设为「Get Oudio」，双击文件即可开始进程，同时还能欣赏我为ncm文件设计的神金图标。
+若将ncm的默认打开方式设为「Get Oudio」，双击文件即可开始进程。
 
   
 

@@ -83,7 +83,8 @@ struct MainView: View {
         case .overview:
             DashboardView(
                 finderSettings: settingsViewModel.finderSettings,
-                systemExtensionSettings: settingsViewModel.systemExtensionSettings
+                systemExtensionSettings: settingsViewModel.systemExtensionSettings,
+                recordingSettings: settingsViewModel.recordingSettings
             )
         case .transcoding:
             TranscodingSettingsPage(

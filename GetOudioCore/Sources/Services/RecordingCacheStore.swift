@@ -84,3 +84,66 @@ public final class RecordingCacheStore {
             }
     }
 }
+
+public final class RecordingCacheDirectoryAccess {
+    public let store: RecordingCacheStore
+    public let fallbackMessage: String?
+    private let securityScopedParentDirectory: URL?
+
+    public init(
+        container: SharedContainer,
+        settings: SettingsStore,
+        fileManager: FileManager = .default
+    ) throws {
+        guard settings.recordingUsesCustomCacheDirectory,
+              let bookmarkData = settings.recordingCustomCacheBookmarkData else {
+            store = try RecordingCacheStore(container: container, fileManager: fileManager)
+            fallbackMessage = nil
+            securityScopedParentDirectory = nil
+            return
+        }
+
+        do {
+            var isStale = false
+            let parentDirectory = try URL(
+                resolvingBookmarkData: bookmarkData,
+                options: [.withSecurityScope],
+                relativeTo: nil,
+                bookmarkDataIsStale: &isStale
+            )
+            guard parentDirectory.startAccessingSecurityScopedResource() else {
+                throw RecordingCacheDirectoryAccessError.accessDenied(parentDirectory)
+            }
+            do {
+                store = try RecordingCacheStore(
+                    directoryURL: parentDirectory,
+                    fileManager: fileManager
+                )
+                fallbackMessage = nil
+                securityScopedParentDirectory = parentDirectory
+            } catch {
+                parentDirectory.stopAccessingSecurityScopedResource()
+                throw error
+            }
+        } catch {
+            store = try RecordingCacheStore(container: container, fileManager: fileManager)
+            fallbackMessage = "指定缓存目录不可用，已使用默认缓存目录：\(error.localizedDescription)"
+            securityScopedParentDirectory = nil
+        }
+    }
+
+    deinit {
+        securityScopedParentDirectory?.stopAccessingSecurityScopedResource()
+    }
+}
+
+public enum RecordingCacheDirectoryAccessError: LocalizedError {
+    case accessDenied(URL)
+
+    public var errorDescription: String? {
+        switch self {
+        case .accessDenied(let directory):
+            return "无法访问缓存位置 \(directory.path)"
+        }
+    }
+}

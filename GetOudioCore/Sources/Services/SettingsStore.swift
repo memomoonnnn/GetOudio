@@ -14,8 +14,8 @@ public final class SettingsStore {
         public static let defaultAudioPlayerPath = "defaultAudioPlayerPath"
         public static let recordingBridgeDeviceUID = "recordingBridgeDeviceUID"
         public static let recordingCacheLimitBytes = "recordingCacheLimitBytes"
-        public static let recordingCustomOutputBookmark = "recordingCustomOutputBookmark"
-        public static let recordingUsesCustomOutputDirectory = "recordingUsesCustomOutputDirectory"
+        public static let recordingCustomCacheBookmark = "recordingCustomCacheBookmark"
+        public static let recordingUsesCustomCacheDirectory = "recordingUsesCustomCacheDirectory"
         public static let recordingTrimsSilence = "recordingTrimsSilence"
         public static let recordingNormalizesPeak = "recordingNormalizesPeak"
         public static let recordingSilenceThresholdDBFS = "recordingSilenceThresholdDBFS"
@@ -129,14 +129,14 @@ public final class SettingsStore {
         set { defaults.set(NSNumber(value: newValue), forKey: Keys.recordingCacheLimitBytes) }
     }
 
-    public var recordingCustomOutputBookmarkData: Data? {
-        get { defaults.data(forKey: Keys.recordingCustomOutputBookmark) }
-        set { defaults.set(newValue, forKey: Keys.recordingCustomOutputBookmark) }
+    public var recordingCustomCacheBookmarkData: Data? {
+        get { defaults.data(forKey: Keys.recordingCustomCacheBookmark) }
+        set { defaults.set(newValue, forKey: Keys.recordingCustomCacheBookmark) }
     }
 
-    public var recordingUsesCustomOutputDirectory: Bool {
-        get { defaults.bool(forKey: Keys.recordingUsesCustomOutputDirectory) }
-        set { defaults.set(newValue, forKey: Keys.recordingUsesCustomOutputDirectory) }
+    public var recordingUsesCustomCacheDirectory: Bool {
+        get { defaults.bool(forKey: Keys.recordingUsesCustomCacheDirectory) }
+        set { defaults.set(newValue, forKey: Keys.recordingUsesCustomCacheDirectory) }
     }
 
     public var recordingPostProcessingOptions: RecordingPostProcessingOptions {

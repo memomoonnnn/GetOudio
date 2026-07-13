@@ -152,6 +152,23 @@ final class GetOudioCoreTests: XCTestCase {
         XCTAssertEqual(RecordingPostProcessingOptions(silenceThresholdDBFS: 10).silenceThresholdDBFS, 0)
     }
 
+    func testRecordingCustomCacheSettingsPersistSeparately() {
+        let suiteName = "GetOudioCoreTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let bookmarkData = Data([0x01, 0x02, 0x03])
+        let store = SettingsStore(defaults: defaults)
+
+        XCTAssertFalse(store.recordingUsesCustomCacheDirectory)
+        XCTAssertNil(store.recordingCustomCacheBookmarkData)
+        store.recordingUsesCustomCacheDirectory = true
+        store.recordingCustomCacheBookmarkData = bookmarkData
+
+        let reloaded = SettingsStore(defaults: defaults)
+        XCTAssertTrue(reloaded.recordingUsesCustomCacheDirectory)
+        XCTAssertEqual(reloaded.recordingCustomCacheBookmarkData, bookmarkData)
+    }
+
     func testRecordingPostProcessorTrimsOnlyOuterSilenceAndKeepsPadding() throws {
         let root = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }

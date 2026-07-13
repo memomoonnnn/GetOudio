@@ -6,7 +6,7 @@
 
 录音源只支持用户在设置页选定的 `Pro Tools Audio Bridge 2-A` 或 `2-B`，持久化设备 UID，运行时重新解析 AudioDeviceID。开始录音时只修改 `kAudioHardwarePropertyDefaultOutputDevice`，不得修改系统提醒音使用的 `kAudioHardwarePropertyDefaultSystemOutputDevice`；监听输出固定使用切换前的默认媒体输出。源设备或监听设备断开、系统睡眠、磁盘写入失败或实时缓冲溢出均应汇入同一个幂等停止流程并恢复原输出。
 
-Widget 只通过 App Group 读取 `RecordingSessionSnapshot` 并打开 `getoudio://recording/toggle`，不能持有音频引擎。录音临时文件位于共享容器的 `Library/Caches/Recordings`；自定义目录必须使用 security-scoped bookmark，转移失败时保留缓存成品。剪贴板写文件 URL，不写整份 PCM 数据。
+Widget 只通过 App Group 读取 `RecordingSessionSnapshot` 并打开 `getoudio://recording/toggle`，不能持有音频引擎。默认录音缓存位于共享容器的 `Library/Caches/Recordings`；用户选定缓存位置时，必须以 security-scoped bookmark 直接访问该目录，缓存统计与清理会管理其中的录音 WAV，因此设置页必须提示用户专门为 Get Oudio 新建缓存文件夹。指定位置不可用时回退默认缓存目录。剪贴板写文件 URL，不写整份 PCM 数据。
 
 ## Finder Sync
 

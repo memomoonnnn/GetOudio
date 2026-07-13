@@ -8,6 +8,7 @@ final class RecordingRunner: NSObject, NSApplicationDelegate, UNUserNotification
     private let container: SharedContainer
     private let settings: SettingsStore
     private let controlStore: RecordingControlStore
+    private let cacheAccess: RecordingCacheDirectoryAccess
     private let cacheStore: RecordingCacheStore
     private let notificationService: NotificationService
     private let postProcessor = RecordingPostProcessor()
@@ -22,11 +23,17 @@ final class RecordingRunner: NSObject, NSApplicationDelegate, UNUserNotification
 
     init(container: SharedContainer) throws {
         self.container = container
-        settings = SettingsStore(container: container)
+        let settings = SettingsStore(container: container)
+        self.settings = settings
         controlStore = try RecordingControlStore(container: container)
-        cacheStore = try RecordingCacheStore(container: container)
+        let cacheAccess = try RecordingCacheDirectoryAccess(container: container, settings: settings)
+        self.cacheAccess = cacheAccess
+        cacheStore = cacheAccess.store
         notificationService = NotificationService(container: container)
         super.init()
+        if let fallbackMessage = cacheAccess.fallbackMessage {
+            DiagnosticLog.append("[Recording] \(fallbackMessage)")
+        }
     }
 
     static func main(container: SharedContainer) {
@@ -209,13 +216,16 @@ final class RecordingRunner: NSObject, NSApplicationDelegate, UNUserNotification
             guard let self else { return }
             var finalURL: URL?
             var finalMessage = message
+            if let fallbackMessage = self.cacheAccess.fallbackMessage {
+                self.appendPostProcessingMessage(fallbackMessage, to: &finalMessage)
+            }
             do {
                 try self.session?.finalize()
                 if let temporaryURL = snapshot.temporaryFileURL {
                     let cachedURL = self.cacheStore.completedURL(for: temporaryURL)
                     try FileManager.default.moveItem(at: temporaryURL, to: cachedURL)
                     let processedURL = self.processCompletedRecording(cachedURL, message: &finalMessage)
-                    finalURL = self.moveToCustomDirectoryIfNeeded(processedURL)
+                    finalURL = processedURL
                 }
             } catch {
                 finalMessage = error.localizedDescription
@@ -236,32 +246,6 @@ final class RecordingRunner: NSObject, NSApplicationDelegate, UNUserNotification
             self.reloadWidget()
             await self.notificationService.notifyRecordingFinished(fileURL: finalURL, message: finalMessage)
             await MainActor.run { NSApp.terminate(nil) }
-        }
-    }
-
-    private func moveToCustomDirectoryIfNeeded(_ cachedURL: URL) -> URL {
-        guard settings.recordingUsesCustomOutputDirectory,
-              let bookmark = settings.recordingCustomOutputBookmarkData else { return cachedURL }
-        do {
-            var stale = false
-            let directory = try URL(
-                resolvingBookmarkData: bookmark,
-                options: [.withSecurityScope],
-                relativeTo: nil,
-                bookmarkDataIsStale: &stale
-            )
-            guard directory.startAccessingSecurityScopedResource() else { return cachedURL }
-            defer { directory.stopAccessingSecurityScopedResource() }
-            let destination = directory.appendingPathComponent(cachedURL.lastPathComponent)
-            let staging = destination.appendingPathExtension("part")
-            try? FileManager.default.removeItem(at: staging)
-            try FileManager.default.copyItem(at: cachedURL, to: staging)
-            try FileManager.default.moveItem(at: staging, to: destination)
-            try FileManager.default.removeItem(at: cachedURL)
-            return destination
-        } catch {
-            DiagnosticLog.append("recording custom output fallback: \(error.localizedDescription)")
-            return cachedURL
         }
     }
 

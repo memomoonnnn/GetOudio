@@ -29,7 +29,7 @@ struct RecordingSettingsPage: View {
             //         .fixedSize(horizontal: false, vertical: true)
             // }
 
-            SettingsSection("输入与权限", systemImage: "waveform.badge.mic") {
+            SettingsSection("输入", systemImage: "waveform.badge.mic") {
                 VStack(alignment: .leading, spacing: 14) {
                     HStack {
                         Text("Audio Bridge")
@@ -46,24 +46,14 @@ struct RecordingSettingsPage: View {
                         }
                         .labelsHidden()
                         .frame(maxWidth: 320)
-                    }
 
-                    HStack {
-                        Label(
-                            viewModel.microphoneAuthorized ? "音频输入权限已启用" : "需要音频输入权限",
-                            systemImage: viewModel.microphoneAuthorized ? "checkmark.circle.fill" : "exclamationmark.circle"
-                        )
-                        .foregroundStyle(viewModel.microphoneAuthorized ? .green : .secondary)
-                        Spacer()
-                        if !viewModel.microphoneAuthorized {
-                            Button("授权") { viewModel.requestMicrophonePermission() }
-                        }
                         Button("刷新设备") { viewModel.refresh() }
                     }
+
                 }
             }
 
-            SettingsSection("文件与缓存", systemImage: "externaldrive") {
+            SettingsSection("缓存", systemImage: "externaldrive") {
                 VStack(alignment: .leading, spacing: 14) {
                     HStack {
                         Text("缓存上限")
@@ -90,19 +80,30 @@ struct RecordingSettingsPage: View {
 
                     Divider()
 
-                    Toggle("完成后移动到指定目录", isOn: Binding(
-                        get: { viewModel.usesCustomOutputDirectory },
-                        set: { viewModel.setUsesCustomOutputDirectory($0) }
+                    Toggle("使用指定缓存目录", isOn: Binding(
+                        get: { viewModel.usesCustomCacheDirectory },
+                        set: { viewModel.setUsesCustomCacheDirectory($0) }
                     ))
 
+                    Text("Get Oudio会管理你指定的缓存目录，所以请专门为它新建一个文件夹！")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
                     HStack {
-                        Text(viewModel.customOutputDirectoryName)
+                        Text(viewModel.cacheDirectoryPath)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                         Spacer()
-                        Button("选择目录") { viewModel.chooseOutputDirectory() }
+                        Button("选择目录") { viewModel.chooseCacheDirectory() }
                     }
-                    .disabled(!viewModel.usesCustomOutputDirectory)
+
+                    HStack {
+                        Button("恢复默认缓存目录") { viewModel.restoreDefaultCacheDirectory() }
+                            .disabled(!viewModel.usesCustomCacheDirectory)
+                        Spacer()
+                        Button("在访达中显示") { viewModel.revealCacheDirectory() }
+                    }
                 }
             }
 
@@ -352,10 +353,16 @@ struct TranscodingSettingsPage: View {
 
             SettingsSection("默认打开方式", systemImage: "doc.badge.gearshape") {
                 VStack(alignment: .leading, spacing: 12) {
+                    Text("使用下方的Toggle快速改变对应文件的默认打开方式")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+
+                    Divider()
+
                     HStack(spacing: 8) {
                         Text("关闭时使用")
                             .foregroundStyle(.secondary)
-                        Spacer()
+                        // Spacer()
                         Menu {
                             if defaultOpenWithSettings.defaultAudioPlayerOptions.isEmpty {
                                 Text("没有找到可打开 .wav 的应用")
@@ -425,7 +432,7 @@ struct TranscodingSettingsPage: View {
                 }
             }
 
-            SettingsSection("Re-Encoding预设", systemImage: "slider.horizontal.3") {
+            SettingsSection("预设配置", systemImage: "slider.horizontal.3") {
                 VStack(alignment: .leading, spacing: 16) {
                     ForEach(ConversionPresetGroup.allCases) { group in
                         presetGroupBoard(group)
@@ -551,79 +558,15 @@ struct AppleMusicSettingsPage: View {
     @State private var username = ""
     @State private var password = ""
     @State private var verificationCode = ""
-    @State private var selectedTab = "settings"
     private let keychain = KeychainService()
 
     var body: some View {
         SettingsForm {
+            dependencyInstallationSettings
+            runtimeStatusSettings
+            initializationSettings
+            downloadSettings
             MarkdownDocumentView(.appleMusic)
-
-            SettingsSection("Apple Music 下载", systemImage: "arrow.down.circle") {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 12) {
-                        statusBadge
-                        Text(viewModel.appleMusicRuntimeMessage)
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                        Spacer()
-                    }
-
-                    if viewModel.isManagingAppleMusicRuntime || viewModel.appleMusicRuntimeProgress?.isActive == true {
-                        VStack(alignment: .leading, spacing: 6) {
-                            ProgressView(value: viewModel.appleMusicRuntimeProgress?.fractionCompleted ?? 0)
-                                .progressViewStyle(.linear)
-                            Text(viewModel.appleMusicRuntimeProgress?.message ?? viewModel.appleMusicRuntimeMessage)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-
-                    HStack(spacing: 12) {
-                        Button {
-                            Task { await viewModel.enableAppleMusicRuntime() }
-                        } label: {
-                            Label(viewModel.isAppleMusicDownloadEnabled ? "检查并修复" : "启用", systemImage: "arrow.down.to.line")
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(viewModel.isManagingAppleMusicRuntime)
-
-                        Button {
-                            Task { await viewModel.refreshAppleMusicRuntimeStatus() }
-                        } label: {
-                            Label("刷新", systemImage: "arrow.clockwise")
-                        }
-                        .disabled(viewModel.isManagingAppleMusicRuntime)
-
-                        Button(role: .destructive) {
-                            Task { await viewModel.uninstallAppleMusicRuntime() }
-                        } label: {
-                            Label("卸载", systemImage: "trash")
-                        }
-                        .disabled(viewModel.isManagingAppleMusicRuntime || !viewModel.isAppleMusicDownloadEnabled)
-
-                        Button(role: .destructive) {
-                            viewModel.stopAppleMusicDownload()
-                        } label: {
-                            Label("急停", systemImage: "stop.circle")
-                        }
-                        .disabled(!viewModel.canStopAppleMusicDownload)
-                    }
-                }
-            }
-
-            Picker("", selection: $selectedTab) {
-                Text("下载设置").tag("settings")
-                Text("依赖状态").tag("runtime")
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-
-            if selectedTab == "settings" {
-                accountAndDownloadSettings
-            } else {
-                runtimeStatusSettings
-            }
         }
         .task {
             await viewModel.refreshAppleMusicRuntimeStatus()
@@ -633,6 +576,62 @@ struct AppleMusicSettingsPage: View {
         }
         .task {
             await viewModel.monitorAppleMusicRuntimeProgress()
+        }
+    }
+
+    private var dependencyInstallationSettings: some View {
+        SettingsSection("依赖安装", systemImage: "arrow.down.circle") {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 12) {
+                    statusBadge
+                    Text(viewModel.appleMusicRuntimeMessage)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                    Spacer()
+                }
+
+                if viewModel.isManagingAppleMusicRuntime || viewModel.appleMusicRuntimeProgress?.isActive == true {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ProgressView(value: viewModel.appleMusicRuntimeProgress?.fractionCompleted ?? 0)
+                            .progressViewStyle(.linear)
+                        Text(viewModel.appleMusicRuntimeProgress?.message ?? viewModel.appleMusicRuntimeMessage)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                HStack(spacing: 12) {
+                    Button {
+                        Task { await viewModel.enableAppleMusicRuntime() }
+                    } label: {
+                        Label(viewModel.isAppleMusicDownloadEnabled ? "检查并修复" : "启用", systemImage: "arrow.down.to.line")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(viewModel.isManagingAppleMusicRuntime)
+
+                    Button {
+                        Task { await viewModel.refreshAppleMusicRuntimeStatus() }
+                    } label: {
+                        Label("刷新", systemImage: "arrow.clockwise")
+                    }
+                    .disabled(viewModel.isManagingAppleMusicRuntime)
+
+                    Button(role: .destructive) {
+                        Task { await viewModel.uninstallAppleMusicRuntime() }
+                    } label: {
+                        Label("卸载", systemImage: "trash")
+                    }
+                    .disabled(viewModel.isManagingAppleMusicRuntime || !viewModel.isAppleMusicDownloadEnabled)
+
+                    Button(role: .destructive) {
+                        viewModel.stopAppleMusicDownload()
+                    } label: {
+                        Label("急停", systemImage: "stop.circle")
+                    }
+                    .disabled(!viewModel.canStopAppleMusicDownload)
+                }
+            }
         }
     }
 
@@ -646,131 +645,140 @@ struct AppleMusicSettingsPage: View {
         .foregroundStyle(viewModel.isAppleMusicDownloadEnabled ? .green : .secondary)
     }
 
-    private var accountAndDownloadSettings: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            SettingsSection("初始化", systemImage: "person.badge.key") {
-                VStack(alignment: .leading, spacing: 12) {
-                    LabeledContent("Apple ID") {
-                        TextField("example@icloud.com", text: $username)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(maxWidth: 280)
+    private var initializationSettings: some View {
+        SettingsSection("初始化", systemImage: "person.badge.key") {
+            VStack(alignment: .leading, spacing: 12) {
+                LabeledContent("Apple ID") {
+                    TextField("example@icloud.com", text: $username)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(maxWidth: 280)
+                }
+
+                LabeledContent("密码") {
+                    SecureField("••••••••", text: $password)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(maxWidth: 280)
+                }
+
+                Toggle("使用系统代理", isOn: Binding(
+                    get: { viewModel.appleMusicUseSystemProxy },
+                    set: { viewModel.setAppleMusicUseSystemProxy($0) }
+                ))
+                .toggleStyle(.switch)
+
+                HStack(spacing: 12) {
+                    Button {
+                        saveCredentials()
+                    } label: {
+                        Label("保存凭据", systemImage: "key")
                     }
+                    .disabled(!viewModel.isAppleMusicDownloadEnabled || viewModel.appleMusicWrapperLoginStatus.isInProgress)
 
-                    LabeledContent("密码") {
-                        SecureField("••••••••", text: $password)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(maxWidth: 280)
+                    Button {
+                        Task { await initializeWrapper() }
+                    } label: {
+                        Label("开始初始化", systemImage: "play.fill")
                     }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(
+                        !viewModel.isAppleMusicDownloadEnabled
+                            || viewModel.isInitializingAppleMusicWrapper
+                            || viewModel.appleMusicWrapperLoginStatus.isInProgress
+                            || viewModel.appleMusicWrapperLoginStatus.isAuthenticated
+                            || username.isEmpty
+                            || password.isEmpty
+                    )
+                }
 
-                    Toggle("使用系统代理", isOn: Binding(
-                        get: { viewModel.appleMusicUseSystemProxy },
-                        set: { viewModel.setAppleMusicUseSystemProxy($0) }
-                    ))
-                    .toggleStyle(.switch)
+                LabeledContent("验证码") {
+                    HStack(spacing: 8) {
+                        TextField("123456", text: $verificationCode)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 140)
+                            .disabled(!viewModel.appleMusicWrapperLoginStatus.canSubmitVerificationCode)
 
-                    HStack(spacing: 12) {
                         Button {
-                            saveCredentials()
+                            Task { await submitVerificationCode() }
                         } label: {
-                            Label("保存凭据", systemImage: "key")
+                            Label("提交验证码", systemImage: "number")
                         }
-                        .disabled(!viewModel.isAppleMusicDownloadEnabled || viewModel.appleMusicWrapperLoginStatus.isInProgress)
-
-                        Button {
-                            Task { await initializeWrapper() }
-                        } label: {
-                            Label("开始初始化", systemImage: "play.fill")
-                        }
-                        .buttonStyle(.borderedProminent)
                         .disabled(
                             !viewModel.isAppleMusicDownloadEnabled
-                                || viewModel.isInitializingAppleMusicWrapper
-                                || viewModel.appleMusicWrapperLoginStatus.isInProgress
-                                || viewModel.appleMusicWrapperLoginStatus.isAuthenticated
-                                || username.isEmpty
-                                || password.isEmpty
+                                || !viewModel.appleMusicWrapperLoginStatus.canSubmitVerificationCode
+                                || viewModel.isSubmittingAppleMusicVerificationCode
+                                || verificationCode.isEmpty
                         )
                     }
+                }
 
-                    LabeledContent("验证码") {
-                        HStack(spacing: 8) {
-                            TextField("123456", text: $verificationCode)
-                                .textFieldStyle(.roundedBorder)
-                                .frame(width: 140)
-                                .disabled(!viewModel.appleMusicWrapperLoginStatus.canSubmitVerificationCode)
+                if viewModel.appleMusicWrapperLoginStatus.isInProgress {
+                    ProgressView()
+                        .controlSize(.small)
+                }
 
-                            Button {
-                                Task { await submitVerificationCode() }
-                            } label: {
-                                Label("提交验证码", systemImage: "number")
-                            }
-                            .disabled(
-                                !viewModel.isAppleMusicDownloadEnabled
-                                    || !viewModel.appleMusicWrapperLoginStatus.canSubmitVerificationCode
-                                    || viewModel.isSubmittingAppleMusicVerificationCode
-                                    || verificationCode.isEmpty
-                            )
-                        }
-                    }
-
-                    if viewModel.appleMusicWrapperLoginStatus.isInProgress {
-                        ProgressView()
-                            .controlSize(.small)
-                    }
-
-                    if !viewModel.appleMusicActionMessage.isEmpty {
-                        Text(viewModel.appleMusicActionMessage)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .padding(.vertical, 2)
-                    }
+                if !viewModel.appleMusicActionMessage.isEmpty {
+                    Text(viewModel.appleMusicActionMessage)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.vertical, 2)
                 }
             }
-            .disabled(viewModel.appleMusicWrapperLoginStatus.isAuthenticated)
             .overlay {
                 if viewModel.appleMusicWrapperLoginStatus.isAuthenticated {
                     ZStack {
                         RoundedRectangle(cornerRadius: SettingsMetrics.sectionCornerRadius, style: .continuous)
                             .fill(.regularMaterial)
+                            .opacity(0.5)
                         Label("初始化已完成", systemImage: "checkmark.circle.fill")
-                            .font(.title3.weight(.semibold))
+                            .font(.title2.weight(.bold))
                             .foregroundStyle(.green)
                     }
-                }
-            }
-
-            SettingsSection("下载设置", systemImage: "arrow.down.circle") {
-                VStack(alignment: .leading, spacing: 12) {
-                    LabeledContent("输出到") {
-                        HStack {
-                            Text(viewModel.appleMusicOutputURL.path)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                            Spacer()
-                            Button {
-                                viewModel.chooseAppleMusicOutputDirectory()
-                            } label: {
-                                Label("选择", systemImage: "folder")
-                            }
-                        }
-                    }
-
-                    Divider()
-
-                    Picker("下载格式", selection: Binding(
-                        get: { viewModel.appleMusicDownloadFormat },
-                        set: { viewModel.setAppleMusicDownloadFormat($0) }
-                    )) {
-                        ForEach(AppleMusicDownloadFormat.allCases) { format in
-                            Text(format.displayName).tag(format)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .disabled(!viewModel.isAppleMusicDownloadEnabled)
+                    .padding(-SettingsMetrics.sectionPadding)
+                    .allowsHitTesting(false)
                 }
             }
         }
+        .disabled(!areAppleMusicDependenciesReady || viewModel.appleMusicWrapperLoginStatus.isAuthenticated)
+    }
+
+    private var downloadSettings: some View {
+        SettingsSection("下载设置", systemImage: "arrow.down.circle") {
+            VStack(alignment: .leading, spacing: 12) {
+                LabeledContent("输出到") {
+                    HStack {
+                        Text(viewModel.appleMusicOutputURL.path)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Spacer()
+                        Button {
+                            viewModel.chooseAppleMusicOutputDirectory()
+                        } label: {
+                            Label("选择", systemImage: "folder")
+                        }
+                    }
+                }
+
+                Divider()
+
+                Picker("下载格式", selection: Binding(
+                    get: { viewModel.appleMusicDownloadFormat },
+                    set: { viewModel.setAppleMusicDownloadFormat($0) }
+                )) {
+                    ForEach(AppleMusicDownloadFormat.allCases) { format in
+                        Text(format.displayName).tag(format)
+                    }
+                }
+                .pickerStyle(.menu)
+                .disabled(!viewModel.isAppleMusicDownloadEnabled)
+            }
+        }
+    }
+
+    private var areAppleMusicDependenciesReady: Bool {
+        viewModel.isAppleMusicDownloadEnabled
+            && !viewModel.appleMusicRuntimeStatuses.isEmpty
+            && viewModel.appleMusicRuntimeStatuses.allSatisfy(\.isReady)
     }
 
     private var runtimeStatusSettings: some View {

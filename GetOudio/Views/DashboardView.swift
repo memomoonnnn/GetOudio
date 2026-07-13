@@ -3,11 +3,15 @@ import SwiftUI
 struct DashboardView: View {
     @ObservedObject var finderSettings: FinderDirectorySettingsModel
     @ObservedObject var systemExtensionSettings: SystemExtensionSettingsModel
+    @ObservedObject var recordingSettings: RecordingSettingsModel
 
     var body: some View {
         SettingsForm {
             SettingsSection("授权", systemImage: "checkmark.shield") {
                 VStack(alignment: .leading, spacing: 18) {
+                    Label("拓展", systemImage: "puzzlepiece.extension")
+                        .font(.headline)
+
                     Text("你需要启用以下拓展：“文件提供程序”使你可以在访达的右键菜单中找到「Get Oudio」；“共享”则使你可以在 Apple Music 中分享 URL 到「Get Oudio」")
                         .font(.callout)
                         .foregroundStyle(.secondary)
@@ -74,6 +78,29 @@ struct DashboardView: View {
                         }
 
                         Spacer(minLength: 0)
+                    }
+
+                    Divider()
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        Label("权限", systemImage: "lock.shield")
+                            .font(.headline)
+
+                        Text("你需要批准麦克风访问权限，这使你可以使用「Get Oudio」的录音功能")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+
+                        HStack {
+                            Label(
+                                recordingSettings.microphoneAuthorized ? "音频输入权限已启用" : "需要音频输入权限",
+                                systemImage: recordingSettings.microphoneAuthorized ? "checkmark.circle.fill" : "exclamationmark.circle"
+                            )
+                            .foregroundStyle(recordingSettings.microphoneAuthorized ? .green : .secondary)
+                            Spacer()
+                            if !recordingSettings.microphoneAuthorized {
+                                Button("授权") { recordingSettings.requestMicrophonePermission() }
+                            }
+                        }
                     }
                 }
             }

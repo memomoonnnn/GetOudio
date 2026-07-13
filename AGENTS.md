@@ -22,7 +22,7 @@ App Bundle 只携带精简 `ffmpeg`、`ncmdump` 和 `apple-music-downloader`。D
 
 输入回调、监听回调不得分配内存、写磁盘、写日志、调度主线程或等待信号量；实时错误只写入预分配的原子状态，由 Runner 健康检查统一停止和记录。监听环形缓冲的欠载、丢帧及输入回调/PCM 静音状态必须保留为诊断数据；静音是合法信号，不能自动停止录音。若日志出现 `input health` 的“无回调”或“所有 PCM 块静音”，即使设备仍显示可用，也应先在“音频 MIDI 设置”打开并刷新该 Bridge 的输入/输出页，再判断路由或代码是否有问题。
 
-录后处理只适用于本录音器已完成的 24-bit PCM WAV/RF64 成品，由 Core 的 `RecordingPostProcessor` 流式扫描和写入；不得在实时回调中处理，也不得改用 ffmpeg、AVFoundation 离线效果或任意格式的通用解码路径。`RecordingPostProcessingOptions` 经 `SettingsStore` 的 suite defaults 持久化：开启“去除头尾的无声片段”或“峰值标准化”任一项即处理，无总开关；静音阈值限定 `-90...0 dBFS`、额外垫付限定 `0...1000 ms`，默认分别为 `-50 dBFS` 与 `150 ms`，标准化峰值固定为 `-0.1 dBFS`。裁切仅移除两端所有声道均低于阈值的帧，不得触碰中间静音；处理必须在 WAV finalize、默认媒体输出恢复后、迁移到自定义目录前执行，先写同目录暂存文件并验证后再原子替换缓存成品。全程静音、非受支持 WAV/RF64 或任何处理/替换失败时必须保留原始 WAV，并把回退原因带入完成通知。
+录后处理只适用于本录音器已完成的 24-bit PCM WAV/RF64 成品，由 Core 的 `RecordingPostProcessor` 流式扫描和写入；不得在实时回调中处理，也不得改用 ffmpeg、AVFoundation 离线效果或任意格式的通用解码路径。`RecordingPostProcessingOptions` 经 `SettingsStore` 的 suite defaults 持久化：开启“去除头尾的无声片段”或“峰值标准化”任一项即处理，无总开关；静音阈值限定 `-90...0 dBFS`、额外垫付限定 `0...1000 ms`，默认分别为 `-50 dBFS` 与 `150 ms`，标准化峰值固定为 `-0.1 dBFS`。裁切仅移除两端所有声道均低于阈值的帧，不得触碰中间静音；处理必须在 WAV finalize、默认媒体输出恢复后进行，先写缓存目录内暂存文件并验证后再原子替换缓存成品。默认缓存位于 App Group；用户指定缓存位置时，直接管理该目录内的录音 WAV，并以 security-scoped bookmark 维持访问，设置页必须提醒用户专门为 Get Oudio 新建缓存文件夹。全程静音、非受支持 WAV/RF64 或任何处理/替换失败时必须保留原始 WAV，并把回退原因带入完成通知。
 
 ## Required Task Guides
 
