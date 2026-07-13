@@ -219,7 +219,7 @@ private enum MainSidebarItem: String, CaseIterable, Identifiable {
         case .transcoding: return "音频重编码"
         case .ncm: return "NCM解密"
         case .appleMusic: return "Apple Music 下载"
-        case .recording: return "Audio Bridge Recorder"
+        case .recording: return "录音"
         }
     }
 
