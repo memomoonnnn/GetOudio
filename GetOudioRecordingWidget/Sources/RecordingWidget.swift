@@ -32,27 +32,61 @@ private struct RecordingWidgetProvider: TimelineProvider {
 
 private struct RecordingWidgetView: View {
     let entry: RecordingWidgetEntry
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var cardFill: LinearGradient {
+        let colors: [Color]
+        if entry.isRecording {
+            colors = [
+                Color(red: 1, green: 0.24, blue: 0.25),
+                Color(red: 0.68, green: 0.04, blue: 0.08)
+            ]
+        } else if colorScheme == .dark {
+            colors = [Color(white: 0.16), .black]
+        } else {
+            colors = [.white, Color(white: 0.9)]
+        }
+        return LinearGradient(colors: colors, startPoint: .top, endPoint: .bottom)
+    }
+
+    private var labelFill: LinearGradient {
+        let colors: [Color] = entry.isRecording
+            ? [.white, Color(white: 0.82)]
+            : [
+                Color(red: 0.64, green: 0.02, blue: 0.07),
+                Color(red: 0.98, green: 0.2, blue: 0.23)
+            ]
+        return LinearGradient(colors: colors, startPoint: .top, endPoint: .bottom)
+    }
+
+    private var cardShadow: Color {
+        .black.opacity(colorScheme == .dark ? 0.45 : 0.18)
+    }
 
     var body: some View {
         Link(destination: URL(string: "getoudio://recording/toggle")!) {
-            VStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(entry.isRecording ? Color.red : Color.accentColor)
-                        .frame(width: 62, height: 62)
-                    Image(systemName: entry.isRecording ? "stop.fill" : "record.circle")
-                        .font(.system(size: 28, weight: .semibold))
-                        .foregroundStyle(.white)
-                }
-                Text(entry.isRecording ? "正在录音" : "开始录音")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(.primary)
+            ZStack(alignment: .bottomLeading) {
+                ContainerRelativeShape()
+                    .fill(.ultraThinMaterial)
+
+                ContainerRelativeShape()
+                    .fill(cardFill)
+                    .shadow(color: cardShadow, radius: 3, x: 0, y: 1)
+                    .padding(8)
+
+                Text(entry.isRecording ? "结束录音..." : "录音开始！")
+                    .font(.system(size: 26, weight: .bold))
+                    .foregroundStyle(labelFill)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .allowsTightening(true)
+                    .padding(22)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .containerBackground(.fill.tertiary, for: .widget)
+        .containerBackground(.clear, for: .widget)
     }
 }
 
@@ -66,6 +100,7 @@ private struct GetOudioRecordingWidget: Widget {
         .configurationDisplayName("Audio Bridge Recorder")
         .description("开始或停止 Pro Tools Audio Bridge 录音。")
         .supportedFamilies([.systemSmall])
+        .contentMarginsDisabled()
     }
 }
 
@@ -75,4 +110,3 @@ struct GetOudioRecordingWidgetBundle: WidgetBundle {
         GetOudioRecordingWidget()
     }
 }
-

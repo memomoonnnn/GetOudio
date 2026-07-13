@@ -64,6 +64,25 @@ final class GetOudioCoreTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: current.path))
     }
 
+    func testRecordingCacheUsesCompactTimestampAndUUIDPrefixInTemporaryFileName() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let cache = try RecordingCacheStore(directoryURL: root)
+        let now = try XCTUnwrap(Calendar.current.date(from: DateComponents(
+            year: 2026,
+            month: 7,
+            day: 13,
+            hour: 14,
+            minute: 30,
+            second: 45
+        )))
+        let id = try XCTUnwrap(UUID(uuidString: "A1B2C3D4-E5F6-4718-9ABC-DEF012345678"))
+
+        let url = cache.makeTemporaryFileURL(now: now, id: id)
+
+        XCTAssertEqual(url.lastPathComponent, "260713-143045 [GetOudioRec. A1B2C3D4].wav.part")
+    }
+
     func testRecordingWAVWriterCreatesRecoverable24BitHeader() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -1002,6 +1021,13 @@ final class GetOudioCoreTests: XCTestCase {
 
         XCTAssertEqual(manager.runtimeEnvironment()["COLIMA_HOME"], colimaHome.path)
         XCTAssertEqual(manager.runtimeEnvironment()["LIMA_HOME"], limaHome.path)
+    }
+
+    func testAppleMusicRuntimeUsesPersistentShortApplicationSupportDirectoryForVMState() {
+        let expected = SettingsStore.realUserHomeDirectory()
+            .appendingPathComponent("Library/Application Support/GetOudio/AM", isDirectory: true)
+
+        XCTAssertEqual(AppleMusicRuntimeManager.defaultVMStateRootURL, expected)
     }
 
     func testAppleMusicRuntimeHasOfficialDefaultGPACPackage() {

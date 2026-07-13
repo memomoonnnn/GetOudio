@@ -17,8 +17,8 @@ public final class RecordingCacheStore {
     public func makeTemporaryFileURL(now: Date = Date(), id: UUID = UUID()) -> URL {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "yyyy-MM-dd HH.mm.ss"
-        let name = "Get Oudio Recording \(formatter.string(from: now)) \(id.uuidString.prefix(8)).wav.part"
+        formatter.dateFormat = "yyMMdd-HHmmss"
+        let name = "\(formatter.string(from: now)) [GetOudioRec. \(id.uuidString.prefix(8))].wav.part"
         return directoryURL.appendingPathComponent(name)
     }
 
