@@ -167,6 +167,7 @@ private extension EnvironmentValues {
 private struct MainSidebarRow: View {
     let item: MainSidebarItem
     let isSelected: Bool
+    @State private var isHovering = false
 
     var body: some View {
         HStack(spacing: 0) {
@@ -183,12 +184,20 @@ private struct MainSidebarRow: View {
         .padding(.vertical, 11)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
-            if isSelected {
-                RoundedRectangle(cornerRadius: 11, style: .continuous)
-                    .fill(Color.accentColor)
-            }
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                .fill(backgroundColor)
         }
         .contentShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+        .onHover { isHovering = $0 }
+        .animation(.easeOut(duration: 0.12), value: isHovering)
+    }
+
+    private var backgroundColor: Color {
+        if isSelected {
+            return .accentColor
+        }
+
+        return isHovering ? Color.primary.opacity(0.08) : .clear
     }
 }
 
