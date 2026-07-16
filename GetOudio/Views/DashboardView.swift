@@ -1,18 +1,5 @@
 import SwiftUI
 
-private enum AboutLayout {
-    static let iconSize: CGFloat = 128
-    static let titleFontSize: CGFloat = 36
-    static let titleFontName = "Pally-Bold"
-    static let versionFontSize: CGFloat = 16
-    static let attributionFontSize: CGFloat = 13
-    static let headerSpacing: CGFloat = 16
-    static let contentRowSpacing: CGFloat = 16
-    static let buttonSpacing: CGFloat = 10
-    static let dividerTopSpacing: CGFloat = 24
-    static let githubURL = URL(string: "https://github.com/memomoonnnn/GetOudio")!
-}
-
 struct DashboardView: View {
     @ObservedObject var finderSettings: FinderDirectorySettingsModel
     @ObservedObject var systemExtensionSettings: SystemExtensionSettingsModel
@@ -121,19 +108,20 @@ struct DashboardView: View {
             }
 
             SettingsSection("关于", systemImage: "info.circle") {
-                HStack(alignment: .center, spacing: AboutLayout.headerSpacing) {
-                    VStack(alignment: .leading, spacing: AboutLayout.contentRowSpacing) {
-                        Group {
+                HStack(alignment: .center, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 24) {
+                        VStack(alignment: .leading, spacing: 16) {
                             Text(verbatim: "Get! OOOOOOOOOudio")
-                                .font(.custom(AboutLayout.titleFontName, size: AboutLayout.titleFontSize))
+                                .font(.custom("Pally-Bold", size: 32))
                             Text(verbatim: versionText)
-                                .font(.system(size: AboutLayout.versionFontSize))
+                                .font(.system(size: 16))
                                 .foregroundStyle(.secondary)
+                                .padding(.leading, 2) //视觉对齐
                         }
                         .accessibilityElement(children: .ignore)
                         .accessibilityLabel("Get Oudio，\(versionText)")
 
-                        HStack(spacing: AboutLayout.buttonSpacing) {
+                        HStack(spacing: 10) {
                             Button {
                                 checkForUpdates()
                             } label: {
@@ -141,13 +129,13 @@ struct DashboardView: View {
                             }
                             .buttonStyle(.bordered)
 
-                            Link(destination: AboutLayout.githubURL) {
+                            Link(destination: URL(string: "https://github.com/memomoonnnn/GetOudio")!) {
                                 Label("在Github上查看", systemImage: "link")
                             }
                             .buttonStyle(.bordered)
 
                             Text(verbatim: "@紙葉 Shiyō")
-                                .font(.system(size: AboutLayout.attributionFontSize))
+                                .font(.system(size: 13))
                                 .foregroundStyle(.secondary)
                                 .accessibilityLabel("作者：紙葉 Shiyō")
                         }
@@ -158,13 +146,16 @@ struct DashboardView: View {
                     Image(nsImage: NSApp.applicationIconImage)
                         .resizable()
                         .interpolation(.high)
-                        .frame(width: AboutLayout.iconSize, height: AboutLayout.iconSize)
+                        .frame(width: 128, height: 128)
                         .accessibilityHidden(true)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .padding([.leading, .top], 12)
 
                 Divider()
-                    .padding(.top, AboutLayout.dividerTopSpacing)
+                    .padding(.horizontal, 12)
+                    .padding(.top, 16)
+                    .padding(.bottom, 4) //补偿Doc布局原始的12pt padding
 
                 MarkdownDocumentContent(.overview)
             }
@@ -178,6 +169,12 @@ struct DashboardView: View {
                     )
                 )
                 .toggleStyle(.switch)
+
+                Spacer()
+
+                Button("在访达中显示") {
+                    diagnosticSettings.revealLogLocation()
+                }
             }
         }
     }

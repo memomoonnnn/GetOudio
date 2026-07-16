@@ -23,6 +23,6 @@ final class SettingsViewModel: ObservableObject {
         defaultOpenWithSettings = DefaultOpenWithSettingsModel(store: store)
         appleMusicSettings = AppleMusicSettingsModel(container: container, store: store)
         recordingSettings = RecordingSettingsModel(container: container, store: store)
-        diagnosticSettings = DiagnosticSettingsModel(store: store)
+        diagnosticSettings = DiagnosticSettingsModel(container: container, store: store)
     }
 }
