@@ -70,7 +70,7 @@ struct DashboardView: View {
                         .disabled(systemExtensionSettings.isRestartingFinder)
 
                         VStack(alignment: .leading, spacing: 3) {
-                            Text("更改扩展或文件/文件夹访问权限后，请重启访达")
+                            Text("上述设置均需要重启访达以生效")
                                 .font(.callout.weight(.medium))
                             if !systemExtensionSettings.finderRestartMessage.isEmpty {
                                 Text(systemExtensionSettings.finderRestartMessage)
