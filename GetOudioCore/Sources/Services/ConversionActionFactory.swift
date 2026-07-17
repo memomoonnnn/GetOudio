@@ -24,10 +24,12 @@ public struct ConversionActionFactory {
         urls
             .filter { FileCategory.classify($0) == .audio }
             .map {
-                JobRequest(
+                let directoryURL = $0.deletingLastPathComponent()
+                return JobRequest(
                     fileURL: $0,
                     fileBookmarkData: JobRequest.securityScopedBookmarkData(for: $0),
-                    directoryBookmarkData: JobRequest.securityScopedBookmarkData(for: $0.deletingLastPathComponent()),
+                    directoryBookmarkData: settingsStore.directoryBookmarkData(for: directoryURL)
+                        ?? JobRequest.securityScopedBookmarkData(for: directoryURL),
                     category: .audio,
                     operation: .transcode(preset),
                     source: source

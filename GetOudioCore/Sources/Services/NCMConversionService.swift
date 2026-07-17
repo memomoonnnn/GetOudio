@@ -41,15 +41,45 @@ public final class NCMConversionService {
                 let access = job.startAccessingSecurityScopedResources()
                 defer { access.stopAccessing() }
 
-                let outputDirectory = try outputDirectory(for: job, access: access)
-                try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+                let customOutputAccess: SecurityScopedDirectoryAccess?
+                let outputDirectory: URL
+                if settingsStore.ncmOutputMode == "customDirectory" {
+                    let outputAccess = try settingsStore.ncmCustomOutputAccess()
+                    customOutputAccess = outputAccess
+                    outputDirectory = outputAccess.directoryURL
+                } else {
+                    customOutputAccess = nil
+                    outputDirectory = access.outputDirectoryURL
+                }
+                defer { customOutputAccess?.stopAccessing() }
+                DiagnosticLog.append(
+                    "[NCM-DIAG] access file=\(access.fileURL.path) scopeDirectory=\(access.directoryURL?.path ?? "<none>") activeDirectoryScope=\(access.hasActiveDirectorySecurityScope) activeScopes=\(access.activeSecurityScopedResourceCount) output=\(outputDirectory.path)"
+                )
+                try DirectoryAccess.ensureWritableDirectory(outputDirectory)
+                DiagnosticLog.append(
+                    "[NCM-DIAG] output preflight \(outputDirectoryDiagnostic(for: outputDirectory, inputURL: access.fileURL))"
+                )
+                let outputBefore = outputCandidateStamps(in: outputDirectory, matching: access.fileURL)
 
                 let result = try await runner.run(
                     executablePath: executableURL.path,
                     arguments: ["-o", outputDirectory.path, access.fileURL.path]
                 )
+                DiagnosticLog.append(
+                    "[NCM-DIAG] ncmdump exit=\(result.exitCode) stdout=\(diagnosticExcerpt(result.standardOutput)) stderr=\(diagnosticExcerpt(result.standardError))"
+                )
+                DiagnosticLog.append(
+                    "[NCM-DIAG] output postflight \(outputDirectoryDiagnostic(for: outputDirectory, inputURL: access.fileURL))"
+                )
 
                 if result.succeeded {
+                    guard outputCandidateStamps(in: outputDirectory, matching: access.fileURL) != outputBefore else {
+                        let message = "NCM 转换未生成输出文件：\(access.fileURL.lastPathComponent)"
+                        failureCount += 1
+                        messages.append(message)
+                        progressHandler?(job, .failed, message)
+                        continue
+                    }
                     successCount += 1
                     progressHandler?(job, .succeeded, nil)
                 } else {
@@ -67,15 +97,75 @@ public final class NCMConversionService {
         }
     }
 
-    private func outputDirectory(for job: JobRequest, access: ScopedJobAccess) throws -> URL {
-        if settingsStore.ncmOutputMode == "customDirectory", let customURL = settingsStore.ncmCustomOutputURL {
-            return customURL
-        }
+    private func outputDirectoryDiagnostic(for directoryURL: URL, inputURL: URL) -> String {
+        let fileManager = FileManager.default
+        var isDirectory: ObjCBool = false
+        let exists = fileManager.fileExists(atPath: directoryURL.path, isDirectory: &isDirectory)
+        let attributes = (try? fileManager.attributesOfItem(atPath: directoryURL.path)) ?? [:]
+        let permissions = (attributes[.posixPermissions] as? Int16).map { String($0, radix: 8) } ?? "?"
+        let owner = attributes[.ownerAccountName] as? String ?? "?"
+        let candidates = outputCandidates(in: directoryURL, matching: inputURL)
 
-        if let directoryURL = access.directoryURL {
-            return directoryURL
-        }
+        return "path=\(directoryURL.path) exists=\(exists) isDirectory=\(isDirectory.boolValue) writable=\(fileManager.isWritableFile(atPath: directoryURL.path)) permissions=\(permissions) owner=\(owner) candidates=\(candidates)"
+    }
 
-        return job.fileURL.deletingLastPathComponent()
+    private func outputCandidates(in directoryURL: URL, matching inputURL: URL) -> String {
+        let entries = outputCandidateStamps(in: directoryURL, matching: inputURL)
+        guard !entries.isEmpty else { return "<none>" }
+
+        return entries
+            .sorted { $0.name < $1.name }
+            .map { entry in
+                let size = entry.size.map(String.init) ?? "?"
+                let modified = entry.modified.map(ISO8601DateFormatter().string(from:)) ?? "?"
+                return "\(entry.name){size=\(size),modified=\(modified)}"
+            }
+            .joined(separator: ", ")
+    }
+
+    private func outputCandidateStamps(in directoryURL: URL, matching inputURL: URL) -> Set<OutputCandidateStamp> {
+        let inputStem = inputURL.deletingPathExtension().lastPathComponent
+        let audioExtensions: Set<String> = ["aac", "aiff", "alac", "flac", "m4a", "mp3", "ogg", "opus", "wav"]
+
+        do {
+            let urls = try FileManager.default.contentsOfDirectory(
+                at: directoryURL,
+                includingPropertiesForKeys: [.contentModificationDateKey, .fileSizeKey, .isRegularFileKey],
+                options: [.skipsHiddenFiles]
+            )
+            return Set(urls.compactMap { url -> OutputCandidateStamp? in
+                guard url.deletingPathExtension().lastPathComponent == inputStem,
+                      audioExtensions.contains(url.pathExtension.lowercased()),
+                      (try? url.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true else {
+                    return nil
+                }
+
+                let values = try? url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey])
+                return OutputCandidateStamp(
+                    name: url.lastPathComponent,
+                    size: values?.fileSize,
+                    modified: values?.contentModificationDate
+                )
+            })
+        } catch {
+            return []
+        }
+    }
+
+    private struct OutputCandidateStamp: Hashable {
+        let name: String
+        let size: Int?
+        let modified: Date?
+    }
+
+    private func diagnosticExcerpt(_ value: String, limit: Int = 800) -> String {
+        guard !value.isEmpty else { return "<empty>" }
+
+        let normalized = value
+            .components(separatedBy: .controlCharacters)
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard normalized.count > limit else { return normalized }
+        return "\(normalized.prefix(limit))…"
     }
 }

@@ -52,6 +52,9 @@ public final class AudioConversionService {
             defer { access.stopAccessing() }
 
             let outputURL = preset.outputURL(for: access.fileURL)
+            DiagnosticLog.append(
+                "[AUDIO-DIAG] access file=\(access.fileURL.path) scopeDirectory=\(access.directoryURL?.path ?? "<none>") activeDirectoryScope=\(access.hasActiveDirectorySecurityScope) output=\(outputURL.path)"
+            )
             let inputAudioChannelCount: Int?
             if preset.needsInputAudioChannelCount {
                 inputAudioChannelCount = await probeInputAudioChannelCount(ffmpegPath: ffmpegPath, fileURL: access.fileURL)
@@ -65,7 +68,11 @@ public final class AudioConversionService {
             )
 
             do {
+                try DirectoryAccess.ensureWritableDirectory(outputURL.deletingLastPathComponent())
                 let result = try await runner.run(executablePath: ffmpegPath, arguments: arguments)
+                DiagnosticLog.append(
+                    "[AUDIO-DIAG] ffmpeg exit=\(result.exitCode) output=\(outputURL.path) stderr=\(diagnosticExcerpt(result.standardError))"
+                )
                 if result.succeeded {
                     successCount += 1
                     progressHandler?(job, .succeeded, nil)
@@ -128,5 +135,14 @@ public final class AudioConversionService {
         }
 
         return nil
+    }
+
+    private func diagnosticExcerpt(_ value: String, limit: Int = 800) -> String {
+        guard !value.isEmpty else { return "<empty>" }
+        let normalized = value
+            .components(separatedBy: .controlCharacters)
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return normalized.count > limit ? "\(normalized.prefix(limit))…" : normalized
     }
 }

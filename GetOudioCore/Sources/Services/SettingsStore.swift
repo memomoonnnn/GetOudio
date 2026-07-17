@@ -5,8 +5,10 @@ public final class SettingsStore {
     public enum Keys {
         public static let enabledPresetIDs = "enabledPresetIDs"
         public static let finderDirectoryPaths = "finderDirectoryPaths"
+        public static let directoryBookmarks = "directoryBookmarks"
         public static let ncmOutputMode = "ncmOutputMode"
         public static let ncmCustomOutputPath = "ncmCustomOutputPath"
+        public static let ncmCustomOutputBookmark = "ncmCustomOutputBookmark"
         public static let appleMusicOutputPath = "appleMusicOutputPath"
         public static let appleMusicDownloadMode = "appleMusicDownloadMode"
         public static let isAppleMusicDownloadEnabled = "isAppleMusicDownloadEnabled"
@@ -72,6 +74,40 @@ public final class SettingsStore {
         set {
             defaults.set(newValue?.path, forKey: Keys.ncmCustomOutputPath)
         }
+    }
+
+    public var ncmCustomOutputBookmarkData: Data? {
+        get { defaults.data(forKey: Keys.ncmCustomOutputBookmark) }
+        set { defaults.set(newValue, forKey: Keys.ncmCustomOutputBookmark) }
+    }
+
+    public func setNCMCustomOutputDirectory(_ directoryURL: URL) throws {
+        ncmCustomOutputURL = directoryURL
+        ncmCustomOutputBookmarkData = try DirectoryAccess.bookmarkData(for: directoryURL)
+        try storeDirectoryBookmark(for: directoryURL)
+    }
+
+    public func ncmCustomOutputAccess() throws -> SecurityScopedDirectoryAccess {
+        guard let directoryURL = ncmCustomOutputURL,
+              let bookmarkData = ncmCustomOutputBookmarkData else {
+            throw DirectoryAccessError.bookmarkMissing(ncmCustomOutputURL?.path ?? "指定 NCM 输出目录")
+        }
+        return try DirectoryAccess.beginAccess(bookmarkData: bookmarkData, expectedPath: directoryURL.path)
+    }
+
+    public func directoryBookmarkData(for directoryURL: URL) -> Data? {
+        let targetPath = Self.normalizedDirectoryPath(for: directoryURL)
+        return directoryBookmarks
+            .filter { path, _ in targetPath == path || targetPath.hasPrefix(path + "/") }
+            .max { $0.key.count < $1.key.count }?
+            .value
+    }
+
+    public func storeDirectoryBookmark(for directoryURL: URL) throws {
+        let path = Self.normalizedDirectoryPath(for: directoryURL)
+        var bookmarks = directoryBookmarks
+        bookmarks[path] = try DirectoryAccess.bookmarkData(for: directoryURL)
+        defaults.set(bookmarks, forKey: Keys.directoryBookmarks)
     }
 
     public var appleMusicOutputURL: URL {
@@ -192,6 +228,14 @@ public final class SettingsStore {
                 .sorted()
             if normalizedPaths != paths.sorted() {
                 defaults.set(normalizedPaths, forKey: Keys.finderDirectoryPaths)
+            }
+        }
+    }
+
+    private var directoryBookmarks: [String: Data] {
+        (defaults.dictionary(forKey: Keys.directoryBookmarks) ?? [:]).reduce(into: [:]) { result, entry in
+            if let bookmarkData = entry.value as? Data {
+                result[entry.key] = bookmarkData
             }
         }
     }

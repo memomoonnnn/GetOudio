@@ -674,6 +674,7 @@ final class GetOudioCoreTests: XCTestCase {
         let reloaded = SettingsStore(defaults: defaults)
         XCTAssertEqual(reloaded.enabledPresets, [.aac128, .flacSource])
         XCTAssertEqual(reloaded.finderDirectoryURLs.map(\.path).sorted(), ["/tmp/Desktop", "/tmp/Music"])
+        XCTAssertNil(defaults.dictionary(forKey: SettingsStore.Keys.directoryBookmarks))
     }
 
     func testSettingsStoreDoesNotPersistEmptyPresetSelection() {
@@ -807,6 +808,32 @@ final class GetOudioCoreTests: XCTestCase {
         XCTAssertEqual(reloaded.appleMusicOutputURL.path, "/tmp/AppleMusic")
         XCTAssertEqual(reloaded.appleMusicDownloadFormat, .atmos)
         XCTAssertTrue(reloaded.isAppleMusicDownloadEnabled)
+    }
+
+    func testDirectoryBookmarkLookupUsesLongestAuthorizedAncestor() {
+        let suiteName = "GetOudioCoreTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let store = SettingsStore(defaults: defaults)
+        let musicBookmark = Data([0x01])
+        let albumBookmark = Data([0x02])
+        defaults.set([
+            "/tmp/Music": musicBookmark,
+            "/tmp/Music/Album": albumBookmark
+        ], forKey: SettingsStore.Keys.directoryBookmarks)
+
+        XCTAssertEqual(store.directoryBookmarkData(for: URL(fileURLWithPath: "/tmp/Music/Album/Track", isDirectory: true)), albumBookmark)
+        XCTAssertEqual(store.directoryBookmarkData(for: URL(fileURLWithPath: "/tmp/Music/Other", isDirectory: true)), musicBookmark)
+        XCTAssertNil(store.directoryBookmarkData(for: URL(fileURLWithPath: "/tmp/Elsewhere", isDirectory: true)))
+    }
+
+    func testDirectoryAccessRejectsMissingOutputDirectory() throws {
+        let missingDirectory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+
+        XCTAssertThrowsError(try DirectoryAccess.ensureWritableDirectory(missingDirectory)) { error in
+            XCTAssertEqual(error.localizedDescription, "无法访问输出目录：\(missingDirectory.path)")
+        }
     }
 
     func testAppleMusicDownloadIsDisabledByDefault() {

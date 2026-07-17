@@ -168,10 +168,12 @@ private final class FinderActionContext: NSObject {
     }
 
     private func makeJob(fileURL: URL, category: FileCategory, operation: JobOperation) -> JobRequest {
-        JobRequest(
+        let directoryURL = fileURL.deletingLastPathComponent()
+        return JobRequest(
             fileURL: fileURL,
             fileBookmarkData: JobRequest.securityScopedBookmarkData(for: fileURL),
-            directoryBookmarkData: JobRequest.securityScopedBookmarkData(for: fileURL.deletingLastPathComponent()),
+            directoryBookmarkData: settingsStore?.directoryBookmarkData(for: directoryURL)
+                ?? JobRequest.securityScopedBookmarkData(for: directoryURL),
             category: category,
             operation: operation,
             source: .finderSync

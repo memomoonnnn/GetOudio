@@ -22,8 +22,12 @@ final class NCMSettingsModel: ObservableObject {
 
     func chooseNCMOutputDirectory() {
         guard let url = DirectoryChooser.chooseDirectory(prompt: "选择") else { return }
-        ncmCustomOutputURL = url
-        store.ncmCustomOutputURL = url
-        setNCMOutputMode("customDirectory")
+        do {
+            try store.setNCMCustomOutputDirectory(url)
+            ncmCustomOutputURL = url
+            setNCMOutputMode("customDirectory")
+        } catch {
+            DiagnosticLog.append("ncm custom output authorization failed \(error.localizedDescription)", level: .error)
+        }
     }
 }

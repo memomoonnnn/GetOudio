@@ -54,9 +54,17 @@ public final class MediaExtractionService {
                     continue
                 }
 
+                DiagnosticLog.append(
+                    "[EXTRACTION-DIAG] access file=\(access.fileURL.path) scopeDirectory=\(access.directoryURL?.path ?? "<none>") activeDirectoryScope=\(access.hasActiveDirectorySecurityScope) output=\(outputURL.path)"
+                )
+                try DirectoryAccess.ensureWritableDirectory(outputURL.deletingLastPathComponent())
+
                 let result = try await runner.run(
                     executablePath: ffmpegPath,
                     arguments: ["-i", access.fileURL.path, "-c:a", "copy", "-map_metadata", "0", "-vn", "-y", outputURL.path]
+                )
+                DiagnosticLog.append(
+                    "[EXTRACTION-DIAG] ffmpeg exit=\(result.exitCode) output=\(outputURL.path)"
                 )
 
                 if result.succeeded {

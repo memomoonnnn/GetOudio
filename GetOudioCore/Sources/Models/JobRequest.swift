@@ -127,14 +127,23 @@ public struct JobRequest: Codable, Identifiable, Equatable, Sendable {
         var accessedURLs: [URL] = []
         let scopedFileURL = Self.resolveSecurityScopedURL(from: fileBookmarkData) ?? fileURL
         let scopedDirectoryURL = Self.resolveSecurityScopedURL(from: directoryBookmarkData)
+        var hasActiveDirectorySecurityScope = false
 
-        for url in [scopedDirectoryURL, scopedFileURL].compactMap({ $0 }) {
+        for (url, isDirectoryScope) in [(scopedDirectoryURL, true), (scopedFileURL, false)] {
+            guard let url else { continue }
             if url.startAccessingSecurityScopedResource() {
                 accessedURLs.append(url)
+                hasActiveDirectorySecurityScope = hasActiveDirectorySecurityScope || isDirectoryScope
             }
         }
 
-        return ScopedJobAccess(fileURL: scopedFileURL, directoryURL: scopedDirectoryURL, accessedURLs: accessedURLs)
+        return ScopedJobAccess(
+            fileURL: scopedFileURL,
+            directoryURL: scopedDirectoryURL,
+            outputDirectoryURL: scopedFileURL.deletingLastPathComponent(),
+            hasActiveDirectorySecurityScope: hasActiveDirectorySecurityScope,
+            accessedURLs: accessedURLs
+        )
     }
 
     private static func resolveSecurityScopedURL(from bookmarkData: Data?) -> URL? {
@@ -155,11 +164,25 @@ public struct JobRequest: Codable, Identifiable, Equatable, Sendable {
 public struct ScopedJobAccess {
     public let fileURL: URL
     public let directoryURL: URL?
+    public let outputDirectoryURL: URL
+    public let hasActiveDirectorySecurityScope: Bool
     private let accessedURLs: [URL]
 
-    init(fileURL: URL, directoryURL: URL?, accessedURLs: [URL]) {
+    public var activeSecurityScopedResourceCount: Int {
+        accessedURLs.count
+    }
+
+    init(
+        fileURL: URL,
+        directoryURL: URL?,
+        outputDirectoryURL: URL,
+        hasActiveDirectorySecurityScope: Bool,
+        accessedURLs: [URL]
+    ) {
         self.fileURL = fileURL
         self.directoryURL = directoryURL
+        self.outputDirectoryURL = outputDirectoryURL
+        self.hasActiveDirectorySecurityScope = hasActiveDirectorySecurityScope
         self.accessedURLs = accessedURLs
     }
 

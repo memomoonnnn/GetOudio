@@ -3,11 +3,14 @@ import GetOudioCore
 
 final class OpenWithJobDispatcher {
     private let container: SharedContainer
+    private let settingsStore: SettingsStore
     private let actionFactory: ConversionActionFactory
 
     init(container: SharedContainer, actionFactory: ConversionActionFactory? = nil) {
         self.container = container
-        self.actionFactory = actionFactory ?? ConversionActionFactory(container: container)
+        let settingsStore = SettingsStore(container: container)
+        self.settingsStore = settingsStore
+        self.actionFactory = actionFactory ?? ConversionActionFactory(settingsStore: settingsStore)
     }
 
     func enabledPresets() -> [ConversionPreset] {
@@ -15,6 +18,7 @@ final class OpenWithJobDispatcher {
     }
 
     func enqueueAudioJobs(urls: [URL], preset: ConversionPreset) -> Bool {
+        guard ensureSourceDirectoryAccess(for: urls) else { return false }
         let jobs = actionFactory.audioTranscodeJobs(for: urls, preset: preset, source: .openWith)
         guard jobs.count == urls.count, !jobs.isEmpty else {
             DiagnosticLog.append("open with enqueue audio rejected count=\(urls.count) jobs=\(jobs.count)")
@@ -25,13 +29,19 @@ final class OpenWithJobDispatcher {
     }
 
     func enqueueNCMJobs(urls: [URL]) -> Bool {
+        if settingsStore.ncmOutputMode == "sourceDirectory",
+           !ensureSourceDirectoryAccess(for: urls) {
+            return false
+        }
         let jobs = urls
             .filter { FileCategory.classify($0) == .ncm }
             .map {
-                JobRequest(
+                let directoryURL = $0.deletingLastPathComponent()
+                return JobRequest(
                     fileURL: $0,
                     fileBookmarkData: JobRequest.securityScopedBookmarkData(for: $0),
-                    directoryBookmarkData: JobRequest.securityScopedBookmarkData(for: $0.deletingLastPathComponent()),
+                    directoryBookmarkData: settingsStore.directoryBookmarkData(for: directoryURL)
+                        ?? JobRequest.securityScopedBookmarkData(for: directoryURL),
                     category: .ncm,
                     operation: .convertNCM,
                     source: .openWith
@@ -44,6 +54,13 @@ final class OpenWithJobDispatcher {
         }
 
         return enqueue(jobs, launchSource: .openWithNCM)
+    }
+
+    private func ensureSourceDirectoryAccess(for urls: [URL]) -> Bool {
+        DirectoryAccessAuthorizer.authorizeSourceDirectories(
+            urls.map { $0.deletingLastPathComponent() },
+            store: settingsStore
+        )
     }
 
     func launchHeadlessProcessor() {

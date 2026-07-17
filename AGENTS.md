@@ -24,6 +24,10 @@ App Bundle 只携带精简 `ffmpeg`、`ncmdump` 和 `apple-music-downloader`。D
 
 录后处理只适用于本录音器已完成的 24-bit PCM WAV/RF64 成品，由 Core 的 `RecordingPostProcessor` 流式扫描和写入；不得在实时回调中处理，也不得改用 ffmpeg、AVFoundation 离线效果或任意格式的通用解码路径。`RecordingPostProcessingOptions` 经 `SettingsStore` 的 suite defaults 持久化：开启“去除头尾的无声片段”或“峰值标准化”任一项即处理，无总开关；静音阈值限定 `-90...0 dBFS`、额外垫付限定 `0...1000 ms`，默认分别为 `-50 dBFS` 与 `150 ms`，标准化峰值固定为 `-0.1 dBFS`。裁切仅移除两端所有声道均低于阈值的帧，不得触碰中间静音；处理必须在 WAV finalize、默认媒体输出恢复后进行，先写缓存目录内暂存文件并验证后再原子替换缓存成品。默认缓存位于 App Group；用户指定缓存位置时，直接管理该目录内的录音 WAV，并以 security-scoped bookmark 维持访问，设置页必须提醒用户专门为 Get Oudio 新建缓存文件夹。全程静音、非受支持 WAV/RF64 或任何处理/替换失败时必须保留原始 WAV，并把回退原因带入完成通知。
 
+## File and Folder Access
+
+Finder Sync 的 `directoryURLs` 只决定菜单可见范围；跨进程的读写授权由 `SettingsStore.directoryBookmarks` 中的 security-scoped bookmark 提供，二者不得混为一谈。`finderDirectoryURLs` 只保存界面配置路径，只有 `DirectoryChooser` 或等价的用户文件选择操作返回的目录才能由 `FinderDirectorySettingsModel` 写入 bookmark；不得根据旧路径、默认目录或已持久化路径静默伪造授权。设置页统一称为“文件/文件夹访问权限”：添加文件夹时保存所选文件夹的 bookmark；“重置”要求用户在原生面板确认一个覆盖默认桌面、文稿、下载、影片和音乐文件夹的祖先目录，再恢复默认列表并保存该祖先 bookmark，不能要求用户逐项移除后重新添加。默认打开方式的 `DirectoryAccessAuthorizer` 同样只能要求用户选择源文件夹或其祖先；`ScopedJobAccess` 可以持有祖先作用域，但 `outputDirectoryURL` 始终是输入文件的父目录，不能因祖先授权而把转换结果改写到授权根。NCM 自定义输出目录必须恢复 `ncmCustomOutputBookmarkData`，所有 NCM、音频转码与媒体提取在调用工具前都应检查实际输出目录可访问且可写；ncmdump 即使退出码为 0，也必须确认匹配的输出音频已新增或更新后才能报告成功。
+
 ## Required Task Guides
 
 开始任务前按改动面读取下列指南；跨多个改动面时读取所有相关文件。

@@ -11,10 +11,10 @@ struct DashboardView: View {
         SettingsForm {
             SettingsSection("授权", systemImage: "checkmark.shield") {
                 VStack(alignment: .leading, spacing: 18) {
-                    Label("拓展", systemImage: "puzzlepiece.extension")
-                        .font(.headline)
+                        Label("扩展", systemImage: "puzzlepiece.extension")
+                            .font(.headline)
 
-                    Text("你需要启用以下拓展：“文件提供程序”使你可以在访达的右键菜单中找到「Get Oudio」；“共享”则使你可以在 Apple Music 中分享 URL 到「Get Oudio」")
+                        Text("你需要启用以下扩展，这使你可在访达右键菜单中使用「Get Oudio」，也可从 Apple Music 将 URL 分享给它。")
                         .font(.callout)
                         .foregroundStyle(.secondary)
 
@@ -37,10 +37,10 @@ struct DashboardView: View {
                     Divider()
 
                     VStack(alignment: .leading, spacing: 12) {
-                        Label("监听目录", systemImage: "folder")
+                        Label("文件/文件夹访问权限", systemImage: "folder.badge.gearshape")
                             .font(.headline)
 
-                        Text("只有处于监听目录列表下的文件才可以被访问；右键菜单也只会出现在监听列表以下的目录中，这是 MacOS 的限制所致。此外，还不推荐将外置硬盘添加到监听列表中，这会改变你的外置硬盘图标......")
+                        Text("于此授权「Get Oudio」可以访问的文件夹。访达菜单拓展只会出现在这些目录下，转换程序也只能据此将转换结果写回源文件夹。另外受访达显示机制影响，不建议选择外置硬盘————这会改变你的外置硬盘图标显示。")
                             .font(.callout)
                             .foregroundStyle(.secondary)
 
@@ -70,7 +70,7 @@ struct DashboardView: View {
                         .disabled(systemExtensionSettings.isRestartingFinder)
 
                         VStack(alignment: .leading, spacing: 3) {
-                            Text("上述所有更改均需要重启访达")
+                            Text("更改扩展或文件/文件夹访问权限后，请重启访达")
                                 .font(.callout.weight(.medium))
                             if !systemExtensionSettings.finderRestartMessage.isEmpty {
                                 Text(systemExtensionSettings.finderRestartMessage)
@@ -237,13 +237,13 @@ struct DashboardView: View {
                 Button {
                     finderSettings.addFinderDirectory()
                 } label: {
-                    Label("添加目录", systemImage: "plus")
+                    Label("添加文件夹", systemImage: "plus")
                 }
 
                 Button {
-                    finderSettings.restoreDefaultFinderDirectories()
+                    finderSettings.resetFinderDirectories()
                 } label: {
-                    Label("恢复默认", systemImage: "arrow.counterclockwise")
+                    Label("重置", systemImage: "arrow.counterclockwise")
                 }
 
                 Spacer()
