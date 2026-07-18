@@ -137,7 +137,7 @@ public final class DockerImageManager {
                 return ManagedDockerImageStatus(
                     image: image,
                     isAvailable: true,
-                    detail: "\(image.imageName) 已随 Apple Music 运行时安装；Colima 当前未运行，下载时会在后台启动后复查"
+                    detail: "\(image.imageName) 已随 Downloader Runtime 安装；Colima 当前未运行，下载时会在后台启动后复查"
                 )
             }
             return ManagedDockerImageStatus(image: image, isAvailable: false, detail: runtimeStatus.detail)

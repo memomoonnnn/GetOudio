@@ -79,7 +79,7 @@ final class AppleMusicRuntimeAgentLauncher {
             throw NSError(
                 domain: "GetOudioAMRuntimeAgentLauncher",
                 code: 2,
-                userInfo: [NSLocalizedDescriptionKey: "无法启动 Apple Music Runtime Agent。open: \(openError.localizedDescription)；NSWorkspace: \(error.localizedDescription)"]
+                userInfo: [NSLocalizedDescriptionKey: "无法启动 Downloader Runtime Agent。open: \(openError.localizedDescription)；NSWorkspace: \(error.localizedDescription)"]
             )
         }
     }

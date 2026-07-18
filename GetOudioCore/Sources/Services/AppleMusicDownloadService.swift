@@ -54,7 +54,7 @@ public final class AppleMusicDownloadService {
         if useAgent {
             do {
                 guard let agentClient else {
-                    throw ProcessRunnerError.processFailed("Apple Music Runtime Agent client is not configured.")
+                    throw ProcessRunnerError.processFailed("Downloader Runtime Agent client is not configured.")
                 }
                 return try await agentClient.download(jobs)
             } catch {
@@ -74,7 +74,7 @@ public final class AppleMusicDownloadService {
         if useAgent {
             do {
                 guard let agentClient else {
-                    throw ProcessRunnerError.processFailed("Apple Music Runtime Agent client is not configured.")
+                    throw ProcessRunnerError.processFailed("Downloader Runtime Agent client is not configured.")
                 }
                 return try await agentClient.initializeWrapper(
                     username: username,
@@ -99,7 +99,7 @@ public final class AppleMusicDownloadService {
         if useAgent {
             do {
                 guard let agentClient else {
-                    throw ProcessRunnerError.processFailed("Apple Music Runtime Agent client is not configured.")
+                    throw ProcessRunnerError.processFailed("Downloader Runtime Agent client is not configured.")
                 }
                 return try await agentClient.submitVerificationCode(code)
             } catch {

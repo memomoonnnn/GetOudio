@@ -277,7 +277,7 @@ public final class AppleMusicRuntimeAgentClient {
     public func wrapperLoginStatus() async throws -> AppleMusicWrapperLoginStatus {
         let response = try await send(command: "wrapper-status")
         guard let status = response.wrapperLoginStatus else {
-            throw ProcessRunnerError.processFailed("Apple Music Runtime Agent 响应中没有登录状态。")
+            throw ProcessRunnerError.processFailed("Downloader Runtime Agent 响应中没有登录状态。")
         }
         return status
     }
@@ -340,19 +340,19 @@ public final class AppleMusicRuntimeAgentClient {
             try await Task.sleep(nanoseconds: 250_000_000)
         }
 
-        throw ProcessRunnerError.processFailed("Apple Music Runtime Agent 没有在限定时间内返回响应。")
+        throw ProcessRunnerError.processFailed("Downloader Runtime Agent 没有在限定时间内返回响应。")
     }
 
     private func responseStatus(_ response: AppleMusicRuntimeAgentResponseEnvelope) throws -> AppleMusicRuntimeAgentStatusReport {
         guard let report = response.statusReport else {
-            throw ProcessRunnerError.processFailed("Apple Music Runtime Agent 响应中没有状态信息。")
+            throw ProcessRunnerError.processFailed("Downloader Runtime Agent 响应中没有状态信息。")
         }
         return report
     }
 
     private func responseSummary(_ response: AppleMusicRuntimeAgentResponseEnvelope) throws -> ConversionSummary {
         guard let summary = response.summary else {
-            throw ProcessRunnerError.processFailed("Apple Music Runtime Agent 响应中没有执行摘要。")
+            throw ProcessRunnerError.processFailed("Downloader Runtime Agent 响应中没有执行摘要。")
         }
         return summary
     }

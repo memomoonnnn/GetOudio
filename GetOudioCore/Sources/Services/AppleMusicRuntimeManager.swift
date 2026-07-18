@@ -226,8 +226,8 @@ public final class AppleMusicRuntimeManager {
     }
 
     public func installManagedRuntime() async throws -> AppleMusicRuntimeInstallResult {
-        DiagnosticLog.append("[Install] 开始安装 Apple Music 运行时 → \(rootURL.path)")
-        writeProgress("准备安装 Apple Music 运行时...", completed: 0, total: 5, isActive: true)
+        DiagnosticLog.append("[Install] 开始安装 Downloader Runtime → \(rootURL.path)")
+        writeProgress("准备安装 Downloader Runtime...", completed: 0, total: 5, isActive: true)
         try createManagedDirectories()
         var installed: [AppleMusicRuntimeComponent] = []
         var messages: [String] = []
@@ -315,7 +315,7 @@ public final class AppleMusicRuntimeManager {
             messages.append("已清理 \(removedColimaCacheCount) 个 Colima 基础镜像缓存项")
             DiagnosticLog.append("[Install] 全部安装完成")
             writeProgress(
-                "Apple Music 运行时安装完成",
+                "Downloader Runtime 安装完成",
                 completed: 5,
                 total: 5,
                 isActive: false,
@@ -336,7 +336,7 @@ public final class AppleMusicRuntimeManager {
     }
 
     public func uninstallManagedRuntime() async throws {
-        writeProgress("正在卸载 Apple Music 运行时...", completed: 0, total: 2, isActive: true)
+        writeProgress("正在卸载 Downloader Runtime...", completed: 0, total: 2, isActive: true)
         let env = runtimeEnvironment()
         if isRegularExecutable(dockerURL) {
             _ = try? await runner.run(executablePath: dockerURL.path, arguments: ["--context", "colima", "rm", "-f", "get-oudio-wrapper"], environment: env)
@@ -353,12 +353,12 @@ public final class AppleMusicRuntimeManager {
             try fileManager.removeItem(at: directory)
         }
         isEnabled = false
-        writeProgress("Apple Music 运行时已卸载", completed: 2, total: 2, isActive: false)
+        writeProgress("Downloader Runtime 已卸载", completed: 2, total: 2, isActive: false)
     }
 
     public func ensureEnabledAndInstalled() throws {
         guard isEnabled else {
-            throw ProcessRunnerError.processFailed("Apple Music 下载功能尚未启用。请先在 Apple Music Downloader 设置中启用并安装运行时。")
+            throw ProcessRunnerError.processFailed("Apple Music 下载功能尚未启用。请先在 Downloader 设置中启用并安装 Runtime。")
         }
         for url in [dockerURL, colimaURL, limaURL, limactlURL, mp4BoxURL] where !isRegularExecutable(url) {
             throw ProcessRunnerError.executableNotFound(url.path)
@@ -1043,7 +1043,7 @@ public final class AppleMusicRuntimeManager {
     private func unavailableExecutableDetail(_ url: URL) -> String {
         var isDirectory: ObjCBool = false
         if fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory), isDirectory.boolValue {
-            return "\(url.path) 是目录，不是可执行文件；请重新安装 Apple Music 运行时。"
+            return "\(url.path) 是目录，不是可执行文件；请重新安装 Downloader Runtime。"
         }
         return "未安装到 \(url.path)"
     }

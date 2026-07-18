@@ -75,7 +75,6 @@
 		A32095A60C634D85C3E1E64C /* Documentation in Resources */ = {isa = PBXBuildFile; fileRef = 78BBD92AC5CAECA405A07511 /* Documentation */; };
 		A8AF384073CDDFCAADE1383D /* JobRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 830E304F412F81F410B833C8 /* JobRequest.swift */; };
 		AD82AD58BE8240DDF4201215 /* AudioConversionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCE6C13E6BA94A818DA3068B /* AudioConversionService.swift */; };
-		AE8147EEC4CD65401A029982 /* KeychainService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6443C0992771CFEA49338C37 /* KeychainService.swift */; };
 		AFFB08D96001497CFBF8AC88 /* ConversionPreset.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96C485724CAA57FDA4F744D0 /* ConversionPreset.swift */; };
 		B8EA68949879206D459B8577 /* DirectoryChooser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45B8F600ED7CF7F3BC4E8D67 /* DirectoryChooser.swift */; };
 		B96987E37666C7F4E82D6AB3 /* GetOudioCoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C43975B92D52741C9A75DC77 /* GetOudioCoreTests.swift */; };
@@ -263,7 +262,6 @@
 		54C8CCAA28BE713D16820038 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; name = AppIcon.icon; path = GetOudio/Resources/AppIcon.icon; sourceTree = SOURCE_ROOT; };
 		5824B80AB71359FF2011C2E0 /* NCMConversionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NCMConversionService.swift; sourceTree = "<group>"; };
 		586B2314A6D6C0E188D4EF15 /* AppleMusicShareURLParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleMusicShareURLParser.swift; sourceTree = "<group>"; };
-		6443C0992771CFEA49338C37 /* KeychainService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainService.swift; sourceTree = "<group>"; };
 		6687368FC009B08493D049E3 /* ShareEventQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareEventQueue.swift; sourceTree = "<group>"; };
 		6BE0DC2B93928C094187FC44 /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
 		7085A54F704E59442755202F /* NormalLauncher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NormalLauncher.swift; sourceTree = "<group>"; };
@@ -560,7 +558,6 @@
 				AE1740A3ADEB17D8F606F398 /* DirectoryAccessAuthorizer.swift */,
 				45B8F600ED7CF7F3BC4E8D67 /* DirectoryChooser.swift */,
 				8A94521F544FCDABB87C3F99 /* FinderDirectorySettingsModel.swift */,
-				6443C0992771CFEA49338C37 /* KeychainService.swift */,
 				2D140BDEF696D4BCE7EDDCBB /* NCMSettingsModel.swift */,
 				DBB5D4A69A9524F2BF4087DB /* PresetSettingsModel.swift */,
 				4A95CE7C9241DA7A29C3C277 /* RecordingControlCoordinator.swift */,
@@ -975,7 +972,6 @@
 				B8EA68949879206D459B8577 /* DirectoryChooser.swift in Sources */,
 				10E03364A2A9B61054AF7D07 /* FinderDirectorySettingsModel.swift in Sources */,
 				2F9FB03C3C2FD83ADA63BE09 /* HeadlessRunner.swift in Sources */,
-				AE8147EEC4CD65401A029982 /* KeychainService.swift in Sources */,
 				9A58A40606282A3F920A071F /* MainSettingsPages.swift in Sources */,
 				0E537BFEFE1F926149378250 /* MainView.swift in Sources */,
 				CDB96F8DD0D55AE6E4146A47 /* NCMSettingsModel.swift in Sources */,

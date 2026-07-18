@@ -19,6 +19,7 @@ final class AppleMusicSettingsModel: ObservableObject {
         message: "尚未初始化"
     )
     @Published var isManagingAppleMusicRuntime = false
+    @Published var isRefreshingAppleMusicRuntimeStatus = false
 
     private let store: SettingsStore
     private let appleMusicAgentClient: AppleMusicRuntimeAgentClient
@@ -39,6 +40,10 @@ final class AppleMusicSettingsModel: ObservableObject {
     var canStopAppleMusicDownload: Bool {
         appleMusicRuntimeProgress?.isActive == true
             && appleMusicRuntimeProgress?.statuses == nil
+    }
+
+    var isAppleMusicRuntimeBusy: Bool {
+        isManagingAppleMusicRuntime || isRefreshingAppleMusicRuntimeStatus
     }
 
     func chooseAppleMusicOutputDirectory() {
@@ -73,7 +78,15 @@ final class AppleMusicSettingsModel: ObservableObject {
     }
 
     func refreshAppleMusicRuntimeStatus() async {
-        isManagingAppleMusicRuntime = true
+        guard !isAppleMusicRuntimeBusy else {
+            return
+        }
+
+        isRefreshingAppleMusicRuntimeStatus = true
+        defer {
+            isRefreshingAppleMusicRuntimeStatus = false
+        }
+
         do {
             try await appleMusicAgentLauncher.ensureRunning()
             let report = try await appleMusicAgentClient.status()
@@ -82,16 +95,14 @@ final class AppleMusicSettingsModel: ObservableObject {
             appleMusicRuntimeMessage = report.message
             appleMusicRuntimeProgress = appleMusicAgentClient.progress()
         } catch {
-            appleMusicRuntimeStatuses = []
             isAppleMusicDownloadEnabled = store.isAppleMusicDownloadEnabled
-            appleMusicRuntimeMessage = "Apple Music Runtime Agent 不可用：\(error.localizedDescription)"
+            appleMusicRuntimeMessage = "Downloader Runtime Agent 不可用：\(error.localizedDescription)"
         }
-        isManagingAppleMusicRuntime = false
     }
 
     func enableAppleMusicRuntime() async {
         isManagingAppleMusicRuntime = true
-        appleMusicRuntimeMessage = "正在通过 Apple Music Runtime Agent 安装运行时..."
+        appleMusicRuntimeMessage = "正在通过 Downloader Runtime Agent 安装 Runtime..."
         startRuntimeProgressPolling()
         do {
             try await appleMusicAgentLauncher.ensureRunning()
@@ -101,7 +112,7 @@ final class AppleMusicSettingsModel: ObservableObject {
             appleMusicRuntimeMessage = report.message
             appleMusicRuntimeProgress = appleMusicAgentClient.progress()
         } catch {
-            appleMusicRuntimeMessage = "Apple Music 运行时安装失败：\(error.localizedDescription)"
+            appleMusicRuntimeMessage = "Downloader Runtime 安装失败：\(error.localizedDescription)"
         }
         stopRuntimeProgressPolling()
         isManagingAppleMusicRuntime = false
@@ -109,17 +120,17 @@ final class AppleMusicSettingsModel: ObservableObject {
 
     func uninstallAppleMusicRuntime() async {
         isManagingAppleMusicRuntime = true
-        appleMusicRuntimeMessage = "正在卸载 Apple Music 运行时..."
+        appleMusicRuntimeMessage = "正在卸载 Downloader Runtime..."
         startRuntimeProgressPolling()
         do {
             try await appleMusicAgentLauncher.ensureRunning()
             let report = try await appleMusicAgentClient.uninstall()
             appleMusicRuntimeStatuses = report.statuses
             isAppleMusicDownloadEnabled = report.isEnabled
-            appleMusicRuntimeMessage = "Apple Music 运行时已卸载"
+            appleMusicRuntimeMessage = "Downloader Runtime 已卸载"
             appleMusicRuntimeProgress = appleMusicAgentClient.progress()
         } catch {
-            appleMusicRuntimeMessage = "Apple Music 运行时卸载失败：\(error.localizedDescription)"
+            appleMusicRuntimeMessage = "Downloader Runtime 卸载失败：\(error.localizedDescription)"
         }
         stopRuntimeProgressPolling()
         isManagingAppleMusicRuntime = false
@@ -132,7 +143,7 @@ final class AppleMusicSettingsModel: ObservableObject {
             return
         }
         isInitializingAppleMusicWrapper = true
-        appleMusicActionMessage = "正在启动 Apple Music Runtime Agent 并初始化 wrapper..."
+        appleMusicActionMessage = "正在启动 Downloader Runtime Agent 并初始化 wrapper..."
         do {
             try await appleMusicAgentLauncher.ensureRunning()
             let summary = await appleMusicDownloadService.initializeWrapper(

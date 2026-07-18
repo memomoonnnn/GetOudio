@@ -255,22 +255,25 @@ extension View {
 
 // MARK: - SettingsSection (Reusable Card Component)
 
-struct SettingsSection<Content: View, Footer: View>: View {
+struct SettingsSection<Content: View, Footer: View, CardOverlay: View>: View {
     let title: String
     let systemImage: String
     let content: Content
     let footer: Footer
+    let cardOverlay: CardOverlay
 
     init(
         _ title: String,
         systemImage: String = "gearshape",
         @ViewBuilder content: () -> Content,
-        @ViewBuilder footer: () -> Footer = { EmptyView() }
+        @ViewBuilder footer: () -> Footer = { EmptyView() },
+        @ViewBuilder cardOverlay: () -> CardOverlay = { EmptyView() }
     ) {
         self.title = title
         self.systemImage = systemImage
         self.content = content()
         self.footer = footer()
+        self.cardOverlay = cardOverlay()
     }
 
     var body: some View {
@@ -304,6 +307,9 @@ struct SettingsSection<Content: View, Footer: View>: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(SettingsCardBackground())
+            .overlay {
+                cardOverlay
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -558,7 +564,6 @@ struct AppleMusicSettingsPage: View {
     @State private var username = ""
     @State private var password = ""
     @State private var verificationCode = ""
-    private let keychain = KeychainService()
 
     var body: some View {
         SettingsForm {
@@ -608,21 +613,21 @@ struct AppleMusicSettingsPage: View {
                         Label(viewModel.isAppleMusicDownloadEnabled ? "检查并修复" : "启用", systemImage: "arrow.down.to.line")
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(viewModel.isManagingAppleMusicRuntime)
+                    .disabled(viewModel.isAppleMusicRuntimeBusy)
 
                     Button {
                         Task { await viewModel.refreshAppleMusicRuntimeStatus() }
                     } label: {
                         Label("刷新", systemImage: "arrow.clockwise")
                     }
-                    .disabled(viewModel.isManagingAppleMusicRuntime)
+                    .disabled(viewModel.isAppleMusicRuntimeBusy)
 
                     Button(role: .destructive) {
                         Task { await viewModel.uninstallAppleMusicRuntime() }
                     } label: {
                         Label("卸载", systemImage: "trash")
                     }
-                    .disabled(viewModel.isManagingAppleMusicRuntime || !viewModel.isAppleMusicDownloadEnabled)
+                    .disabled(viewModel.isAppleMusicRuntimeBusy || !viewModel.isAppleMusicDownloadEnabled)
 
                     Button(role: .destructive) {
                         viewModel.stopAppleMusicDownload()
@@ -667,13 +672,6 @@ struct AppleMusicSettingsPage: View {
                 .toggleStyle(.switch)
 
                 HStack(spacing: 12) {
-                    Button {
-                        saveCredentials()
-                    } label: {
-                        Label("保存凭据", systemImage: "key")
-                    }
-                    .disabled(!viewModel.isAppleMusicDownloadEnabled || viewModel.appleMusicWrapperLoginStatus.isInProgress)
-
                     Button {
                         Task { await initializeWrapper() }
                     } label: {
@@ -723,19 +721,17 @@ struct AppleMusicSettingsPage: View {
                         .padding(.vertical, 2)
                 }
             }
-            .overlay {
-                if viewModel.appleMusicWrapperLoginStatus.isAuthenticated {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: SettingsMetrics.sectionCornerRadius, style: .continuous)
-                            .fill(.regularMaterial)
-                            .opacity(0.5)
-                        Label("初始化已完成", systemImage: "checkmark.circle.fill")
-                            .font(.title2.weight(.bold))
-                            .foregroundStyle(.green)
-                    }
-                    .padding(-SettingsMetrics.sectionPadding)
-                    .allowsHitTesting(false)
+        } cardOverlay: {
+            if viewModel.appleMusicWrapperLoginStatus.isAuthenticated {
+                ZStack {
+                    RoundedRectangle(cornerRadius: SettingsMetrics.sectionCornerRadius, style: .continuous)
+                        .fill(.regularMaterial)
+                        .opacity(0.5)
+                    Label("初始化已完成", systemImage: "checkmark.circle.fill")
+                        .font(.title2.weight(.bold))
+                        .foregroundStyle(.green)
                 }
+                .allowsHitTesting(false)
             }
         }
         .disabled(!areAppleMusicDependenciesReady || viewModel.appleMusicWrapperLoginStatus.isAuthenticated)
@@ -784,41 +780,42 @@ struct AppleMusicSettingsPage: View {
     private var runtimeStatusSettings: some View {
         SettingsSection("依赖状态", systemImage: "list.bullet.rectangle") {
             VStack(spacing: 0) {
-                ForEach(viewModel.appleMusicRuntimeStatuses) { status in
-                    HStack(spacing: 12) {
-                        Image(systemName: status.isReady ? "checkmark.circle.fill" : "xmark.circle")
-                            .foregroundStyle(status.isReady ? .green : .secondary)
-                            .frame(width: 18)
-
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(status.component.displayName)
-                                .font(.callout.weight(.medium))
-                            Text(status.resolvedPath ?? status.detail)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                        }
-
-                        Spacer()
-                    }
+                if viewModel.appleMusicRuntimeStatuses.isEmpty {
+                    Label(
+                        viewModel.isRefreshingAppleMusicRuntimeStatus ? "正在检测依赖..." : "暂无依赖状态",
+                        systemImage: viewModel.isRefreshingAppleMusicRuntimeStatus ? "arrow.triangle.2.circlepath" : "info.circle"
+                    )
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.vertical, 8)
+                } else {
+                    ForEach(viewModel.appleMusicRuntimeStatuses) { status in
+                        HStack(spacing: 12) {
+                            Image(systemName: status.isReady ? "checkmark.circle.fill" : "xmark.circle")
+                                .foregroundStyle(status.isReady ? .green : .secondary)
+                                .frame(width: 18)
 
-                    if status.id != viewModel.appleMusicRuntimeStatuses.last?.id {
-                        Divider()
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(status.component.displayName)
+                                    .font(.callout.weight(.medium))
+                                Text(status.resolvedPath ?? status.detail)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                            }
+
+                            Spacer()
+                        }
+                        .padding(.vertical, 8)
+
+                        if status.id != viewModel.appleMusicRuntimeStatuses.last?.id {
+                            Divider()
+                        }
                     }
                 }
             }
-        }
-    }
-
-    private func saveCredentials() {
-        do {
-            try keychain.save(username, account: "apple-id")
-            try keychain.save(password, account: "apple-id-password")
-            viewModel.appleMusicActionMessage = "凭据已保存到 Keychain"
-        } catch {
-            viewModel.appleMusicActionMessage = "保存失败：\(error.localizedDescription)"
         }
     }
 

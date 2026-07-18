@@ -16,7 +16,7 @@ enum GetOudioAMRuntimeAgent {
 
             let options = ParsedArguments(arguments)
             guard let command = options.command else {
-                throw ProcessRunnerError.processFailed("缺少 Apple Music Runtime Agent 命令。")
+                throw ProcessRunnerError.processFailed("缺少 Downloader Runtime Agent 命令。")
             }
 
             let resourceRoot = options.value(for: "--resource-root").map {
@@ -73,7 +73,7 @@ enum GetOudioAMRuntimeAgent {
             case "wrapper-status":
                 try write(await wrapperRuntime(manager: manager, container: container).loginStatus())
             default:
-                throw ProcessRunnerError.processFailed("未知 Apple Music Runtime Agent 命令：\(command)")
+                throw ProcessRunnerError.processFailed("未知 Downloader Runtime Agent 命令：\(command)")
             }
         } catch {
             FileHandle.standardError.write(Data((error.localizedDescription + "\n").utf8))
@@ -178,7 +178,7 @@ enum GetOudioAMRuntimeAgent {
                     wrapperLoginStatus: await wrapperRuntime(manager: manager, container: container).loginStatus()
                 )
             default:
-                throw ProcessRunnerError.processFailed("未知 Apple Music Runtime Agent 命令：\(request.command)")
+                throw ProcessRunnerError.processFailed("未知 Downloader Runtime Agent 命令：\(request.command)")
             }
         } catch {
             return AppleMusicRuntimeAgentResponseEnvelope(id: request.id, errorMessage: error.localizedDescription)
@@ -198,8 +198,8 @@ enum GetOudioAMRuntimeAgent {
         let statuses = manager.componentStatuses(wrapperStatus: imageStatus)
         let missingCount = statuses.filter { !$0.isReady }.count
         let message = missingCount == 0 && manager.isEnabled
-            ? "Apple Music 运行时已就绪，位置：\(manager.rootURL.path)"
-            : "\(missingCount) 个 Apple Music 运行时组件未就绪"
+            ? "Downloader Runtime 已就绪，位置：\(manager.rootURL.path)"
+            : "\(missingCount) 个 Downloader Runtime 组件未就绪"
 
         return AppleMusicRuntimeAgentStatusReport(
             isEnabled: manager.isEnabled,
