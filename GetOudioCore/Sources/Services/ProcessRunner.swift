@@ -94,6 +94,8 @@ public final class ProcessRunner {
 
             let outputData = LockedData()
             let errorData = LockedData()
+            let outputDecoder = UTF8ChunkDecoder()
+            let errorDecoder = UTF8ChunkDecoder()
             let readGroup = DispatchGroup()
             let terminationState = LockedTerminationState()
             let terminationTimer = Self.makeTerminationTimer(
@@ -109,11 +111,14 @@ public final class ProcessRunner {
                 let data = handle.availableData
                 if data.isEmpty {
                     handle.readabilityHandler = nil
+                    if let text = outputDecoder.finish(), !text.isEmpty {
+                        outputHandler?(.standardOutput, text)
+                    }
                     readGroup.leave()
                     return
                 }
                 outputData.append(data)
-                if let text = String(data: data, encoding: .utf8), !text.isEmpty {
+                if let text = outputDecoder.append(data), !text.isEmpty {
                     outputHandler?(.standardOutput, text)
                 }
             }
@@ -123,11 +128,14 @@ public final class ProcessRunner {
                 let data = handle.availableData
                 if data.isEmpty {
                     handle.readabilityHandler = nil
+                    if let text = errorDecoder.finish(), !text.isEmpty {
+                        outputHandler?(.standardError, text)
+                    }
                     readGroup.leave()
                     return
                 }
                 errorData.append(data)
-                if let text = String(data: data, encoding: .utf8), !text.isEmpty {
+                if let text = errorDecoder.append(data), !text.isEmpty {
                     outputHandler?(.standardError, text)
                 }
             }
@@ -190,6 +198,65 @@ private final class LockedData: @unchecked Sendable {
         let value = String(data: data, encoding: .utf8) ?? ""
         lock.unlock()
         return value
+    }
+}
+
+final class UTF8ChunkDecoder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var bufferedData = Data()
+
+    func append(_ data: Data) -> String? {
+        lock.lock()
+        bufferedData.append(data)
+        let text = consumeCompleteScalars()
+        lock.unlock()
+        return text
+    }
+
+    func finish() -> String? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !bufferedData.isEmpty else { return nil }
+        defer { bufferedData.removeAll(keepingCapacity: false) }
+        return String(data: bufferedData, encoding: .utf8)
+    }
+
+    private func consumeCompleteScalars() -> String? {
+        let incompleteSuffixLength = Self.incompleteUTF8SuffixLength(in: bufferedData)
+        let completeLength = bufferedData.count - incompleteSuffixLength
+        guard completeLength > 0 else { return nil }
+
+        let completeData = bufferedData.prefix(completeLength)
+        guard let text = String(data: completeData, encoding: .utf8) else { return nil }
+        bufferedData.removeFirst(completeLength)
+        return text
+    }
+
+    private static func incompleteUTF8SuffixLength(in data: Data) -> Int {
+        guard let lastIndex = data.indices.last else { return 0 }
+
+        var leadingIndex = lastIndex
+        var continuationCount = 0
+        while leadingIndex > data.startIndex, data[leadingIndex] & 0b1100_0000 == 0b1000_0000 {
+            continuationCount += 1
+            leadingIndex = data.index(before: leadingIndex)
+        }
+
+        let leadingByte = data[leadingIndex]
+        let expectedLength: Int
+        switch leadingByte {
+        case 0b1100_0010...0b1101_1111:
+            expectedLength = 2
+        case 0b1110_0000...0b1110_1111:
+            expectedLength = 3
+        case 0b1111_0000...0b1111_0100:
+            expectedLength = 4
+        default:
+            return 0
+        }
+
+        let availableLength = continuationCount + 1
+        return availableLength < expectedLength ? availableLength : 0
     }
 }
 

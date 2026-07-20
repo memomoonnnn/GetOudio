@@ -115,15 +115,14 @@ final class AppleMusicShareDownloadCoordinator {
 
     private func startProgressNotifications() -> Task<Void, Never> {
         Task { [notificationService, agentClient] in
-            let start = Date()
+            var gate = AppleMusicDownloadNotificationGate(
+                lastNotificationVersion: agentClient.progress()?.notificationVersion
+            )
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 30_000_000_000)
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
                 guard !Task.isCancelled else { return }
-                let progress = agentClient.progress()
-                await notificationService.notifyAppleMusicDownloadInProgress(
-                    elapsed: Date().timeIntervalSince(start),
-                    progress: progress?.isActive == true ? progress?.message : nil
-                )
+                guard let message = gate.nextMessage(for: agentClient.progress()) else { continue }
+                await notificationService.notifyAppleMusicDownloadInProgress(progress: message)
             }
         }
     }

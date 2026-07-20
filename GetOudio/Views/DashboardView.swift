@@ -134,10 +134,10 @@ struct DashboardView: View {
                             }
                             .buttonStyle(.bordered)
 
-                            Text(verbatim: "@紙葉 Shiyō")
+                            Text(verbatim: "@紙葉 Shiyouka")
                                 .font(.system(size: 13))
                                 .foregroundStyle(.secondary)
-                                .accessibilityLabel("作者：紙葉 Shiyō")
+                                .accessibilityLabel("作者：紙葉 Shiyouka")
                         }
                     }
 

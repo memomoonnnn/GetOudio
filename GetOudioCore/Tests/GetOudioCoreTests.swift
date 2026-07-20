@@ -236,7 +236,7 @@ final class GetOudioCoreTests: XCTestCase {
         let options = RecordingPostProcessingOptions(trimsSilence: true, normalizesPeak: true)
 
         let silentResult = RecordingPostProcessor().process(recordingURL: silent, options: options)
-        XCTAssertEqual(silentResult, .keptOriginal(message: "检测到全程静音，已保留原始录音。"))
+        XCTAssertEqual(silentResult, .keptOriginal(message: "检测到全程无声。"))
         XCTAssertEqual(try Data(contentsOf: silent), originalData)
 
         let invalid = root.appendingPathComponent("invalid.wav")
@@ -244,7 +244,7 @@ final class GetOudioCoreTests: XCTestCase {
         guard case .keptOriginal(let message) = RecordingPostProcessor().process(recordingURL: invalid, options: options) else {
             return XCTFail("Invalid input must retain the original file")
         }
-        XCTAssertTrue(message?.contains("已保留原始录音") == true)
+        XCTAssertTrue(message?.contains("保留了原始录音") == true)
     }
 
     func testRecordingPostProcessorLeavesRecordingUntouchedWhenDisabled() throws {
@@ -875,7 +875,7 @@ final class GetOudioCoreTests: XCTestCase {
 
         let arguments = AppleMusicDownloadService.downloaderArguments(for: job, format: .aac)
 
-        XCTAssertEqual(arguments, ["--aac", "--aac-type", "aac", "--song", job.fileURL.absoluteString])
+        XCTAssertEqual(arguments, ["--aac", "--aac-type", "aac", "--events=jsonl", "--song", job.fileURL.absoluteString])
     }
 
     func testAppleMusicDownloaderArgumentsDoNotUseSongFlagForAlbumURL() {
@@ -888,7 +888,7 @@ final class GetOudioCoreTests: XCTestCase {
 
         let arguments = AppleMusicDownloadService.downloaderArguments(for: job, format: .alac)
 
-        XCTAssertEqual(arguments, [job.fileURL.absoluteString])
+        XCTAssertEqual(arguments, ["--events=jsonl", job.fileURL.absoluteString])
     }
 
     func testAppleMusicShareURLParserAcceptsBroadAppleMusicLinks() {
@@ -968,6 +968,160 @@ final class GetOudioCoreTests: XCTestCase {
         XCTAssertEqual(tracker.observe("Song: Example\n"), "Song: Example")
         XCTAssertNil(tracker.observe("Song: Example\n"))
         XCTAssertEqual(tracker.observe("\rDownloading... 40%"), "Downloading... 40%")
+    }
+
+    func testAppleMusicDownloaderEventTrackerBuffersJSONLAndKeepsLatestState() {
+        let tracker = AppleMusicDownloaderEventTracker()
+        let first = #"{"schema_version":1,"event":"item_started","sequence":1,"timestamp":"2026-07-19T00:00:00Z","run_id":"run-1","item_id":"123","data":{"content":{"id":"123","title":"Song","artist":"Artist","playlist_title":"My Playlist"}}}"#
+        let second = #"{"schema_version":1,"event":"progress","sequence":2,"timestamp":"2026-07-19T00:00:30Z","run_id":"run-1","data":{"phase":"downloading","completed_bytes":50,"total_bytes":100,"fraction":0.5,"made_progress":true}}"#
+        let failed = #"{"schema_version":1,"event":"item_failed","sequence":3,"timestamp":"2026-07-19T00:01:00Z","run_id":"run-1","item_id":"123","data":{"code":"decrypt_failed","message":"unexpected EOF"}}"#
+        let diagnostic = #"{"schema_version":1,"event":"diagnostic","sequence":4,"timestamp":"2026-07-19T00:01:01Z","run_id":"run-1","data":{"level":"error","code":"wrapper_unavailable","message":"wrapper unavailable"}}"#
+        let completed = #"{"schema_version":1,"event":"run_completed","sequence":5,"timestamp":"2026-07-19T00:01:02Z","run_id":"run-1","data":{"status":"partial","completed":1,"warnings":1,"failures":0}}"#
+
+        XCTAssertTrue(tracker.observe(String(first.prefix(60))).isEmpty)
+        let events = tracker.observe(String(first.dropFirst(60)) + "\n" + second + "\n" + failed + "\n" + diagnostic + "\n" + completed + "\n")
+
+        XCTAssertEqual(events.map(\.event), ["item_started", "progress", "item_failed", "diagnostic", "run_completed"])
+        XCTAssertEqual(tracker.currentContent?.artist, "Artist")
+        XCTAssertEqual(tracker.currentContent?.title, "Song")
+        XCTAssertEqual(tracker.currentContent?.playlistTitle, "My Playlist")
+        XCTAssertEqual(tracker.failureMessage, "unexpected EOF")
+        XCTAssertEqual(tracker.diagnosticMessage, "wrapper unavailable")
+        XCTAssertEqual(tracker.completionStatus, "partial")
+        XCTAssertEqual(tracker.completion?.completed, 1)
+        XCTAssertEqual(tracker.completion?.failures, 0)
+        XCTAssertEqual(
+            tracker.completion?.failureMessage,
+            "Apple Music 下载未完整完成。成功 1 个，警告 1 个。"
+        )
+    }
+
+    func testAppleMusicDownloadNotificationFormatterFormatsProgressAndCompletion() {
+        let singleTrack = AppleMusicDownloaderEvent.Content(
+            id: "song-1",
+            kind: "songs",
+            title: "歌名",
+            artist: "艺人",
+            album: "专辑名",
+            playlistTitle: nil,
+            position: 3,
+            total: 12
+        )
+        XCTAssertEqual(
+            AppleMusicDownloadNotificationFormatter.progressMessage(
+                content: singleTrack,
+                phase: "downloading",
+                fraction: 0.42,
+                isSingleTrack: true
+            ),
+            "下载42%：艺人 - 歌名"
+        )
+
+        let playlistTrack = AppleMusicDownloaderEvent.Content(
+            id: "song-2",
+            kind: "songs",
+            title: "歌名",
+            artist: "艺人",
+            album: "专辑名",
+            playlistTitle: "播放列表名",
+            position: 3,
+            total: 12
+        )
+        XCTAssertEqual(
+            AppleMusicDownloadNotificationFormatter.progressMessage(
+                content: playlistTrack,
+                phase: "downloading",
+                fraction: 0.42,
+                isSingleTrack: false
+            ),
+            "( 3/12 ) 下载42%：《播放列表名》 艺人 - 歌名"
+        )
+
+        XCTAssertEqual(
+            AppleMusicDownloadNotificationFormatter.progressMessage(
+                content: singleTrack,
+                phase: "downloading",
+                fraction: 0.42,
+                isSingleTrack: false
+            ),
+            "( 3/12 ) 下载42%：《专辑名》 艺人 - 歌名"
+        )
+        XCTAssertNil(
+            AppleMusicDownloadNotificationFormatter.progressMessage(
+                content: singleTrack,
+                phase: "downloading",
+                fraction: nil,
+                isSingleTrack: true
+            )
+        )
+        XCTAssertEqual(
+            AppleMusicDownloadNotificationFormatter.progressMessage(
+                content: singleTrack,
+                phase: "decrypting",
+                fraction: 0.3,
+                isSingleTrack: true
+            ),
+            "正在解密：艺人 - 歌名"
+        )
+        XCTAssertEqual(
+            AppleMusicDownloadNotificationFormatter.progressMessage(
+                content: playlistTrack,
+                phase: "tagging",
+                fraction: nil,
+                isSingleTrack: false
+            ),
+            "( 3/12 ) 正在写入元数据：《播放列表名》 艺人 - 歌名"
+        )
+        XCTAssertEqual(
+            AppleMusicDownloadNotificationFormatter.completionMessage(successCount: 11, failureCount: 1),
+            "下载完成：成功 11 首，失败 1 首。"
+        )
+    }
+
+    func testAppleMusicDownloadNotificationGateOnlyReturnsNewActiveVersions() {
+        var gate = AppleMusicDownloadNotificationGate(lastNotificationVersion: "run-1:1")
+        let previous = AppleMusicRuntimeProgress(
+            message: "下载10%：艺人 - 歌名",
+            completedUnitCount: 10,
+            totalUnitCount: 100,
+            isActive: true,
+            notificationVersion: "run-1:1"
+        )
+        let next = AppleMusicRuntimeProgress(
+            message: "下载42%：艺人 - 歌名",
+            completedUnitCount: 42,
+            totalUnitCount: 100,
+            isActive: true,
+            notificationVersion: "run-1:2"
+        )
+        let inactive = AppleMusicRuntimeProgress(
+            message: "Apple Music 下载完成",
+            completedUnitCount: 1,
+            totalUnitCount: 1,
+            isActive: false,
+            notificationVersion: "run-1:3"
+        )
+
+        XCTAssertNil(gate.nextMessage(for: previous))
+        XCTAssertEqual(gate.nextMessage(for: next), "下载42%：艺人 - 歌名")
+        XCTAssertNil(gate.nextMessage(for: next))
+        XCTAssertNil(gate.nextMessage(for: inactive))
+        XCTAssertNil(gate.nextMessage(for: AppleMusicRuntimeProgress(
+            message: "正在准备 Apple Music 下载...",
+            completedUnitCount: 0,
+            totalUnitCount: 1,
+            isActive: true
+        )))
+    }
+
+    func testUTF8ChunkDecoderPreservesAScalarSplitAcrossChunks() {
+        let decoder = UTF8ChunkDecoder()
+        let prefix = Data([0xE5, 0x91])
+        let suffix = Data([0xA8])
+
+        XCTAssertNil(decoder.append(prefix))
+        XCTAssertEqual(decoder.append(suffix), "周")
+        XCTAssertNil(decoder.finish())
     }
 
     func testAppleMusicDownloadMessageFormatterFiltersProgressLines() {
@@ -1363,7 +1517,8 @@ final class GetOudioCoreTests: XCTestCase {
             completedUnitCount: 3,
             totalUnitCount: 5,
             isActive: true,
-            statuses: [status]
+            statuses: [status],
+            notificationVersion: "run-1:2"
         )
         let decoded = try JSONDecoder().decode(
             AppleMusicRuntimeProgress.self,
@@ -1371,6 +1526,7 @@ final class GetOudioCoreTests: XCTestCase {
         )
 
         XCTAssertEqual(decoded.statuses, [status])
+        XCTAssertEqual(decoded.notificationVersion, "run-1:2")
         XCTAssertEqual(decoded.fractionCompleted, 0.6)
     }
 

@@ -145,8 +145,10 @@ public final class AppleMusicDownloadService {
             for job in downloadJobs {
                 let format = resolvedFormat(for: job)
                 let arguments = Self.downloaderArguments(for: job, format: format)
+                let isSingleTrack = arguments.contains("--song")
                 var lastFailureMessage = ""
                 var completed = false
+                var completion: AppleMusicDownloaderRunCompletion?
 
                 for attempt in 1...Self.maxDownloadAttempts {
                     if agentClient?.isDownloadCancellationRequested() == true {
@@ -158,25 +160,31 @@ public final class AppleMusicDownloadService {
                         ? "正在准备 Apple Music 下载..."
                         : "检测到下载流中断，正在重试 \(attempt - 1)/\(Self.maxDownloadAttempts - 1)..."
                     writeDownloadProgress(prefix, active: true)
-                    let progressTracker = AppleMusicDownloaderProgressTracker()
+                    let eventTracker = AppleMusicDownloaderEventTracker()
                     let result = try await runner.run(
                         executablePath: executableURL.path,
                         arguments: arguments,
                         currentDirectoryURL: workingDirectory,
                         environment: runtimeManager.runtimeEnvironment(),
-                        outputHandler: { _, chunk in
-                            guard let message = progressTracker.observe(chunk) else { return }
-                            self.writeDownloadProgress(message, active: true)
+                        outputHandler: { stream, chunk in
+                            guard stream == .standardOutput else { return }
+                            for event in eventTracker.observe(chunk) {
+                                self.handleDownloaderEvent(
+                                    event,
+                                    tracker: eventTracker,
+                                    isSingleTrack: isSingleTrack
+                                )
+                            }
                         },
                         shouldTerminate: {
                             self.agentClient?.isDownloadCancellationRequested() == true
                         }
                     )
 
-                    let rawMessage = result.standardError.isEmpty ? result.standardOutput : result.standardError
-                    if result.succeeded {
-                        successCount += 1
-                        writeDownloadProgress("Apple Music 下载完成", completed: 1, active: false)
+                    let fallbackMessage = result.standardError.isEmpty ? result.standardOutput : result.standardError
+                    let rawMessage = eventTracker.failureMessage.isEmpty ? fallbackMessage : eventTracker.failureMessage
+                    if result.succeeded, eventTracker.completionStatus == "completed" {
+                        completion = eventTracker.completion
                         completed = true
                         break
                     }
@@ -191,16 +199,33 @@ public final class AppleMusicDownloadService {
                         break
                     }
 
-                    lastFailureMessage = AppleMusicDownloadMessageFormatter.coreMessage(from: rawMessage)
+                    lastFailureMessage = downloadFailureMessage(from: eventTracker, fallback: fallbackMessage)
+                    if result.succeeded, eventTracker.completionStatus == nil {
+                        lastFailureMessage = "Apple Music 下载未返回完成状态。"
+                    }
+                    if result.succeeded, eventTracker.completionStatus != nil {
+                        completion = eventTracker.completion
+                        break
+                    }
                     if Self.shouldRetryDownload(after: rawMessage), attempt < Self.maxDownloadAttempts {
                         DiagnosticLog.append("Apple Music download retry \(attempt) for \(job.fileURL.absoluteString): \(lastFailureMessage)")
                         continue
                     }
+                    completion = eventTracker.completion
                     break
                 }
 
-                if !completed {
-                    failureCount += 1
+                if let completion {
+                    successCount += completion.completed
+                    failureCount += completion.failures
+                }
+
+                if completed {
+                    writeDownloadProgress("Apple Music 下载完成", completed: 1, active: false)
+                } else {
+                    if completion?.failures == 0 {
+                        failureCount += 1
+                    }
                     messages.append(lastFailureMessage.isEmpty ? "Apple Music 下载失败。" : lastFailureMessage)
                     let finalMessage = agentClient?.isDownloadCancellationRequested() == true
                         ? "Apple Music 下载已停止"
@@ -274,6 +299,7 @@ public final class AppleMusicDownloadService {
 
     static func downloaderArguments(for job: JobRequest, format: AppleMusicDownloadFormat) -> [String] {
         var arguments = format.downloaderArguments
+        arguments.append("--events=jsonl")
         if shouldDownloadAsSingleSong(job.fileURL) {
             arguments.append("--song")
         }
@@ -342,17 +368,89 @@ public final class AppleMusicDownloadService {
         return "\"\(escaped)\""
     }
 
+    private func handleDownloaderEvent(
+        _ event: AppleMusicDownloaderEvent,
+        tracker: AppleMusicDownloaderEventTracker,
+        isSingleTrack: Bool
+    ) {
+        switch event.event {
+        case "progress":
+            guard let data = event.data,
+                  let message = AppleMusicDownloadNotificationFormatter.progressMessage(
+                    content: tracker.currentContent,
+                    phase: data.phase,
+                    fraction: data.fraction,
+                    isSingleTrack: isSingleTrack
+                  )
+            else {
+                return
+            }
+            let total = data.totalBytes.map { max(Int($0), 1) } ?? 1
+            let completed = data.totalBytes == nil ? 0 : min(data.completedBytes.map { Int($0) } ?? 0, total)
+            writeDownloadProgress(
+                message,
+                completed: completed,
+                total: total,
+                active: true,
+                notificationVersion: "\(event.runID):\(event.sequence)"
+            )
+        case "diagnostic":
+            if let message = event.data?.message, !message.isEmpty {
+                DiagnosticLog.append(
+                    "Apple Music downloader: \(message)",
+                    level: diagnosticLogLevel(for: event.data?.level)
+                )
+            }
+        case "item_failed":
+            if let message = event.data?.message, !message.isEmpty {
+                DiagnosticLog.append("Apple Music downloader: \(message)", level: .error)
+            }
+        default:
+            break
+        }
+    }
+
+    private func downloadFailureMessage(
+        from tracker: AppleMusicDownloaderEventTracker,
+        fallback: String
+    ) -> String {
+        if !tracker.failureMessage.isEmpty {
+            return AppleMusicDownloadMessageFormatter.coreMessage(from: tracker.failureMessage)
+        }
+        if let completionMessage = tracker.completion?.failureMessage {
+            return completionMessage
+        }
+        if !tracker.diagnosticMessage.isEmpty {
+            return AppleMusicDownloadMessageFormatter.coreMessage(from: tracker.diagnosticMessage)
+        }
+        return AppleMusicDownloadMessageFormatter.coreMessage(from: fallback)
+    }
+
+    private func diagnosticLogLevel(for eventLevel: String?) -> DiagnosticLog.Level {
+        switch eventLevel?.lowercased() {
+        case "error":
+            return .error
+        case "warning", "warn", "notice":
+            return .notice
+        default:
+            return .debug
+        }
+    }
+
     private func writeDownloadProgress(
         _ message: String,
         completed: Int = 0,
-        active: Bool
+        total: Int = 1,
+        active: Bool,
+        notificationVersion: String? = nil
     ) {
         do {
             let progress = AppleMusicRuntimeProgress(
                 message: message,
                 completedUnitCount: completed,
-                totalUnitCount: 1,
-                isActive: active
+                totalUnitCount: total,
+                isActive: active,
+                notificationVersion: notificationVersion
             )
             guard let progressURL = agentClient?.progressURL() else { return }
             let directory = progressURL.deletingLastPathComponent()

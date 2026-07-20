@@ -9,6 +9,8 @@ public final class NotificationService {
         public static let atmosActionIdentifier = "APPLE_MUSIC_DOWNLOAD_ATMOS"
         public static let completionCategoryIdentifier = "GET_OUDIO_COMPLETION"
         public static let copyInfoActionIdentifier = "GET_OUDIO_COPY_INFO"
+        public static let appleMusicFailureCategoryIdentifier = "APPLE_MUSIC_DOWNLOAD_FAILURE"
+        public static let copyErrorInfoActionIdentifier = "APPLE_MUSIC_COPY_ERROR_INFO"
         public static let copyInfoUserInfoKey = "copyInfo"
     }
 
@@ -63,7 +65,22 @@ public final class NotificationService {
             intentIdentifiers: [],
             options: []
         )
-        UNUserNotificationCenter.current().setNotificationCategories([formatCategory, completionCategory])
+        let copyErrorAction = UNNotificationAction(
+            identifier: AppleMusicNotification.copyErrorInfoActionIdentifier,
+            title: "复制错误信息",
+            options: []
+        )
+        let appleMusicFailureCategory = UNNotificationCategory(
+            identifier: AppleMusicNotification.appleMusicFailureCategoryIdentifier,
+            actions: [copyErrorAction],
+            intentIdentifiers: [],
+            options: []
+        )
+        UNUserNotificationCenter.current().setNotificationCategories([
+            formatCategory,
+            completionCategory,
+            appleMusicFailureCategory
+        ])
     }
 
     public func appleMusicFormat(for actionIdentifier: String) -> AppleMusicDownloadFormat? {
@@ -80,14 +97,17 @@ public final class NotificationService {
     }
 
     public func copyInfo(for response: UNNotificationResponse) -> String? {
-        guard response.actionIdentifier == AppleMusicNotification.copyInfoActionIdentifier else {
+        guard [
+            AppleMusicNotification.copyInfoActionIdentifier,
+            AppleMusicNotification.copyErrorInfoActionIdentifier
+        ].contains(response.actionIdentifier) else {
             return nil
         }
         return response.notification.request.content.userInfo[AppleMusicNotification.copyInfoUserInfoKey] as? String
     }
 
     public func notifyAppleMusicInactive() async {
-        await notify(body: "该功能尚未激活")
+        await notify(body: "该功能尚未激活", sound: nil)
     }
 
     public func notifyAppleMusicDownloadStarted() async {
@@ -107,7 +127,7 @@ public final class NotificationService {
 
     public func notifyUnsupportedDownloadSource(urls: [URL]) async {
         let suffix = urls.first.map { " \($0.absoluteString)" } ?? ""
-        await notify(body: "不支持的下载源...\(suffix)")
+        await notify(body: "不支持的下载源...\(suffix)", sound: nil)
     }
 
     public func notifyAppleMusicFormatSelection(jobCount: Int) async {
@@ -122,17 +142,8 @@ public final class NotificationService {
         await send(request, context: "Apple Music format selection count=\(jobCount)")
     }
 
-    public func notifyAppleMusicDownloadInProgress(elapsed: TimeInterval, progress: String? = nil) async {
-        let seconds = max(0, Int(elapsed.rounded()))
-        let minutes = seconds / 60
-        let remainingSeconds = seconds % 60
-        let elapsedText = minutes > 0 ? "\(minutes)分\(remainingSeconds)秒" : "\(remainingSeconds)秒"
-        let detail = progress?.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let detail, !detail.isEmpty {
-            await notify(body: "下载中... \(detail)（已用 \(elapsedText)）")
-        } else {
-            await notify(body: "下载中... 已经过 \(elapsedText)")
-        }
+    public func notifyAppleMusicDownloadInProgress(progress: String) async {
+        await notify(body: progress, sound: nil)
     }
 
     public func notifyAppleMusicDownloadFinished(summary: ConversionSummary, jobs: [JobRequest]) async {
@@ -171,18 +182,38 @@ public final class NotificationService {
     public func notifyConversionFinished(summary: ConversionSummary, jobs: [JobRequest] = []) async {
         let content = UNMutableNotificationContent()
         let actionName = Self.actionName(for: jobs)
+        let isAppleMusicDownload = Self.isAppleMusicDownload(jobs)
         content.title = "Get Oudio"
-        content.categoryIdentifier = AppleMusicNotification.completionCategoryIdentifier
         content.sound = .default
-        content.userInfo = [
-            AppleMusicNotification.copyInfoUserInfoKey: Self.copyInfo(summary: summary, jobs: jobs)
-        ]
 
-        if summary.totalCount == 0 {
+        if isAppleMusicDownload {
+            content.body = AppleMusicDownloadNotificationFormatter.completionMessage(
+                successCount: summary.successCount,
+                failureCount: summary.failureCount
+            )
+            if summary.failureCount > 0 {
+                content.categoryIdentifier = AppleMusicNotification.appleMusicFailureCategoryIdentifier
+                content.userInfo = [
+                    AppleMusicNotification.copyInfoUserInfoKey: Self.copyInfo(summary: summary, jobs: jobs)
+                ]
+            }
+        } else if summary.totalCount == 0 {
+            content.categoryIdentifier = AppleMusicNotification.completionCategoryIdentifier
+            content.userInfo = [
+                AppleMusicNotification.copyInfoUserInfoKey: Self.copyInfo(summary: summary, jobs: jobs)
+            ]
             content.body = "没有文件被处理，请确认选择了有效文件。"
         } else if summary.failureCount == 0 {
+            content.categoryIdentifier = AppleMusicNotification.completionCategoryIdentifier
+            content.userInfo = [
+                AppleMusicNotification.copyInfoUserInfoKey: Self.copyInfo(summary: summary, jobs: jobs)
+            ]
             content.body = "\(actionName)完成，处理了 \(summary.successCount) 个文件。"
         } else {
+            content.categoryIdentifier = AppleMusicNotification.completionCategoryIdentifier
+            content.userInfo = [
+                AppleMusicNotification.copyInfoUserInfoKey: Self.copyInfo(summary: summary, jobs: jobs)
+            ]
             let detail = Self.displayError(summary: summary).map { " \($0)" } ?? ""
             content.body = "\(actionName)基本完成，处理了 \(summary.totalCount) 个文件，成功 \(summary.successCount) 个，失败 \(summary.failureCount) 个。\(detail)"
         }
@@ -250,6 +281,16 @@ public final class NotificationService {
             return "NCM 转换"
         }
         return "Apple Music 下载"
+    }
+
+    private static func isAppleMusicDownload(_ jobs: [JobRequest]) -> Bool {
+        guard !jobs.isEmpty else { return false }
+        return jobs.allSatisfy { job in
+            if case .appleMusicDownload = job.operation {
+                return true
+            }
+            return false
+        }
     }
 
     private static func displayError(summary: ConversionSummary) -> String? {

@@ -51,19 +51,22 @@ public struct AppleMusicRuntimeProgress: Codable, Equatable, Sendable {
     public var totalUnitCount: Int
     public var isActive: Bool
     public var statuses: [AppleMusicRuntimeComponentStatus]?
+    public var notificationVersion: String?
 
     public init(
         message: String,
         completedUnitCount: Int,
         totalUnitCount: Int,
         isActive: Bool,
-        statuses: [AppleMusicRuntimeComponentStatus]? = nil
+        statuses: [AppleMusicRuntimeComponentStatus]? = nil,
+        notificationVersion: String? = nil
     ) {
         self.message = message
         self.completedUnitCount = completedUnitCount
         self.totalUnitCount = totalUnitCount
         self.isActive = isActive
         self.statuses = statuses
+        self.notificationVersion = notificationVersion
     }
 
     public var fractionCompleted: Double {
