@@ -1,9 +1,18 @@
-<?xml version="1.0" encoding="utf-8"?>
-<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
-  <channel>
-    <title>Get Oudio Updates</title>
-    <link>https://github.com/memomoonnnn/GetOudio/releases</link>
-    <description>Get Oudio release updates.</description>
-    <language>zh-CN</language>
-  </channel>
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>Get Oudio Updates</title>
+        <link>https://github.com/memomoonnnn/GetOudio/releases</link>
+        <description>Get Oudio release updates.</description>
+        <language>zh-CN</language>
+        <item>
+            <title>1.2.1</title>
+            <pubDate>Mon, 20 Jul 2026 09:12:18 +0800</pubDate>
+            <link>https://github.com/memomoonnnn/GetOudio/releases</link>
+            <sparkle:version>5</sparkle:version>
+            <sparkle:shortVersionString>1.2.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/memomoonnnn/GetOudio/releases/download/v1.2.1/GetOudio.dmg" length="16326523" type="application/octet-stream" sparkle:edSignature="QcETTv63p1LoPfMe12JHPF77mAneN28YDW7IGG9nNO/NWnDh3oHN4Zma/D6zDAhVZjuajZQGA4Y/Nk9xzKxHCw=="/>
+        </item>
+    </channel>
 </rss>
