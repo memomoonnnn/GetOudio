@@ -543,7 +543,6 @@
 		7F17B539629433A1A728EEE5 /* GetOudioFinderExtension */ = {
 			isa = PBXGroup;
 			children = (
-				A6A6C8985F7D8F5AC4403B28 /* Resources */,
 				469811EC9210CB9C36BB5C08 /* Sources */,
 			);
 			path = GetOudioFinderExtension;
@@ -583,13 +582,6 @@
 				07E142F989021D191723AA81 /* SharedContainer.swift */,
 			);
 			path = Support;
-			sourceTree = "<group>";
-		};
-		A6A6C8985F7D8F5AC4403B28 /* Resources */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			path = Resources;
 			sourceTree = "<group>";
 		};
 		AC8830FC087B510324BC7887 /* Views */ = {

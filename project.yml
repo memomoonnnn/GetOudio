@@ -246,7 +246,6 @@ targets:
     platform: macOS
     sources:
       - path: GetOudioFinderExtension/Sources
-      - path: GetOudioFinderExtension/Resources
     dependencies:
       - target: GetOudioCore
     info:
