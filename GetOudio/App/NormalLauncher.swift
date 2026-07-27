@@ -1,4 +1,5 @@
 import AppKit
+import AVFoundation
 import GetOudioCore
 import Sparkle
 import SwiftUI
@@ -145,13 +146,19 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
         showSettingsWindow()
     }
 
-    private func showSettingsWindow(recordingPage: Bool = false) {
+    private func showSettingsWindow(
+        recordingPage: Bool = false,
+        highlightRecordingInput: Bool = false
+    ) {
         if let mainWindow {
             NSApp.setActivationPolicy(.regular)
             mainWindow.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             if recordingPage {
                 NotificationCenter.default.post(name: .getOudioShowRecordingSettings, object: nil)
+            }
+            if highlightRecordingInput {
+                NotificationCenter.default.post(name: .getOudioHighlightRecordingInputSettings, object: nil)
             }
             return
         }
@@ -160,6 +167,7 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
             rootView: MainView(
                 container: container,
                 initialRecordingPage: recordingPage,
+                initialRecordingInputHighlight: highlightRecordingInput,
                 checkForUpdates: { [weak self] in self?.updaterController.checkForUpdates(nil) }
             )
         )
@@ -238,10 +246,13 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
             case .requestedStop:
                 DiagnosticLog.append("[Recording] toggle result=requestedStop")
                 finishTransientInteractionIfNeeded()
-            case .needsConfiguration:
-                DiagnosticLog.append("[Recording] toggle result=needsConfiguration")
-                launchIntent = .settings
-                showSettingsWindow(recordingPage: true)
+            case .needsConfiguration(let requirements):
+                DiagnosticLog.append(
+                    "[Recording] toggle result=needsConfiguration " +
+                    "needsMicrophonePermission=\(requirements.needsMicrophonePermission) " +
+                    "needsInputDevice=\(requirements.needsInputDevice)"
+                )
+                handleRecordingConfiguration(requirements)
             case .failed(let message):
                 DiagnosticLog.append("[Recording] toggle result=failed error=\(message)")
                 Task { await notificationService.notifyRecordingFinished(fileURL: nil, message: message) }
@@ -256,6 +267,31 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
         }
         openWithDispatcher.launchHeadlessProcessor()
         finishTransientInteractionIfNeeded()
+    }
+
+    private func handleRecordingConfiguration(
+        _ requirements: RecordingControlCoordinator.ConfigurationRequirements
+    ) {
+        if requirements.needsMicrophonePermission {
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                let granted = await AVCaptureDevice.requestAccess(for: .audio)
+                DiagnosticLog.append("[Recording] microphone permission request completed granted=\(granted)")
+                if requirements.needsInputDevice {
+                    self.launchIntent = .settings
+                    self.showSettingsWindow(recordingPage: true, highlightRecordingInput: true)
+                } else {
+                    self.finishTransientInteractionIfNeeded()
+                }
+            }
+            return
+        }
+
+        launchIntent = .settings
+        showSettingsWindow(
+            recordingPage: true,
+            highlightRecordingInput: requirements.needsInputDevice
+        )
     }
 
     private func presentOpenWithAudioMenu(for urls: [URL]) {

@@ -15,10 +15,17 @@ private enum SettingsMetrics {
 // MARK: - Audio Bridge Recording Settings
 
 struct RecordingSettingsPage: View {
+    private static let inputSectionID = "recording-input-section"
+
     @ObservedObject var viewModel: RecordingSettingsModel
+    let inputHighlightRequest: Int
+    @State private var showsInputHighlight = false
 
     var body: some View {
-        SettingsForm {
+        SettingsForm(
+            scrollTarget: Self.inputSectionID,
+            scrollRequestID: inputHighlightRequest
+        ) {
             MarkdownDocumentView(.recording)
 
             // VStack(alignment: .leading, spacing: 8) {
@@ -51,6 +58,27 @@ struct RecordingSettingsPage: View {
                     }
 
                 }
+            } cardOverlay: {
+                RoundedRectangle(cornerRadius: SettingsMetrics.sectionCornerRadius, style: .continuous)
+                    .fill(.orange.opacity(showsInputHighlight ? 0.22 : 0))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: SettingsMetrics.sectionCornerRadius, style: .continuous)
+                            .strokeBorder(.orange.opacity(showsInputHighlight ? 0.8 : 0), lineWidth: 2)
+                    )
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+            .id(Self.inputSectionID)
+            .task(id: inputHighlightRequest) {
+                guard inputHighlightRequest > 0 else { return }
+                try? await Task.sleep(nanoseconds: 450_000_000)
+                guard !Task.isCancelled else { return }
+                withAnimation(.easeInOut(duration: 0.24).repeatCount(5, autoreverses: true)) {
+                    showsInputHighlight = true
+                }
+                try? await Task.sleep(nanoseconds: 2_400_000_000)
+                guard !Task.isCancelled else { return }
+                showsInputHighlight = false
             }
 
             SettingsSection("缓存", systemImage: "externaldrive") {
@@ -319,31 +347,50 @@ struct SettingsSection<Content: View, Footer: View, CardOverlay: View>: View {
 
 struct SettingsForm<Content: View>: View {
     let spacing: CGFloat
+    let scrollTarget: String?
+    let scrollRequestID: Int
     let content: Content
 
-    init(spacing: CGFloat = 30, @ViewBuilder content: () -> Content) {
+    init(
+        spacing: CGFloat = 30,
+        scrollTarget: String? = nil,
+        scrollRequestID: Int = 0,
+        @ViewBuilder content: () -> Content
+    ) {
         self.spacing = spacing
+        self.scrollTarget = scrollTarget
+        self.scrollRequestID = scrollRequestID
         self.content = content()
     }
 
     var body: some View {
-        ScrollView(.vertical) {
-            VStack(alignment: .leading, spacing: 0) {
-                Color.clear
-                    .frame(height: SettingsMetrics.contentTopInset)
+        ScrollViewReader { proxy in
+            ScrollView(.vertical) {
+                VStack(alignment: .leading, spacing: 0) {
+                    Color.clear
+                        .frame(height: SettingsMetrics.contentTopInset)
 
-                VStack(alignment: .leading, spacing: spacing) {
-                    content
+                    VStack(alignment: .leading, spacing: spacing) {
+                        content
+                    }
+                    .frame(maxWidth: SettingsMetrics.contentMaxWidth, alignment: .leading)
+
+                    Color.clear
+                        .frame(height: SettingsMetrics.contentBottomInset)
                 }
-                .frame(maxWidth: SettingsMetrics.contentMaxWidth, alignment: .leading)
-
-                Color.clear
-                    .frame(height: SettingsMetrics.contentBottomInset)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .scrollClipDisabled()
+            .scrollContentBackground(.hidden)
+            .task(id: scrollRequestID) {
+                guard scrollRequestID > 0, let scrollTarget else { return }
+                try? await Task.sleep(nanoseconds: 150_000_000)
+                guard !Task.isCancelled else { return }
+                withAnimation(.easeOut(duration: 0.25)) {
+                    proxy.scrollTo(scrollTarget, anchor: .top)
+                }
+            }
         }
-        .scrollClipDisabled()
-        .scrollContentBackground(.hidden)
     }
 }
 

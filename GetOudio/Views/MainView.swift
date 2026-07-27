@@ -5,15 +5,18 @@ import SwiftUI
 struct MainView: View {
     @StateObject private var settingsViewModel: SettingsViewModel
     @State private var selection: MainSidebarItem? = .overview
+    @State private var recordingInputHighlightRequest = 0
     private let checkForUpdates: () -> Void
 
     init(
         container: SharedContainer,
         initialRecordingPage: Bool = false,
+        initialRecordingInputHighlight: Bool = false,
         checkForUpdates: @escaping () -> Void
     ) {
         _settingsViewModel = StateObject(wrappedValue: SettingsViewModel(container: container))
         _selection = State(initialValue: initialRecordingPage ? .recording : .overview)
+        _recordingInputHighlightRequest = State(initialValue: initialRecordingInputHighlight ? 1 : 0)
         self.checkForUpdates = checkForUpdates
     }
 
@@ -35,6 +38,10 @@ struct MainView: View {
         .clipShape(RoundedRectangle(cornerRadius: LayoutConstants.windowCornerRadius, style: .continuous))
         .onReceive(NotificationCenter.default.publisher(for: .getOudioShowRecordingSettings)) { _ in
             selection = .recording
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .getOudioHighlightRecordingInputSettings)) { _ in
+            selection = .recording
+            recordingInputHighlightRequest += 1
         }
     }
 
@@ -107,7 +114,10 @@ struct MainView: View {
         case .appleMusic:
             AppleMusicSettingsPage(viewModel: settingsViewModel.appleMusicSettings)
         case .recording:
-            RecordingSettingsPage(viewModel: settingsViewModel.recordingSettings)
+            RecordingSettingsPage(
+                viewModel: settingsViewModel.recordingSettings,
+                inputHighlightRequest: recordingInputHighlightRequest
+            )
         }
     }
 }
@@ -255,4 +265,5 @@ private enum MainSidebarItem: String, CaseIterable, Identifiable {
 
 extension Notification.Name {
     static let getOudioShowRecordingSettings = Notification.Name("GetOudioShowRecordingSettings")
+    static let getOudioHighlightRecordingInputSettings = Notification.Name("GetOudioHighlightRecordingInputSettings")
 }

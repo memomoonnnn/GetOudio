@@ -6,10 +6,20 @@ import GetOudioCore
 import WidgetKit
 
 final class RecordingControlCoordinator {
+    struct ConfigurationRequirements {
+        let needsMicrophonePermission: Bool
+        let needsInputDevice: Bool
+
+        static let none = ConfigurationRequirements(
+            needsMicrophonePermission: false,
+            needsInputDevice: false
+        )
+    }
+
     enum ToggleResult {
         case launchedRunner
         case requestedStop
-        case needsConfiguration
+        case needsConfiguration(ConfigurationRequirements)
         case failed(String)
     }
 
@@ -50,8 +60,8 @@ final class RecordingControlCoordinator {
         }
 
         if let failure = preflightFailure() {
-            DiagnosticLog.append("[Recording] preflight failed: \(failure)")
-            return .needsConfiguration
+            DiagnosticLog.append("[Recording] preflight failed: \(failure.message)")
+            return .needsConfiguration(failure.requirements)
         }
 
         do {
@@ -72,35 +82,60 @@ final class RecordingControlCoordinator {
         }
     }
 
-    private func preflightFailure() -> String? {
+    private func preflightFailure() -> (
+        message: String,
+        requirements: ConfigurationRequirements
+    )? {
         let authorization = AVCaptureDevice.authorizationStatus(for: .audio)
-        guard authorization == .authorized else {
-            return "audio input permission status=\(authorization.rawValue)"
+        let needsMicrophonePermission = authorization != .authorized
+        let bridgeUID = store.recordingBridgeDeviceUID
+        let needsInputDevice = bridgeUID == nil
+
+        if needsMicrophonePermission || needsInputDevice {
+            var reasons: [String] = []
+            if needsMicrophonePermission {
+                reasons.append("audio input permission status=\(authorization.rawValue)")
+            }
+            if needsInputDevice {
+                reasons.append("bridge UID is not configured")
+            }
+            return (
+                reasons.joined(separator: "; "),
+                ConfigurationRequirements(
+                    needsMicrophonePermission: needsMicrophonePermission,
+                    needsInputDevice: needsInputDevice
+                )
+            )
         }
-        guard let bridgeUID = store.recordingBridgeDeviceUID else {
-            return "bridge UID is not configured"
-        }
+
+        guard let bridgeUID else { return nil }
         guard let bridge = RecordingDeviceService.descriptor(uid: bridgeUID) else {
-            return "configured bridge is unavailable uid=\(bridgeUID)"
+            return ("configured bridge is unavailable uid=\(bridgeUID)", .none)
         }
         guard bridge.isSupportedProToolsAudioBridge else {
-            return "configured bridge is unsupported name=\(bridge.name) inputChannels=\(bridge.inputChannelCount) outputChannels=\(bridge.outputChannelCount) uid=\(bridge.uid)"
+            return (
+                "configured bridge is unsupported name=\(bridge.name) inputChannels=\(bridge.inputChannelCount) outputChannels=\(bridge.outputChannelCount) uid=\(bridge.uid)",
+                .none
+            )
         }
 
         let originalUID: String
         do {
             originalUID = try RecordingDeviceService.defaultOutputDeviceUID()
         } catch {
-            return "default output lookup failed error=\(error.localizedDescription)"
+            return ("default output lookup failed error=\(error.localizedDescription)", .none)
         }
         guard originalUID != bridgeUID else {
-            return "default output already equals configured bridge uid=\(bridgeUID)"
+            return ("default output already equals configured bridge uid=\(bridgeUID)", .none)
         }
         guard let original = RecordingDeviceService.descriptor(uid: originalUID) else {
-            return "default output descriptor is unavailable uid=\(originalUID)"
+            return ("default output descriptor is unavailable uid=\(originalUID)", .none)
         }
         guard original.outputChannelCount > 0 else {
-            return "default output has no output channels name=\(original.name) uid=\(original.uid)"
+            return (
+                "default output has no output channels name=\(original.name) uid=\(original.uid)",
+                .none
+            )
         }
 
         DiagnosticLog.append(
