@@ -188,15 +188,102 @@ enum SettingsDocumentationStore {
 
 struct MarkdownDocumentView: View {
     let id: SettingsDocumentSectionID
+    @State private var isExpanded = false
 
     init(_ id: SettingsDocumentSectionID) {
         self.id = id
     }
 
     var body: some View {
-        SettingsSection("使用说明", systemImage: "text.book.closed") {
-            MarkdownDocumentContent(id)
+        SettingsSection(
+            "使用说明",
+            showsTitle: false,
+            contentPadding: 0,
+            clipsCardContent: true
+        ) {
+            MarkdownDocumentDisclosureControl(
+                sectionTitle: id.rawValue,
+                isExpanded: $isExpanded
+            )
+
+            if isExpanded {
+                Divider()
+
+                MarkdownDocumentContent(id)
+                    .padding(16)
+                    .transition(.opacity)
+            }
         }
+    }
+}
+
+private struct MarkdownDocumentDisclosureControl: View {
+    let sectionTitle: String
+    @Binding var isExpanded: Bool
+    @State private var isHovering = false
+
+    var body: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.18)) {
+                isExpanded.toggle()
+            }
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 16, weight: .bold))
+                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                    .offset(y: -0.6)
+
+                HStack(spacing: 0) {
+                    Text(actionTitle)
+                    Text(" 关于「\(sectionTitle)」")
+                        .opacity(0.4)
+                    Text("的使用说明")
+                }
+                .font(.system(size: 18, weight: .semibold))
+
+                Spacer()
+            }
+                .foregroundStyle(foregroundColor)
+                .padding(.horizontal, 18)
+                .frame(maxWidth: .infinity, minHeight: 56)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .background {
+            Rectangle()
+                .fill(backgroundColor)
+                .overlay {
+                    Rectangle()
+                        .fill(hoverHighlightColor)
+                }
+        }
+        .onHover { isHovering = $0 }
+        .animation(.easeOut(duration: 0.12), value: isHovering)
+        .accessibilityLabel(title)
+        .accessibilityValue(isExpanded ? "已展开" : "已折叠")
+        .accessibilityHint(isExpanded ? "点按以收起使用说明" : "点按以展开使用说明")
+    }
+
+    private var title: String {
+        "\(actionTitle) 关于「\(sectionTitle)」的使用说明"
+    }
+
+    private var actionTitle: String {
+        isExpanded ? "收起" : "查看"
+    }
+
+    private var foregroundColor: Color {
+        isExpanded ? .white : .primary
+    }
+
+    private var backgroundColor: Color {
+        isExpanded ? .accentColor : .clear
+    }
+
+    private var hoverHighlightColor: Color {
+        guard isHovering else { return .clear }
+        return isExpanded ? .white.opacity(0.12) : .primary.opacity(0.06)
     }
 }
 

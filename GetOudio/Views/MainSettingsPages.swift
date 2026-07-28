@@ -286,6 +286,9 @@ extension View {
 struct SettingsSection<Content: View, Footer: View, CardOverlay: View>: View {
     let title: String
     let systemImage: String
+    let showsTitle: Bool
+    let contentPadding: CGFloat
+    let clipsCardContent: Bool
     let content: Content
     let footer: Footer
     let cardOverlay: CardOverlay
@@ -293,12 +296,18 @@ struct SettingsSection<Content: View, Footer: View, CardOverlay: View>: View {
     init(
         _ title: String,
         systemImage: String = "gearshape",
+        showsTitle: Bool = true,
+        contentPadding: CGFloat = SettingsMetrics.sectionPadding,
+        clipsCardContent: Bool = false,
         @ViewBuilder content: () -> Content,
         @ViewBuilder footer: () -> Footer = { EmptyView() },
         @ViewBuilder cardOverlay: () -> CardOverlay = { EmptyView() }
     ) {
         self.title = title
         self.systemImage = systemImage
+        self.showsTitle = showsTitle
+        self.contentPadding = contentPadding
+        self.clipsCardContent = clipsCardContent
         self.content = content()
         self.footer = footer()
         self.cardOverlay = cardOverlay()
@@ -306,21 +315,23 @@ struct SettingsSection<Content: View, Footer: View, CardOverlay: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
-            HStack(spacing: 6) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 12, weight: .semibold))
-                    .frame(width: 15, alignment: .center)
-                Text(title)
-                    .font(SettingsMetrics.sectionTitleFont)
+            if showsTitle {
+                HStack(spacing: 6) {
+                    Image(systemName: systemImage)
+                        .font(.system(size: 12, weight: .semibold))
+                        .frame(width: 15, alignment: .center)
+                    Text(title)
+                        .font(SettingsMetrics.sectionTitleFont)
+                }
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 6)
             }
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 6)
 
             VStack(alignment: .leading, spacing: 0) {
                 VStack(alignment: .leading, spacing: 0) {
                     content
                 }
-                .padding(SettingsMetrics.sectionPadding)
+                .padding(contentPadding)
 
                 if !(footer is EmptyView) {
                     Divider()
@@ -334,12 +345,31 @@ struct SettingsSection<Content: View, Footer: View, CardOverlay: View>: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            .modifier(SettingsCardContentClipModifier(isEnabled: clipsCardContent))
             .background(SettingsCardBackground())
             .overlay {
                 cardOverlay
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct SettingsCardContentClipModifier: ViewModifier {
+    let isEnabled: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if isEnabled {
+            content.clipShape(
+                RoundedRectangle(
+                    cornerRadius: SettingsMetrics.sectionCornerRadius,
+                    style: .continuous
+                )
+            )
+        } else {
+            content
+        }
     }
 }
 
