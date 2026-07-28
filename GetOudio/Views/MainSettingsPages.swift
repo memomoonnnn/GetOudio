@@ -644,11 +644,11 @@ struct AppleMusicSettingsPage: View {
 
     var body: some View {
         SettingsForm {
+            MarkdownDocumentView(.appleMusic)
             dependencyInstallationSettings
             runtimeStatusSettings
             initializationSettings
             downloadSettings
-            MarkdownDocumentView(.appleMusic)
         }
         .task {
             await viewModel.refreshAppleMusicRuntimeStatus()
