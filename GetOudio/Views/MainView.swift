@@ -6,17 +6,20 @@ struct MainView: View {
     @StateObject private var settingsViewModel: SettingsViewModel
     @State private var selection: MainSidebarItem? = .overview
     @State private var recordingInputHighlightRequest = 0
+    @State private var appleMusicDependencyHighlightRequest = 0
+    @State private var appleMusicInitializationHighlightRequest = 0
     private let checkForUpdates: () -> Void
 
     init(
         container: SharedContainer,
-        initialRecordingPage: Bool = false,
-        initialRecordingInputHighlight: Bool = false,
+        initialSettingsGuidance: SettingsGuidanceTarget? = nil,
         checkForUpdates: @escaping () -> Void
     ) {
         _settingsViewModel = StateObject(wrappedValue: SettingsViewModel(container: container))
-        _selection = State(initialValue: initialRecordingPage ? .recording : .overview)
-        _recordingInputHighlightRequest = State(initialValue: initialRecordingInputHighlight ? 1 : 0)
+        _selection = State(initialValue: Self.initialSelection(for: initialSettingsGuidance))
+        _recordingInputHighlightRequest = State(initialValue: initialSettingsGuidance == .recordingInput ? 1 : 0)
+        _appleMusicDependencyHighlightRequest = State(initialValue: initialSettingsGuidance == .appleMusicDependencies ? 1 : 0)
+        _appleMusicInitializationHighlightRequest = State(initialValue: initialSettingsGuidance == .appleMusicInitialization ? 1 : 0)
         self.checkForUpdates = checkForUpdates
     }
 
@@ -36,12 +39,15 @@ struct MainView: View {
             .padding(.top, LayoutConstants.sidebarTopMargin)
         }
         .clipShape(RoundedRectangle(cornerRadius: LayoutConstants.windowCornerRadius, style: .continuous))
-        .onReceive(NotificationCenter.default.publisher(for: .getOudioShowRecordingSettings)) { _ in
-            selection = .recording
+        .onReceive(NotificationCenter.default.publisher(for: .getOudioPresentSettingsGuidance)) { notification in
+            guard let guidance = notification.object as? SettingsGuidanceTarget else { return }
+            present(guidance)
         }
-        .onReceive(NotificationCenter.default.publisher(for: .getOudioHighlightRecordingInputSettings)) { _ in
-            selection = .recording
-            recordingInputHighlightRequest += 1
+        .onReceive(NotificationCenter.default.publisher(for: .getOudioShowOverviewSettings)) { _ in
+            selection = .overview
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .getOudioRefreshRecordingMicrophonePermission)) { _ in
+            settingsViewModel.recordingSettings.refreshMicrophonePermission()
         }
     }
 
@@ -112,12 +118,41 @@ struct MainView: View {
                 defaultOpenWithSettings: settingsViewModel.defaultOpenWithSettings
             )
         case .appleMusic:
-            AppleMusicSettingsPage(viewModel: settingsViewModel.appleMusicSettings)
+            AppleMusicSettingsPage(
+                viewModel: settingsViewModel.appleMusicSettings,
+                dependencyInstallationHighlightRequest: appleMusicDependencyHighlightRequest,
+                initializationHighlightRequest: appleMusicInitializationHighlightRequest
+            )
         case .recording:
             RecordingSettingsPage(
                 viewModel: settingsViewModel.recordingSettings,
                 inputHighlightRequest: recordingInputHighlightRequest
             )
+        }
+    }
+
+    private func present(_ guidance: SettingsGuidanceTarget) {
+        switch guidance {
+        case .recordingInput:
+            selection = .recording
+            recordingInputHighlightRequest += 1
+        case .appleMusicDependencies:
+            selection = .appleMusic
+            appleMusicDependencyHighlightRequest += 1
+        case .appleMusicInitialization:
+            selection = .appleMusic
+            appleMusicInitializationHighlightRequest += 1
+        }
+    }
+
+    private static func initialSelection(for guidance: SettingsGuidanceTarget?) -> MainSidebarItem {
+        switch guidance {
+        case .recordingInput:
+            .recording
+        case .appleMusicDependencies, .appleMusicInitialization:
+            .appleMusic
+        case nil:
+            .overview
         }
     }
 }
@@ -264,6 +299,7 @@ private enum MainSidebarItem: String, CaseIterable, Identifiable {
 }
 
 extension Notification.Name {
-    static let getOudioShowRecordingSettings = Notification.Name("GetOudioShowRecordingSettings")
-    static let getOudioHighlightRecordingInputSettings = Notification.Name("GetOudioHighlightRecordingInputSettings")
+    static let getOudioPresentSettingsGuidance = Notification.Name("GetOudioPresentSettingsGuidance")
+    static let getOudioShowOverviewSettings = Notification.Name("GetOudioShowOverviewSettings")
+    static let getOudioRefreshRecordingMicrophonePermission = Notification.Name("GetOudioRefreshRecordingMicrophonePermission")
 }

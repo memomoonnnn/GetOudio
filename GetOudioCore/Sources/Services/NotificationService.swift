@@ -106,8 +106,8 @@ public final class NotificationService {
         return response.notification.request.content.userInfo[AppleMusicNotification.copyInfoUserInfoKey] as? String
     }
 
-    public func notifyAppleMusicInactive() async {
-        await notify(body: "该功能尚未激活", sound: nil)
+    public func notifyAppleMusicUnavailable() async {
+        await notify(body: "Apple Music 下载暂时不可用", sound: nil)
     }
 
     public func notifyAppleMusicDownloadStarted() async {

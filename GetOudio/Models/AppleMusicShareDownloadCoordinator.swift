@@ -34,34 +34,50 @@ final class AppleMusicShareDownloadCoordinator {
         }
     }
 
-    func handleShareAppleMusicJobs(_ jobs: [JobRequest]) async -> [JobRequest] {
+    func handleShareAppleMusicJobs(
+        _ jobs: [JobRequest]
+    ) async -> (remainingJobs: [JobRequest], settingsGuidance: SettingsGuidanceTarget?) {
         let shareJobs = jobs.filter { $0.isShareAppleMusicDownload }
         let remainingJobs = jobs.filter { !$0.isShareAppleMusicDownload }
         guard !shareJobs.isEmpty else {
-            return remainingJobs
+            return (remainingJobs, nil)
         }
 
-        await handleAppleMusicJobs(shareJobs)
-        return remainingJobs
+        return (remainingJobs, await handleAppleMusicJobs(shareJobs))
     }
 
-    func handlePendingAppleMusicDownload(format: AppleMusicDownloadFormat) async {
+    func handlePendingAppleMusicDownload(
+        format: AppleMusicDownloadFormat
+    ) async -> SettingsGuidanceTarget? {
         do {
             guard let batch = try pendingStoreFactory().drain(), !batch.jobs.isEmpty else {
                 await notificationService.notifyUnsupportedDownloadSource(urls: [])
-                return
+                return nil
             }
-            await handleAppleMusicJobs(batch.jobs, forcedFormat: format)
+            return await handleAppleMusicJobs(batch.jobs, forcedFormat: format)
         } catch {
             DiagnosticLog.append("pending Apple Music downloads failed: \(error.localizedDescription)")
             await notificationService.notifyUnsupportedDownloadSource(urls: [])
+            return nil
         }
     }
 
-    private func handleAppleMusicJobs(_ jobs: [JobRequest], forcedFormat: AppleMusicDownloadFormat? = nil) async {
-        guard await isAppleMusicDownloadActive() else {
-            await notificationService.notifyAppleMusicInactive()
-            return
+    private func handleAppleMusicJobs(
+        _ jobs: [JobRequest],
+        forcedFormat: AppleMusicDownloadFormat? = nil
+    ) async -> SettingsGuidanceTarget? {
+        switch await appleMusicDownloadAvailability() {
+        case .needsRuntimeInstallation:
+            DiagnosticLog.append("Apple Music share requires Downloader Runtime installation")
+            return .appleMusicDependencies
+        case .needsInitialization:
+            DiagnosticLog.append("Apple Music share requires wrapper initialization")
+            return .appleMusicInitialization
+        case .unavailable:
+            await notificationService.notifyAppleMusicUnavailable()
+            return nil
+        case .ready:
+            break
         }
 
         if forcedFormat == nil, settingsStore.appleMusicDownloadFormat == .askEveryTime {
@@ -73,7 +89,7 @@ final class AppleMusicShareDownloadCoordinator {
                 DiagnosticLog.append("pending Apple Music downloads save failed: \(error.localizedDescription)")
                 await notificationService.notifyUnsupportedDownloadSource(urls: jobs.map(\.fileURL))
             }
-            return
+            return nil
         }
 
         let format = forcedFormat ?? settingsStore.appleMusicDownloadFormat
@@ -87,23 +103,31 @@ final class AppleMusicShareDownloadCoordinator {
         writeConversionLog(summary: summary, jobs: resolvedJobs)
         let dispatched = await notificationService.dispatchPendingNotificationEvents()
         DiagnosticLog.append("share Apple Music completion notification dispatched count=\(dispatched)")
+        return nil
     }
 
-    private func isAppleMusicDownloadActive() async -> Bool {
+    private enum AppleMusicDownloadAvailability {
+        case ready
+        case needsRuntimeInstallation
+        case needsInitialization
+        case unavailable
+    }
+
+    private func appleMusicDownloadAvailability() async -> AppleMusicDownloadAvailability {
         guard settingsStore.isAppleMusicDownloadEnabled else {
-            return false
+            return .needsRuntimeInstallation
         }
 
         do {
             try await agentLauncher.ensureRunning()
             let report = try await agentClient.status()
             guard report.isEnabled, report.statuses.allSatisfy(\.isReady) else {
-                return false
+                return .needsRuntimeInstallation
             }
-            return hasCompletedAppleMusicAuthentication()
+            return hasCompletedAppleMusicAuthentication() ? .ready : .needsInitialization
         } catch {
             DiagnosticLog.append("Apple Music share activation check failed: \(error.localizedDescription)")
-            return false
+            return .unavailable
         }
     }
 

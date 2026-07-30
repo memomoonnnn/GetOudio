@@ -53,9 +53,13 @@ final class RecordingSettingsModel: ObservableObject {
 
     func refresh() {
         bridgeDevices = RecordingDeviceService.devices().filter(\.isSupportedProToolsAudioBridge)
-        microphoneAuthorized = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
+        refreshMicrophonePermission()
         updateCacheDirectoryPath()
         updateCacheSize()
+    }
+
+    func refreshMicrophonePermission() {
+        microphoneAuthorized = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
     }
 
     func selectBridge(_ uid: String?) {

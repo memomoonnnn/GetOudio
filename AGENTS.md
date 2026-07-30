@@ -16,6 +16,8 @@ Get Oudio 是 XcodeGen 驱动的 macOS 原生音频工具。`GetOudioCore` 承�
 
 App Bundle 只携带精简 `ffmpeg`、`ncmdump` 和 `apple-music-downloader`。Docker CLI、Colima、Lima、GPAC/MP4Box 与 wrapper 镜像必须由 AM Runtime Agent 安装到 managed runtime，不得塞回 App Bundle，也不得改用用户系统里的 Homebrew、Docker Desktop、Colima 或 GPAC。内嵌 downloader 的源码由相邻专用 fork `../apple-music-downloader-get-oudio` 维护，本仓库只保存构建产物与 `config.yaml.template`。
 
+需要用户修复应用内配置时，统一由 Core 的 `SettingsGuidanceStore` 传递 `SettingsGuidanceTarget`，后台和无窗口入口经 `SettingsGuidanceLauncher` 启动独立的普通 App 实例，再由 `NormalLauncher`、`MainView` 和目标设置卡片完成页面定位与不拦截操作的闪动遮罩；不得由 HeadlessRunner 或 Extension 直接创建设置窗口，也不得用无关通知代替配置引导。系统权限请求（如麦克风 `AVCaptureDevice.requestAccess`）仍由对应入口直接发起，不属于设置引导。Apple Music Share 缺少 runtime 时引导至“依赖安装”，runtime 就绪但未完成登录时引导至“初始化”，只有其他运行故障才发送中性不可用通知；新增同类引导只扩展目标、页面映射和目标卡片。
+
 ## Audio Bridge Recording
 
 录音 Widget 只打开 `getoudio://recording/toggle`；`RecordingControlCoordinator` 经 `RecordingControlStore` 原子预约会话、写命令并监督独立的 `RecordingRunner`，不得让 Widget、设置窗口或普通启动实例持有音频单元。录音 Runner 使用用户保存的设备 UID 绑定输入 AUHAL，将 `DefaultOutputDevice` 暂时切到所选 `Pro Tools Audio Bridge 2-A/2-B`，同时把监听 AUHAL 绑定到切换前的播放设备；不得修改 `DefaultSystemOutputDevice`。macOS 输出和 DAW 输入使用同一 2-A 或 2-B 是 Pro Tools Audio Bridge 的正常用法，不能因为这一拓扑而强制改为双 Bridge。

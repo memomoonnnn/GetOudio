@@ -48,6 +48,21 @@ final class GetOudioCoreTests: XCTestCase {
         XCTAssertTrue(firstStore.drainCommands().isEmpty)
     }
 
+    func testSettingsGuidanceStoreConsumesOnlyFreshRequest() {
+        let suiteName = "GetOudioCoreTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let store = SettingsGuidanceStore(defaults: defaults)
+
+        store.request(.appleMusicDependencies)
+
+        XCTAssertEqual(store.consume(), .appleMusicDependencies)
+        XCTAssertNil(store.consume())
+
+        store.request(.recordingInput, at: Date(timeIntervalSinceNow: -121))
+        XCTAssertNil(store.consume())
+    }
+
     func testRecordingCacheEvictsOldestCompletedFile() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }

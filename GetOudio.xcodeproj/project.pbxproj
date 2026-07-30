@@ -74,6 +74,7 @@
 		A284874C51E3738AEDC9BC65 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A31E47AC388151B7BA99BFE6 /* NotificationService.swift */; };
 		A32095A60C634D85C3E1E64C /* Documentation in Resources */ = {isa = PBXBuildFile; fileRef = 78BBD92AC5CAECA405A07511 /* Documentation */; };
 		A8AF384073CDDFCAADE1383D /* JobRequest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 830E304F412F81F410B833C8 /* JobRequest.swift */; };
+		AC4A124588D71D280F7BBDE9 /* SettingsGuidanceLauncher.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3BA2B5B2637039E67718C70 /* SettingsGuidanceLauncher.swift */; };
 		AD82AD58BE8240DDF4201215 /* AudioConversionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCE6C13E6BA94A818DA3068B /* AudioConversionService.swift */; };
 		AFFB08D96001497CFBF8AC88 /* ConversionPreset.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96C485724CAA57FDA4F744D0 /* ConversionPreset.swift */; };
 		B8E544476B65B2595235803A /* AppleMusicDownloadNotificationSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A78E71AB3690C0540A80048 /* AppleMusicDownloadNotificationSupport.swift */; };
@@ -85,6 +86,7 @@
 		CDB96F8DD0D55AE6E4146A47 /* NCMSettingsModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D140BDEF696D4BCE7EDDCBB /* NCMSettingsModel.swift */; };
 		D0471A3CCE40DBACF8511587 /* ffmpeg in Resources */ = {isa = PBXBuildFile; fileRef = 4AD5E91E2A5C903C19F28C4E /* ffmpeg */; };
 		D3B2A574D58BB6A994DDC271 /* Dependency.swift in Sources */ = {isa = PBXBuildFile; fileRef = 218718BFCE1EB8C4B99AED9F /* Dependency.swift */; };
+		D48DADFB6C251A450A5B36B7 /* SettingsGuidanceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E5BF7615EAE9DCACEEC9E0E /* SettingsGuidanceStore.swift */; };
 		D52AE571DC64BBCF63A285E3 /* MediaExtractionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF11B1E80B3F43236531D6A8 /* MediaExtractionService.swift */; };
 		D58FF2BD12778EF0B6E674D5 /* RecordingWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11CE5B6DE261238024CBD28E /* RecordingWidget.swift */; };
 		D77ABFA086DA60B93B9E7633 /* RecordingSettingsModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 435B034A4E419E3458A83202 /* RecordingSettingsModel.swift */; };
@@ -273,6 +275,7 @@
 		76995440FD4DFA28DBA35A05 /* LayoutConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LayoutConstants.swift; sourceTree = "<group>"; };
 		77EEDFE3B80A0F69EECC7FD9 /* RecordingAudioSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingAudioSession.swift; sourceTree = "<group>"; };
 		78BBD92AC5CAECA405A07511 /* Documentation */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Documentation; path = GetOudio/Resources/Documentation; sourceTree = SOURCE_ROOT; };
+		7E5BF7615EAE9DCACEEC9E0E /* SettingsGuidanceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsGuidanceStore.swift; sourceTree = "<group>"; };
 		7E935EA0A23172AF7AE10BEB /* SettingsViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsViewModel.swift; sourceTree = "<group>"; };
 		7F29A548AD0635BE90D34456 /* JobQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JobQueue.swift; sourceTree = "<group>"; };
 		80F5F247C72D46445AD92B40 /* DiagnosticLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticLog.swift; sourceTree = "<group>"; };
@@ -304,6 +307,7 @@
 		DD195C4FD5DAEAF01DF5F7F8 /* RecordingRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingRunner.swift; sourceTree = "<group>"; };
 		DF11B1E80B3F43236531D6A8 /* MediaExtractionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaExtractionService.swift; sourceTree = "<group>"; };
 		E2899287901CD702A941CC53 /* RecordingPostProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingPostProcessor.swift; sourceTree = "<group>"; };
+		E3BA2B5B2637039E67718C70 /* SettingsGuidanceLauncher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsGuidanceLauncher.swift; sourceTree = "<group>"; };
 		E6C5A2F4790C8793FAFE44BD /* JobIntake.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JobIntake.swift; sourceTree = "<group>"; };
 		E71B1DAE2F34CAAE4261B2F0 /* GetOudioFinderExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = GetOudioFinderExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		ECC45B39B4FFC5F6D7ECA9FE /* DefaultOpenWithService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DefaultOpenWithService.swift; sourceTree = "<group>"; };
@@ -515,6 +519,7 @@
 				B593C74C28A406CC8D596CF7 /* RecordingControlStore.swift */,
 				E2899287901CD702A941CC53 /* RecordingPostProcessor.swift */,
 				A7A6DA16595F336C14E58DFD /* RecordingWAVWriter.swift */,
+				7E5BF7615EAE9DCACEEC9E0E /* SettingsGuidanceStore.swift */,
 				277323E37349CB4F0E1FDA52 /* SettingsStore.swift */,
 				6687368FC009B08493D049E3 /* ShareEventQueue.swift */,
 			);
@@ -566,6 +571,7 @@
 				48883A23F3BC9324B757C5A7 /* RecordingControlSignal.swift */,
 				B9F6F4CA81B28E94AA9E564E /* RecordingDeviceService.swift */,
 				435B034A4E419E3458A83202 /* RecordingSettingsModel.swift */,
+				E3BA2B5B2637039E67718C70 /* SettingsGuidanceLauncher.swift */,
 				7E935EA0A23172AF7AE10BEB /* SettingsViewModel.swift */,
 				280B0F7AC8A13D4928A4F3EF /* SystemExtensionSettingsModel.swift */,
 			);
@@ -947,6 +953,7 @@
 				6785036FFE17401D61B71443 /* RecordingModels.swift in Sources */,
 				3DE68FDA8368952A53A2EE42 /* RecordingPostProcessor.swift in Sources */,
 				9842A7C37AD50688EED63C16 /* RecordingWAVWriter.swift in Sources */,
+				D48DADFB6C251A450A5B36B7 /* SettingsGuidanceStore.swift in Sources */,
 				1E2BA6165226BFEB0082B779 /* SettingsStore.swift in Sources */,
 				DE40E324B1CCD0A87D29DBD9 /* ShareEventQueue.swift in Sources */,
 				1E4668A8BDB0F2F9431B77C9 /* SharedContainer.swift in Sources */,
@@ -983,6 +990,7 @@
 				1E9E000750F0441C8B6E597C /* RecordingRunner.swift in Sources */,
 				D77ABFA086DA60B93B9E7633 /* RecordingSettingsModel.swift in Sources */,
 				0BEB235A871AD3566C4C1F7E /* SettingsDocumentationView.swift in Sources */,
+				AC4A124588D71D280F7BBDE9 /* SettingsGuidanceLauncher.swift in Sources */,
 				21909135C633A36CA4A2EBCA /* SettingsViewModel.swift in Sources */,
 				893000D007353B9BF9F71CBC /* SystemExtensionSettingsModel.swift in Sources */,
 				995A3254ABC5325D7D583905 /* main.swift in Sources */,

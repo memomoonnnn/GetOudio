@@ -89,7 +89,8 @@ final class RecordingControlCoordinator {
         let authorization = AVCaptureDevice.authorizationStatus(for: .audio)
         let needsMicrophonePermission = authorization != .authorized
         let bridgeUID = store.recordingBridgeDeviceUID
-        let needsInputDevice = bridgeUID == nil
+        let bridge = bridgeUID.flatMap(RecordingDeviceService.descriptor(uid:))
+        let needsInputDevice = bridge.map { !$0.isSupportedProToolsAudioBridge } ?? true
 
         if needsMicrophonePermission || needsInputDevice {
             var reasons: [String] = []
@@ -97,7 +98,14 @@ final class RecordingControlCoordinator {
                 reasons.append("audio input permission status=\(authorization.rawValue)")
             }
             if needsInputDevice {
-                reasons.append("bridge UID is not configured")
+                switch (bridgeUID, bridge) {
+                case (nil, _):
+                    reasons.append("bridge UID is not configured")
+                case let (.some(bridgeUID), nil):
+                    reasons.append("configured bridge is unavailable uid=\(bridgeUID)")
+                case let (.some(bridgeUID), .some):
+                    reasons.append("configured bridge is unsupported uid=\(bridgeUID)")
+                }
             }
             return (
                 reasons.joined(separator: "; "),
@@ -108,16 +116,7 @@ final class RecordingControlCoordinator {
             )
         }
 
-        guard let bridgeUID else { return nil }
-        guard let bridge = RecordingDeviceService.descriptor(uid: bridgeUID) else {
-            return ("configured bridge is unavailable uid=\(bridgeUID)", .none)
-        }
-        guard bridge.isSupportedProToolsAudioBridge else {
-            return (
-                "configured bridge is unsupported name=\(bridge.name) inputChannels=\(bridge.inputChannelCount) outputChannels=\(bridge.outputChannelCount) uid=\(bridge.uid)",
-                .none
-            )
-        }
+        guard let bridgeUID, let bridge else { return nil }
 
         let originalUID: String
         do {

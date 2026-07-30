@@ -39,6 +39,7 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
     private var lastAudioOpenSignature: String?
     private var lastAudioOpenDate = Date.distantPast
     private var isSupervisingRecording = false
+    private var isRequestingRecordingMicrophonePermission = false
 
     init(container: SharedContainer) {
         self.container = container
@@ -88,6 +89,11 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
         }
 
         recordingControl.recoverStaleSessionIfNeeded()
+
+        if let guidance = SettingsGuidanceStore(container: container).consume() {
+            launchIntent = .settings
+            showSettingsWindow(guidance: guidance)
+        }
 
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 700_000_000)
@@ -146,19 +152,13 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
         showSettingsWindow()
     }
 
-    private func showSettingsWindow(
-        recordingPage: Bool = false,
-        highlightRecordingInput: Bool = false
-    ) {
+    private func showSettingsWindow(guidance: SettingsGuidanceTarget? = nil) {
         if let mainWindow {
             NSApp.setActivationPolicy(.regular)
             mainWindow.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
-            if recordingPage {
-                NotificationCenter.default.post(name: .getOudioShowRecordingSettings, object: nil)
-            }
-            if highlightRecordingInput {
-                NotificationCenter.default.post(name: .getOudioHighlightRecordingInputSettings, object: nil)
+            if let guidance {
+                NotificationCenter.default.post(name: .getOudioPresentSettingsGuidance, object: guidance)
             }
             return
         }
@@ -166,8 +166,7 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
         let hostingController = NSHostingController(
             rootView: MainView(
                 container: container,
-                initialRecordingPage: recordingPage,
-                initialRecordingInputHighlight: highlightRecordingInput,
+                initialSettingsGuidance: guidance,
                 checkForUpdates: { [weak self] in self?.updaterController.checkForUpdates(nil) }
             )
         )
@@ -273,25 +272,30 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
         _ requirements: RecordingControlCoordinator.ConfigurationRequirements
     ) {
         if requirements.needsMicrophonePermission {
+            guard !isRequestingRecordingMicrophonePermission else { return }
+            isRequestingRecordingMicrophonePermission = true
             Task { @MainActor [weak self] in
                 guard let self else { return }
+                defer { self.isRequestingRecordingMicrophonePermission = false }
                 let granted = await AVCaptureDevice.requestAccess(for: .audio)
                 DiagnosticLog.append("[Recording] microphone permission request completed granted=\(granted)")
                 if requirements.needsInputDevice {
                     self.launchIntent = .settings
-                    self.showSettingsWindow(recordingPage: true, highlightRecordingInput: true)
-                } else {
+                    self.showSettingsWindow(guidance: .recordingInput)
+                } else if granted {
                     self.finishTransientInteractionIfNeeded()
+                } else {
+                    self.launchIntent = .settings
+                    self.showSettingsWindow()
+                    NotificationCenter.default.post(name: .getOudioShowOverviewSettings, object: nil)
                 }
+                NotificationCenter.default.post(name: .getOudioRefreshRecordingMicrophonePermission, object: nil)
             }
             return
         }
 
         launchIntent = .settings
-        showSettingsWindow(
-            recordingPage: true,
-            highlightRecordingInput: requirements.needsInputDevice
-        )
+        showSettingsWindow(guidance: requirements.needsInputDevice ? .recordingInput : nil)
     }
 
     private func presentOpenWithAudioMenu(for urls: [URL]) {
@@ -383,10 +387,14 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
 
         beginNotificationResponse()
         Task {
-            await AppleMusicShareDownloadCoordinator(container: container)
+            let guidance = await AppleMusicShareDownloadCoordinator(container: container)
                 .handlePendingAppleMusicDownload(format: format)
             completionHandler()
             await MainActor.run {
+                if let guidance {
+                    self.launchIntent = .settings
+                    self.showSettingsWindow(guidance: guidance)
+                }
                 self.endNotificationResponse()
             }
         }

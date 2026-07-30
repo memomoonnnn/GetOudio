@@ -12,6 +12,36 @@ private enum SettingsMetrics {
     static let groupTitleFont = Font.system(size: 12.5, weight: .semibold)
 }
 
+private struct SettingsGuidancePulseOverlay: View {
+    let requestID: Int
+    @State private var isHighlighted = false
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: SettingsMetrics.sectionCornerRadius, style: .continuous)
+            .fill(.orange.opacity(isHighlighted ? 0.22 : 0))
+            .overlay(
+                RoundedRectangle(cornerRadius: SettingsMetrics.sectionCornerRadius, style: .continuous)
+                    .strokeBorder(.orange.opacity(isHighlighted ? 0.8 : 0), lineWidth: 2)
+            )
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+            .task(id: requestID) {
+                guard requestID > 0 else { return }
+                withTransaction(Transaction(animation: nil)) {
+                    isHighlighted = false
+                }
+                try? await Task.sleep(nanoseconds: 450_000_000)
+                guard !Task.isCancelled else { return }
+                withAnimation(.easeInOut(duration: 0.24).repeatCount(5, autoreverses: true)) {
+                    isHighlighted = true
+                }
+                try? await Task.sleep(nanoseconds: 2_400_000_000)
+                guard !Task.isCancelled else { return }
+                isHighlighted = false
+            }
+    }
+}
+
 // MARK: - Audio Bridge Recording Settings
 
 struct RecordingSettingsPage: View {
@@ -19,7 +49,6 @@ struct RecordingSettingsPage: View {
 
     @ObservedObject var viewModel: RecordingSettingsModel
     let inputHighlightRequest: Int
-    @State private var showsInputHighlight = false
 
     var body: some View {
         SettingsForm(
@@ -59,27 +88,9 @@ struct RecordingSettingsPage: View {
 
                 }
             } cardOverlay: {
-                RoundedRectangle(cornerRadius: SettingsMetrics.sectionCornerRadius, style: .continuous)
-                    .fill(.orange.opacity(showsInputHighlight ? 0.22 : 0))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: SettingsMetrics.sectionCornerRadius, style: .continuous)
-                            .strokeBorder(.orange.opacity(showsInputHighlight ? 0.8 : 0), lineWidth: 2)
-                    )
-                    .allowsHitTesting(false)
-                    .accessibilityHidden(true)
+                SettingsGuidancePulseOverlay(requestID: inputHighlightRequest)
             }
             .id(Self.inputSectionID)
-            .task(id: inputHighlightRequest) {
-                guard inputHighlightRequest > 0 else { return }
-                try? await Task.sleep(nanoseconds: 450_000_000)
-                guard !Task.isCancelled else { return }
-                withAnimation(.easeInOut(duration: 0.24).repeatCount(5, autoreverses: true)) {
-                    showsInputHighlight = true
-                }
-                try? await Task.sleep(nanoseconds: 2_400_000_000)
-                guard !Task.isCancelled else { return }
-                showsInputHighlight = false
-            }
 
             SettingsSection("缓存", systemImage: "externaldrive") {
                 VStack(alignment: .leading, spacing: 14) {
@@ -637,13 +648,21 @@ struct NCMSettingsPage: View {
 // MARK: - AppleMusicSettingsPage
 
 struct AppleMusicSettingsPage: View {
+    private static let dependencyInstallationSectionID = "apple-music-dependency-installation-section"
+    private static let initializationSectionID = "apple-music-initialization-section"
+
     @ObservedObject var viewModel: AppleMusicSettingsModel
+    let dependencyInstallationHighlightRequest: Int
+    let initializationHighlightRequest: Int
     @State private var username = ""
     @State private var password = ""
     @State private var verificationCode = ""
 
     var body: some View {
-        SettingsForm {
+        SettingsForm(
+            scrollTarget: scrollTarget,
+            scrollRequestID: scrollRequestID
+        ) {
             MarkdownDocumentView(.appleMusic)
             dependencyInstallationSettings
             runtimeStatusSettings
@@ -714,7 +733,10 @@ struct AppleMusicSettingsPage: View {
                     .disabled(!viewModel.canStopAppleMusicDownload)
                 }
             }
+        } cardOverlay: {
+            SettingsGuidancePulseOverlay(requestID: dependencyInstallationHighlightRequest)
         }
+        .id(Self.dependencyInstallationSectionID)
     }
 
     @ViewBuilder
@@ -799,8 +821,8 @@ struct AppleMusicSettingsPage: View {
                 }
             }
         } cardOverlay: {
-            if viewModel.appleMusicWrapperLoginStatus.isAuthenticated {
-                ZStack {
+            ZStack {
+                if viewModel.appleMusicWrapperLoginStatus.isAuthenticated {
                     RoundedRectangle(cornerRadius: SettingsMetrics.sectionCornerRadius, style: .continuous)
                         .fill(.regularMaterial)
                         .opacity(0.5)
@@ -808,9 +830,11 @@ struct AppleMusicSettingsPage: View {
                         .font(.title2.weight(.bold))
                         .foregroundStyle(.green)
                 }
-                .allowsHitTesting(false)
+                SettingsGuidancePulseOverlay(requestID: initializationHighlightRequest)
             }
+            .allowsHitTesting(false)
         }
+        .id(Self.initializationSectionID)
         .disabled(!areAppleMusicDependenciesReady || viewModel.appleMusicWrapperLoginStatus.isAuthenticated)
     }
 
@@ -852,6 +876,20 @@ struct AppleMusicSettingsPage: View {
         viewModel.isAppleMusicDownloadEnabled
             && !viewModel.appleMusicRuntimeStatuses.isEmpty
             && viewModel.appleMusicRuntimeStatuses.allSatisfy(\.isReady)
+    }
+
+    private var scrollRequestID: Int {
+        max(dependencyInstallationHighlightRequest, initializationHighlightRequest)
+    }
+
+    private var scrollTarget: String? {
+        if initializationHighlightRequest > dependencyInstallationHighlightRequest {
+            Self.initializationSectionID
+        } else if dependencyInstallationHighlightRequest > 0 {
+            Self.dependencyInstallationSectionID
+        } else {
+            nil
+        }
     }
 
     private var runtimeStatusSettings: some View {

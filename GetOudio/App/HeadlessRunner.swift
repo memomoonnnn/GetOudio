@@ -4,7 +4,7 @@ import UserNotifications
 
 /// Runs in headless mode: drains the shared job queue, processes every job
 /// in the background, posts a UserNotification, then terminates.
-/// No windows are ever created — the user only sees the notification banner.
+/// It never creates windows itself; missing configuration opens a separate settings instance.
 final class HeadlessRunner: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
 
     private let container: SharedContainer
@@ -92,7 +92,10 @@ final class HeadlessRunner: NSObject, NSApplicationDelegate, UNUserNotificationC
 
         beginNotificationResponse()
         Task {
-            await appleMusicShareCoordinator.handlePendingAppleMusicDownload(format: format)
+            let guidance = await appleMusicShareCoordinator.handlePendingAppleMusicDownload(format: format)
+            if let guidance {
+                await SettingsGuidanceLauncher.open(guidance, container: container)
+            }
             completionHandler()
             endNotificationResponse()
         }
@@ -180,7 +183,11 @@ final class HeadlessRunner: NSObject, NSApplicationDelegate, UNUserNotificationC
             return
         }
 
-        let remainingJobs = await appleMusicShareCoordinator.handleShareAppleMusicJobs(jobs)
+        let shareHandling = await appleMusicShareCoordinator.handleShareAppleMusicJobs(jobs)
+        if let target = shareHandling.settingsGuidance {
+            await SettingsGuidanceLauncher.open(target, container: container)
+        }
+        let remainingJobs = shareHandling.remainingJobs
         guard !jobs.isEmpty else {
             DiagnosticLog.append(shareEvents.isEmpty ? "headless no pending jobs" : "headless processed share events")
             return
