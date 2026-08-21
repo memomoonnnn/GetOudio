@@ -46,6 +46,12 @@ final class AppleMusicSettingsModel: ObservableObject {
         isManagingAppleMusicRuntime || isRefreshingAppleMusicRuntimeStatus
     }
 
+    var isAppleMusicRuntimeUpdateBlocked: Bool {
+        isAppleMusicRuntimeBusy
+            || canStopAppleMusicDownload
+            || appleMusicWrapperLoginStatus.isInProgress
+    }
+
     func chooseAppleMusicOutputDirectory() {
         guard let url = DirectoryChooser.chooseDirectory(prompt: "选择") else { return }
         appleMusicOutputURL = url
@@ -101,8 +107,14 @@ final class AppleMusicSettingsModel: ObservableObject {
     }
 
     func enableAppleMusicRuntime() async {
+        guard !isAppleMusicRuntimeUpdateBlocked else {
+            appleMusicRuntimeMessage = "请先完成当前 Apple Music 下载或登录，再检查并更新 Runtime。"
+            return
+        }
         isManagingAppleMusicRuntime = true
-        appleMusicRuntimeMessage = "正在通过 Downloader Runtime Agent 安装 Runtime..."
+        appleMusicRuntimeMessage = isAppleMusicDownloadEnabled
+            ? "正在通过 Downloader Runtime Agent 检查并更新 Runtime..."
+            : "正在通过 Downloader Runtime Agent 安装 Runtime..."
         startRuntimeProgressPolling()
         do {
             try await appleMusicAgentLauncher.ensureRunning()

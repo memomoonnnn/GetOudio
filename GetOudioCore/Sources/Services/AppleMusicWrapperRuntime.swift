@@ -5,6 +5,7 @@ public final class AppleMusicWrapperRuntime {
     public let image: ManagedDockerImage = .appleMusicWrapper
     static let loginContainerName = "get-oudio-wrapper-login"
     static let serverContainerName = "get-oudio-wrapper"
+    static let rollbackServerContainerName = "get-oudio-wrapper-rollback"
     private let runner: ProcessRunner
     private let runtime: ColimaDockerRuntime
     private let dockerImageManager: DockerImageManager
@@ -62,12 +63,12 @@ public final class AppleMusicWrapperRuntime {
 
     public func ensureImageAvailable() async throws {
         let status = await dockerImageManager.check(image)
-        guard !status.isAvailable else {
-            return
-        }
-        let result = try await dockerImageManager.pull(image)
-        guard result.succeeded else {
-            throw ProcessRunnerError.executableNotFound(result.standardError.isEmpty ? image.imageName : result.standardError)
+        guard status.isAvailable,
+              runtimeManager.managedComponentUpdateState(.wrapperImage, isInstalled: true) == .current
+        else {
+            throw ProcessRunnerError.executableNotFound(
+                "Apple Music wrapper 缺失或不是当前受控版本。请在 Apple Music 设置中点击“检查并更新”。"
+            )
         }
     }
 
@@ -358,57 +359,128 @@ public final class AppleMusicWrapperRuntime {
             ]),
             environment: runtime.runtimeEnvironment
         )
+        var hasRollbackContainer = false
         if inspect.succeeded {
             let status = inspect.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines)
-            if status == "running" {
-                return
-            }
-
-            let start = try await runner.run(
+            let existingImage = try await runner.run(
                 executablePath: dockerPath,
-                arguments: runtime.dockerArguments(["start", Self.serverContainerName]),
+                arguments: runtime.dockerArguments(["inspect", "-f", "{{.Config.Image}}", Self.serverContainerName]),
                 environment: runtime.runtimeEnvironment
             )
-            if start.succeeded {
-                DiagnosticLog.append("[WrapperServer] existing container started name=\(Self.serverContainerName) previousStatus=\(status)")
-                return
+            if existingImage.succeeded,
+               existingImage.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines) == image.imageName {
+                if status == "running" {
+                    try await verifyServerPortMappings(dockerPath: dockerPath)
+                    return
+                }
+
+                let start = try await runner.run(
+                    executablePath: dockerPath,
+                    arguments: runtime.dockerArguments(["start", Self.serverContainerName]),
+                    environment: runtime.runtimeEnvironment
+                )
+                if start.succeeded {
+                    try await verifyServerPortMappings(dockerPath: dockerPath)
+                    DiagnosticLog.append("[WrapperServer] existing container started name=\(Self.serverContainerName) previousStatus=\(status)")
+                    return
+                }
+                DiagnosticLog.append(
+                    "[WrapperServer] existing container start failed name=\(Self.serverContainerName) "
+                        + "previousStatus=\(status) stderr=\(sanitized(start.standardError))"
+                )
             }
-            DiagnosticLog.append(
-                "[WrapperServer] existing container start failed name=\(Self.serverContainerName) "
-                    + "previousStatus=\(status) stderr=\(sanitized(start.standardError))"
+            _ = try? await runner.run(
+                executablePath: dockerPath,
+                arguments: runtime.dockerArguments(["stop", Self.serverContainerName]),
+                environment: runtime.runtimeEnvironment
             )
+            _ = try? await runner.run(
+                executablePath: dockerPath,
+                arguments: runtime.dockerArguments(["rm", "-f", Self.rollbackServerContainerName]),
+                environment: runtime.runtimeEnvironment
+            )
+            let rename = try await runner.run(
+                executablePath: dockerPath,
+                arguments: runtime.dockerArguments(["rename", Self.serverContainerName, Self.rollbackServerContainerName]),
+                environment: runtime.runtimeEnvironment
+            )
+            hasRollbackContainer = rename.succeeded
         }
 
-        _ = try? await runner.run(
-            executablePath: dockerPath,
-            arguments: runtime.dockerArguments(["rm", "-f", Self.serverContainerName]),
-            environment: runtime.runtimeEnvironment
-        )
         let runtimeDirectory = try runtimeDirectory()
         let mount = "\(runtimeDirectory.appendingPathComponent("rootfs/data", isDirectory: true).path):/app/rootfs/data"
-        var wrapperArguments = ["-H", "0.0.0.0"]
-        if settingsStore.appleMusicUseSystemProxy, let proxy = systemProxyURL() {
-            wrapperArguments.append(contentsOf: ["-P", proxy.absoluteString])
+        do {
+            let result = try await runner.run(
+                executablePath: dockerPath,
+                arguments: self.runtime.dockerArguments(
+                    serverDockerArguments(
+                        mount: mount,
+                        proxy: settingsStore.appleMusicUseSystemProxy ? systemProxyURL() : nil
+                    )
+                ),
+                environment: self.runtime.runtimeEnvironment
+            )
+            guard result.succeeded else {
+                throw ProcessRunnerError.executableNotFound(result.standardError.isEmpty ? "Apple Music wrapper container" : result.standardError)
+            }
+            try await verifyServerPortMappings(dockerPath: dockerPath)
+            DiagnosticLog.append("[WrapperServer] started managed image=\(image.imageName)")
+        } catch {
+            _ = try? await runner.run(
+                executablePath: dockerPath,
+                arguments: runtime.dockerArguments(["rm", "-f", Self.serverContainerName]),
+                environment: runtime.runtimeEnvironment
+            )
+            if hasRollbackContainer {
+                _ = try? await runner.run(
+                    executablePath: dockerPath,
+                    arguments: runtime.dockerArguments(["rename", Self.rollbackServerContainerName, Self.serverContainerName]),
+                    environment: runtime.runtimeEnvironment
+                )
+                _ = try? await runner.run(
+                    executablePath: dockerPath,
+                    arguments: runtime.dockerArguments(["start", Self.serverContainerName]),
+                    environment: runtime.runtimeEnvironment
+                )
+            }
+            throw error
         }
+    }
+
+    func serverDockerArguments(mount: String, proxy: URL? = nil) -> [String] {
+        var arguments = [
+            "run", "-d",
+            "--privileged",
+            "--platform", image.platform,
+            "--name", Self.serverContainerName,
+            "-v", mount,
+            "-p", "10020:10020",
+            "-p", "20020:20020",
+            "-p", "30020:30020",
+            "-p", "40020:40020",
+            "--entrypoint", "./wrapper",
+            image.imageName,
+            "-H", "0.0.0.0"
+        ]
+        if let proxy {
+            arguments.append(contentsOf: ["-P", proxy.absoluteString])
+        }
+        return arguments
+    }
+
+    private func verifyServerPortMappings(dockerPath: String) async throws {
         let result = try await runner.run(
             executablePath: dockerPath,
-            arguments: self.runtime.dockerArguments([
-                "run", "-d",
-                "--privileged",
-                "--platform", image.platform,
-                "--name", Self.serverContainerName,
-                "-v", mount,
-                "-p", "10020:10020",
-                "-p", "20020:20020",
-                "-p", "30020:30020",
-                "--entrypoint", "./wrapper",
-                image.imageName
-            ] + wrapperArguments),
-            environment: self.runtime.runtimeEnvironment
+            arguments: runtime.dockerArguments([
+                "inspect",
+                "-f", "{{range $port, $_ := .NetworkSettings.Ports}}{{$port}} {{end}}",
+                Self.serverContainerName
+            ]),
+            environment: runtime.runtimeEnvironment
         )
-
-        guard result.succeeded else {
-            throw ProcessRunnerError.executableNotFound(result.standardError.isEmpty ? "Apple Music wrapper container" : result.standardError)
+        let ports = result.standardOutput
+        guard result.succeeded, ["10020/tcp", "20020/tcp", "30020/tcp", "40020/tcp"].allSatisfy(ports.contains) else {
+            throw ProcessRunnerError.processFailed("Apple Music wrapper 服务端口映射不完整。")
         }
     }
 

@@ -341,7 +341,7 @@ public final class AppleMusicDownloadService {
         return workingDirectory
     }
 
-    private func renderDownloaderConfig(template: String, outputDirectory: URL) -> String {
+    func renderDownloaderConfig(template: String, outputDirectory: URL) -> String {
         let outputPath = yamlQuoted(outputDirectory.path)
         let replacements = [
             "alac-save-folder": outputPath,

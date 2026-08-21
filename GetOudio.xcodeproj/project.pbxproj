@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		00BAF0E1A3DDEFE410FF6F41 /* ManagedRuntimeComponentReceipt.swift in Sources */ = {isa = PBXBuildFile; fileRef = 012AA6A0AFB0DA9485B3E156 /* ManagedRuntimeComponentReceipt.swift */; };
 		043B134B72CE2E5637C11530 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = 54C8CCAA28BE713D16820038 /* AppIcon.icon */; };
 		064462A769601DD9C18E82D8 /* Fonts in Resources */ = {isa = PBXBuildFile; fileRef = 3478CDBAC14F45447AB23C23 /* Fonts */; };
 		0BEB235A871AD3566C4C1F7E /* SettingsDocumentationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECE3EE582980C639EF8D003F /* SettingsDocumentationView.swift */; };
@@ -227,6 +228,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		012AA6A0AFB0DA9485B3E156 /* ManagedRuntimeComponentReceipt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManagedRuntimeComponentReceipt.swift; sourceTree = "<group>"; };
 		02A2B6CA70B65148819F2CF4 /* GetOudioRecordingWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = GetOudioRecordingWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		0709132ABB400330E134F753 /* GetOudio.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GetOudio.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		07A513B3F5F8C121D7D1145B /* ShareExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareExtension.swift; sourceTree = "<group>"; };
@@ -509,6 +511,7 @@
 				E6C5A2F4790C8793FAFE44BD /* JobIntake.swift */,
 				7F29A548AD0635BE90D34456 /* JobQueue.swift */,
 				52E9A2CCF2CA6AC6C81E4EC9 /* LaunchMarkerStore.swift */,
+				012AA6A0AFB0DA9485B3E156 /* ManagedRuntimeComponentReceipt.swift */,
 				DF11B1E80B3F43236531D6A8 /* MediaExtractionService.swift */,
 				5824B80AB71359FF2011C2E0 /* NCMConversionService.swift */,
 				21A23B92406F8183901D2051 /* NotificationEventQueue.swift */,
@@ -942,6 +945,7 @@
 				A8AF384073CDDFCAADE1383D /* JobRequest.swift in Sources */,
 				8FFCE884D7BC03D9A2B1F5B7 /* LaunchMarkerStore.swift in Sources */,
 				A111098435FEDCDDCA524720 /* LayoutConstants.swift in Sources */,
+				00BAF0E1A3DDEFE410FF6F41 /* ManagedRuntimeComponentReceipt.swift in Sources */,
 				D52AE571DC64BBCF63A285E3 /* MediaExtractionService.swift in Sources */,
 				1830DE3F5D6F7D43C5BC7923 /* NCMConversionService.swift in Sources */,
 				0D20ED1C18BE4AAD9EE1311C /* NotificationEventQueue.swift in Sources */,
