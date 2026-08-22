@@ -115,29 +115,31 @@ public enum ManagedDockerImage: String, CaseIterable, Identifiable, Codable, Sen
     public var imageName: String {
         switch self {
         case .appleMusicWrapper:
-            #if arch(arm64)
-            return "ghcr.io/itouakirai/wrapper:arm"
-            #else
-            return "ghcr.io/itouakirai/wrapper:x86"
-            #endif
+            return "get-oudio/wrapper:\(AppleMusicRuntimeManager.wrapperVersion)"
         }
     }
 
     public var platform: String {
         switch self {
         case .appleMusicWrapper:
-            #if arch(arm64)
-            return "linux/arm64"
-            #else
             return "linux/amd64"
-            #endif
         }
     }
 
     public var upstreamURL: URL {
         switch self {
         case .appleMusicWrapper:
-            return URL(string: "https://github.com/itouakirai/wrapper")!
+            return URL(string: "https://github.com/WorldObservationLog/wrapper")!
+        }
+    }
+
+    public var legacyImageNames: [String] {
+        switch self {
+        case .appleMusicWrapper:
+            return [
+                "ghcr.io/itouakirai/wrapper:arm",
+                "ghcr.io/itouakirai/wrapper:x86"
+            ]
         }
     }
 }

@@ -5,6 +5,7 @@ public enum AppleMusicRuntimeComponent: String, CaseIterable, Codable, Identifia
     case colima
     case lima
     case docker
+    case dockerBuildx
     case gpac
     case wrapperImage
     case appleMusicDownloader
@@ -16,6 +17,7 @@ public enum AppleMusicRuntimeComponent: String, CaseIterable, Codable, Identifia
         case .colima: return "Colima"
         case .lima: return "Lima / limactl"
         case .docker: return "Docker CLI"
+        case .dockerBuildx: return "Docker Buildx"
         case .gpac: return "GPAC / MP4Box"
         case .wrapperImage: return "Apple Music wrapper image"
         case .appleMusicDownloader: return "Apple-Music-Downloader"
@@ -29,12 +31,26 @@ public struct AppleMusicRuntimeComponentStatus: Codable, Identifiable, Equatable
     public var isReady: Bool
     public var resolvedPath: String?
     public var detail: String
+    public var installedVersion: String?
+    public var targetVersion: String?
+    public var updateState: ManagedRuntimeComponentUpdateState?
 
-    public init(component: AppleMusicRuntimeComponent, isReady: Bool, resolvedPath: String?, detail: String) {
+    public init(
+        component: AppleMusicRuntimeComponent,
+        isReady: Bool,
+        resolvedPath: String?,
+        detail: String,
+        installedVersion: String? = nil,
+        targetVersion: String? = nil,
+        updateState: ManagedRuntimeComponentUpdateState? = nil
+    ) {
         self.component = component
         self.isReady = isReady
         self.resolvedPath = resolvedPath
         self.detail = detail
+        self.installedVersion = installedVersion
+        self.targetVersion = targetVersion
+        self.updateState = updateState
     }
 }
 
@@ -74,8 +90,18 @@ public final class AppleMusicRuntimeManager {
     }
 
     public static let colimaVersion = "v0.10.3"
+    public static let colimaVMArchitecture = "aarch64"
+    public static let colimaVMType = "vz"
+    public static let colimaRuntimeRevision = "\(colimaVersion)-\(colimaVMArchitecture)-\(colimaVMType)-rosetta-vm2"
     public static let limaVersion = "2.1.2"
     public static let dockerVersion = "29.5.3"
+    public static let dockerBuildxVersion = "v0.36.1"
+    public static let gpacVersion = "managed-latest"
+    public static let wrapperVersion = "4d83f2feb396ca26847530ff7010ac6a4877f136"
+    public static let wrapperArtifactURL = URL(
+        string: "https://github.com/WorldObservationLog/wrapper/releases/download/wrapper.x86_64.latest/Wrapper.x86_64.latest.zip"
+    )!
+    public static let wrapperArtifactSHA256 = "4bf5ec7869c57baeab13832d14b5c8d1c1167a6dd492a837f1d9b8fb42c2d67a"
     public static let gpacPackageEnvironmentKey = "GET_OUDIO_GPAC_PACKAGE_URL"
     public static let gpacDefaultPackageURL = URL(
         string: "https://download.tsi.telecom-paristech.fr/gpac/new_builds/gpac_latest_head_macos.pkg"
@@ -94,6 +120,7 @@ public final class AppleMusicRuntimeManager {
     private let gpacPackageURLOverride: String?
     private let wrapperImageInstaller: WrapperImageInstaller?
     private let progressURL: URL?
+    private let receiptStore: ManagedRuntimeComponentReceiptStore
 
     public let rootURL: URL
     public let colimaHomeDirectory: URL
@@ -128,6 +155,7 @@ public final class AppleMusicRuntimeManager {
         self.gpacPackageURLOverride = gpacPackageURLOverride
         self.wrapperImageInstaller = wrapperImageInstaller
         self.fileManager = fileManager
+        self.receiptStore = ManagedRuntimeComponentReceiptStore(rootURL: rootURL, fileManager: fileManager)
     }
 
     public convenience init(
@@ -154,6 +182,11 @@ public final class AppleMusicRuntimeManager {
     public var downloadsDirectory: URL { rootURL.appendingPathComponent("downloads", isDirectory: true) }
     public var colimaCacheDirectory: URL { rootURL.appendingPathComponent("colima-cache", isDirectory: true) }
     public var dockerConfigDirectory: URL { rootURL.appendingPathComponent("docker-config", isDirectory: true) }
+    public var dockerBuildxURL: URL {
+        dockerConfigDirectory
+            .appendingPathComponent("cli-plugins", isDirectory: true)
+            .appendingPathComponent("docker-buildx")
+    }
     public var gpacDirectory: URL { rootURL.appendingPathComponent("gpac", isDirectory: true) }
     public var wrapperDataDirectory: URL { rootURL.appendingPathComponent("wrapper-data", isDirectory: true) }
     public var downloaderWorkDirectory: URL { rootURL.appendingPathComponent("downloader-work", isDirectory: true) }
@@ -163,6 +196,34 @@ public final class AppleMusicRuntimeManager {
     public var limaURL: URL { binDirectory.appendingPathComponent("lima") }
     public var limactlURL: URL { binDirectory.appendingPathComponent("limactl") }
     public var mp4BoxURL: URL { gpacDirectory.appendingPathComponent("MP4Box") }
+
+    public static let managedComponentSpecs: [ManagedRuntimeComponentSpec] = [
+        ManagedRuntimeComponentSpec(component: .colima, targetVersion: colimaRuntimeRevision),
+        ManagedRuntimeComponentSpec(component: .lima, targetVersion: limaVersion),
+        ManagedRuntimeComponentSpec(component: .docker, targetVersion: dockerVersion),
+        ManagedRuntimeComponentSpec(component: .dockerBuildx, targetVersion: dockerBuildxVersion),
+        ManagedRuntimeComponentSpec(component: .gpac, targetVersion: gpacVersion),
+        ManagedRuntimeComponentSpec(
+            component: .wrapperImage,
+            targetVersion: wrapperVersion,
+            artifactURL: wrapperArtifactURL,
+            artifactSHA256: wrapperArtifactSHA256
+        )
+    ]
+
+    public static func managedComponentSpec(for component: AppleMusicRuntimeComponent) -> ManagedRuntimeComponentSpec? {
+        managedComponentSpecs.first { $0.component == component }
+    }
+
+    public func managedComponentUpdateState(
+        _ component: AppleMusicRuntimeComponent,
+        isInstalled: Bool
+    ) -> ManagedRuntimeComponentUpdateState {
+        guard let spec = Self.managedComponentSpec(for: component) else {
+            return isInstalled ? .current : .missing
+        }
+        return receiptStore.updateState(for: spec, isInstalled: isInstalled)
+    }
 
     public var isEnabled: Bool {
         get { settingsStore.isAppleMusicDownloadEnabled }
@@ -196,24 +257,28 @@ public final class AppleMusicRuntimeManager {
 
     public func componentStatuses(wrapperStatus: ManagedDockerImageStatus? = nil) -> [AppleMusicRuntimeComponentStatus] {
         let downloaderStatus = BundledComponentManager(resourceRoot: resourceRoot).check(.appleMusicDownloader)
+        let wrapperRuntimeDirectory = Self.defaultVMStateRootURL.path
         let wrapper = wrapperStatus.map {
-            AppleMusicRuntimeComponentStatus(
+            managedStatus(
                 component: .wrapperImage,
-                isReady: $0.isAvailable,
-                resolvedPath: nil,
+                isInstalled: $0.isAvailable,
+                resolvedPath: wrapperRuntimeDirectory,
                 detail: $0.detail
             )
         } ?? AppleMusicRuntimeComponentStatus(
             component: .wrapperImage,
             isReady: false,
-            resolvedPath: nil,
-            detail: "启用并初始化 Apple Music 后拉取"
+            resolvedPath: wrapperRuntimeDirectory,
+            detail: "启用并初始化 Apple Music 后安装",
+            targetVersion: Self.wrapperVersion,
+            updateState: .missing
         )
 
         return [
             executableStatus(.colima, url: colimaURL),
             limaStatus(),
             executableStatus(.docker, url: dockerURL),
+            executableStatus(.dockerBuildx, url: dockerBuildxURL),
             executableStatus(.gpac, url: mp4BoxURL),
             wrapper,
             AppleMusicRuntimeComponentStatus(
@@ -227,69 +292,101 @@ public final class AppleMusicRuntimeManager {
 
     public func installManagedRuntime() async throws -> AppleMusicRuntimeInstallResult {
         DiagnosticLog.append("[Install] 开始安装 Downloader Runtime → \(rootURL.path)")
-        writeProgress("准备安装 Downloader Runtime...", completed: 0, total: 5, isActive: true)
+        writeProgress("准备安装 Downloader Runtime...", completed: 0, total: 6, isActive: true)
         try createManagedDirectories()
         var installed: [AppleMusicRuntimeComponent] = []
         var messages: [String] = []
         var completed = 0
+        let wasEnabled = isEnabled
 
         do {
-            if await validateExistingExecutable(colimaURL, arguments: ["version"], component: "Colima") {
+            let colimaHealthy = await validateExistingExecutable(colimaURL, arguments: ["version"], component: "Colima")
+            let installedColimaArchitecture = await installedColimaVMArchitecture()
+            if isComponentCurrent(.colima, isHealthy: colimaHealthy) {
                 messages.append("Colima 已就绪，跳过下载")
+            } else if colimaHealthy {
+                let installedDescription = installedColimaArchitecture ?? "未知架构"
+                DiagnosticLog.append("[Install] Colima VM 配置迁移 \(installedDescription) → \(Self.colimaVMArchitecture)/\(Self.colimaVMType)+Rosetta")
+                writeProgress("正在迁移 Colima VM 到 VZ + Rosetta...", completed: completed, total: 6, isActive: true)
+                try await migrateColimaVMConfiguration()
+                installed.append(.colima)
+                messages.append("Colima VM 已迁移到 VZ + Rosetta，保留 wrapper 认证数据")
             } else {
                 DiagnosticLog.append("[Install] 安装 Colima...")
-                writeProgress("正在安装 Colima...", completed: completed, total: 5, isActive: true)
+                writeProgress("正在安装 Colima...", completed: completed, total: 6, isActive: true)
                 try await installColima()
                 installed.append(.colima)
                 messages.append("Colima 已安装到 \(colimaURL.path)")
             }
+            try recordReceipt(for: .colima)
             completed += 1
-            writeProgress("Colima 已就绪", completed: completed, total: 5, isActive: true)
+            writeProgress("Colima 已就绪", completed: completed, total: 6, isActive: true)
 
             let limaShare = rootURL.appendingPathComponent("share/lima", isDirectory: true)
-            if isRegularExecutable(limaURL),
-               fileManager.fileExists(atPath: limaShare.path),
-               await validateExistingExecutable(limaURL, arguments: ["--version"], component: "Lima CLI"),
-               await validateExistingExecutable(limactlURL, arguments: ["--version"], component: "Lima") {
+            let limaCLIHealthy = await validateExistingExecutable(limaURL, arguments: ["--version"], component: "Lima CLI")
+            let limactlHealthy = await validateExistingExecutable(limactlURL, arguments: ["--version"], component: "Lima")
+            let limaHealthy = fileManager.fileExists(atPath: limaShare.path)
+                && limaCLIHealthy
+                && limactlHealthy
+            if isComponentCurrent(.lima, isHealthy: limaHealthy) {
                 try await ensureLimaVirtualizationEntitlement()
                 messages.append("Lima 已就绪，跳过下载")
             } else {
                 DiagnosticLog.append("[Install] Lima 组件不完整，将从发布包补装")
                 DiagnosticLog.append("[Install] 安装 Lima...")
-                writeProgress("正在安装 Lima / limactl...", completed: completed, total: 5, isActive: true)
+                writeProgress("正在安装 Lima / limactl...", completed: completed, total: 6, isActive: true)
                 try await installLima()
                 installed.append(.lima)
                 messages.append("Lima 已安装到 \(limactlURL.path)")
             }
+            try recordReceipt(for: .lima)
             completed += 1
-            writeProgress("Lima 已就绪", completed: completed, total: 5, isActive: true)
+            writeProgress("Lima 已就绪", completed: completed, total: 6, isActive: true)
 
-            if await validateExistingExecutable(dockerURL, arguments: ["--version"], component: "Docker") {
+            let dockerHealthy = await validateExistingExecutable(dockerURL, arguments: ["--version"], component: "Docker")
+            if isComponentCurrent(.docker, isHealthy: dockerHealthy) {
                 messages.append("Docker CLI 已就绪，跳过下载")
             } else {
                 DiagnosticLog.append("[Install] 安装 Docker...")
-                writeProgress("正在安装 Docker CLI...", completed: completed, total: 5, isActive: true)
+                writeProgress("正在安装 Docker CLI...", completed: completed, total: 6, isActive: true)
                 try await installDocker()
                 installed.append(.docker)
                 messages.append("Docker CLI 已安装到 \(dockerURL.path)")
             }
+            try recordReceipt(for: .docker)
             completed += 1
-            writeProgress("Docker CLI 已就绪", completed: completed, total: 5, isActive: true)
+            writeProgress("Docker CLI 已就绪", completed: completed, total: 6, isActive: true)
 
-            if await validateExistingExecutable(mp4BoxURL, arguments: ["-version"], component: "GPAC") {
+            let buildxHealthy = await validateExistingExecutable(dockerBuildxURL, arguments: ["version"], component: "Docker Buildx")
+            if isComponentCurrent(.dockerBuildx, isHealthy: buildxHealthy) {
+                messages.append("Docker Buildx 已就绪，跳过下载")
+            } else {
+                DiagnosticLog.append("[Install] 安装 Docker Buildx...")
+                writeProgress("正在安装 Docker Buildx...", completed: completed, total: 6, isActive: true)
+                try await installDockerBuildx()
+                installed.append(.dockerBuildx)
+                messages.append("Docker Buildx 已安装到 \(dockerBuildxURL.path)")
+            }
+            try recordReceipt(for: .dockerBuildx)
+            completed += 1
+            writeProgress("Docker Buildx 已就绪", completed: completed, total: 6, isActive: true)
+
+            let gpacHealthy = await validateExistingExecutable(mp4BoxURL, arguments: ["-version"], component: "GPAC")
+            if isComponentCurrent(.gpac, isHealthy: gpacHealthy) {
                 messages.append("GPAC / MP4Box 已就绪，跳过下载")
             } else {
                 DiagnosticLog.append("[Install] 安装 GPAC...")
-                writeProgress("正在安装 GPAC / MP4Box...", completed: completed, total: 5, isActive: true)
+                writeProgress("正在安装 GPAC / MP4Box...", completed: completed, total: 6, isActive: true)
                 try await installGPAC()
                 installed.append(.gpac)
                 messages.append("GPAC / MP4Box 已安装到 \(mp4BoxURL.path)")
             }
+            try recordReceipt(for: .gpac)
             completed += 1
-            writeProgress("GPAC / MP4Box 已就绪", completed: completed, total: 5, isActive: true)
+            writeProgress("GPAC / MP4Box 已就绪", completed: completed, total: 6, isActive: true)
 
             isEnabled = true
-            writeProgress("正在启动 Colima 并检查 wrapper 镜像...", completed: completed, total: 5, isActive: true)
+            writeProgress("正在启动 Colima 并检查 wrapper 镜像...", completed: completed, total: 6, isActive: true)
             let wrapperResult = try await ensureWrapperImageAvailable()
             if wrapperResult.wasPulled {
                 installed.append(.wrapperImage)
@@ -301,7 +398,7 @@ public final class AppleMusicRuntimeManager {
             writeProgress(
                 "Apple Music wrapper image 已就绪",
                 completed: completed,
-                total: 5,
+                total: 6,
                 isActive: true,
                 wrapperStatus: wrapperResult.status
             )
@@ -316,19 +413,19 @@ public final class AppleMusicRuntimeManager {
             DiagnosticLog.append("[Install] 全部安装完成")
             writeProgress(
                 "Downloader Runtime 安装完成",
-                completed: 5,
-                total: 5,
+                completed: 6,
+                total: 6,
                 isActive: false,
                 wrapperStatus: wrapperResult.status
             )
             return AppleMusicRuntimeInstallResult(installedComponents: installed, messages: messages)
         } catch {
-            isEnabled = false
+            isEnabled = wasEnabled
             DiagnosticLog.append("[Install] 安装中断 completed=\(completed) error=\(error.localizedDescription)")
             writeProgress(
                 "安装中断：\(error.localizedDescription)",
                 completed: completed,
-                total: 5,
+                total: 6,
                 isActive: false
             )
             throw error
@@ -360,8 +457,15 @@ public final class AppleMusicRuntimeManager {
         guard isEnabled else {
             throw ProcessRunnerError.processFailed("Apple Music 下载功能尚未启用。请先在 Downloader 设置中启用并安装 Runtime。")
         }
-        for url in [dockerURL, colimaURL, limaURL, limactlURL, mp4BoxURL] where !isRegularExecutable(url) {
+        for url in [dockerURL, dockerBuildxURL, colimaURL, limaURL, limactlURL, mp4BoxURL] where !isRegularExecutable(url) {
             throw ProcessRunnerError.executableNotFound(url.path)
+        }
+        for component in [AppleMusicRuntimeComponent.colima, .lima, .docker, .dockerBuildx, .gpac] {
+            guard let spec = Self.managedComponentSpec(for: component),
+                  receiptStore.updateState(for: spec, isInstalled: true) == .current
+            else {
+                throw ProcessRunnerError.processFailed("Downloader Runtime 有待更新组件。请在 Apple Music 设置中点击“检查并更新”。")
+            }
         }
     }
 
@@ -396,6 +500,36 @@ public final class AppleMusicRuntimeManager {
         return URL(string: "https://download.docker.com/mac/static/stable/\(dockerArch)/docker-\(dockerVersion).tgz")!
     }
 
+    public static func dockerBuildxDownloadURL(architecture: String) throws -> URL {
+        let buildxArchitecture: String
+        switch architecture {
+        case "arm64": buildxArchitecture = "arm64"
+        case "x86_64": buildxArchitecture = "amd64"
+        default: throw InstallError.unsupportedArchitecture(architecture)
+        }
+        return URL(string: "https://github.com/docker/buildx/releases/download/\(dockerBuildxVersion)/buildx-\(dockerBuildxVersion).darwin-\(buildxArchitecture)")!
+    }
+
+    public static func dockerBuildxSHA256(architecture: String) throws -> String {
+        switch architecture {
+        case "arm64": return "214cdc36788602862dbc82b523d58648b4585c7b0ff95218b0817c44db5573d7"
+        case "x86_64": return "52a39ee4012d18f83373656712102ebda55656121dcdabbbb1ccfbd41b7debe8"
+        default: throw InstallError.unsupportedArchitecture(architecture)
+        }
+    }
+
+    static func colimaVMArchitecture(fromListJSON output: String) -> String? {
+        guard let data = output.data(using: .utf8) else { return nil }
+        if let profile = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let architecture = profile["arch"] as? String {
+            return architecture
+        }
+        if let profiles = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+            return profiles.first?["arch"] as? String
+        }
+        return nil
+    }
+
     private func createManagedDirectories() throws {
         cleanupLegacyVMStateIfUnused()
         for directory in [
@@ -405,12 +539,50 @@ public final class AppleMusicRuntimeManager {
             colimaCacheDirectory,
             limaHomeDirectory,
             dockerConfigDirectory,
+            dockerBuildxURL.deletingLastPathComponent(),
             gpacDirectory,
             wrapperDataDirectory,
             downloaderWorkDirectory
         ] {
             try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
         }
+    }
+
+    private func installedColimaVMArchitecture() async -> String? {
+        guard isRegularExecutable(colimaURL) else { return nil }
+        do {
+            let result = try await runner.run(
+                executablePath: colimaURL.path,
+                arguments: ["list", "--json"],
+                environment: runtimeEnvironment()
+            )
+            guard result.succeeded else { return nil }
+            return Self.colimaVMArchitecture(fromListJSON: result.standardOutput)
+        } catch {
+            return nil
+        }
+    }
+
+    private func migrateColimaVMConfiguration() async throws {
+        let environment = runtimeEnvironment()
+        let stop = try await runner.run(
+            executablePath: colimaURL.path,
+            arguments: ["stop"],
+            environment: environment
+        )
+        guard stop.succeeded else {
+            throw ProcessRunnerError.processFailed(stop.standardError.isEmpty ? stop.standardOutput : stop.standardError)
+        }
+
+        let delete = try await runner.run(
+            executablePath: colimaURL.path,
+            arguments: ["delete", "--force", "--data"],
+            environment: environment
+        )
+        guard delete.succeeded else {
+            throw ProcessRunnerError.processFailed(delete.standardError.isEmpty ? delete.standardOutput : delete.standardError)
+        }
+        DiagnosticLog.append("[Install] 已删除旧 Colima VM 与 Docker 数据；wrapper 认证目录未受影响")
     }
 
     private func cleanupLegacyVMStateIfUnused() {
@@ -515,6 +687,28 @@ public final class AppleMusicRuntimeManager {
         } catch {
             discardCachedDownload(archive)
             try? fileManager.removeItem(at: dockerURL)
+            throw error
+        }
+    }
+
+    private func installDockerBuildx() async throws {
+        let arch = try Self.releaseArchitecture()
+        let downloadURL = try Self.dockerBuildxDownloadURL(architecture: arch)
+        let expectedSHA256 = try Self.dockerBuildxSHA256(architecture: arch)
+        DiagnosticLog.append("[Install][Buildx] arch=\(arch) url=\(downloadURL.absoluteString)")
+        let downloaded = try await download(downloadURL, named: "buildx-\(Self.dockerBuildxVersion)-darwin-\(arch)")
+
+        do {
+            let actualSHA256 = try ManagedRuntimeArtifactVerifier.sha256(of: downloaded)
+            guard actualSHA256.caseInsensitiveCompare(expectedSHA256) == .orderedSame else {
+                throw InstallError.invalidPackage("Docker Buildx SHA-256 校验失败。")
+            }
+            try replaceItem(at: dockerBuildxURL, with: downloaded)
+            try await prepareDownloadedExecutable(dockerBuildxURL)
+            try await verifyExecutable(dockerBuildxURL, arguments: ["version"])
+        } catch {
+            discardCachedDownload(downloaded)
+            try? fileManager.removeItem(at: dockerBuildxURL)
             throw error
         }
     }
@@ -724,35 +918,135 @@ public final class AppleMusicRuntimeManager {
         return true
     }
 
+    private func isComponentCurrent(_ component: AppleMusicRuntimeComponent, isHealthy: Bool) -> Bool {
+        managedComponentUpdateState(component, isInstalled: isHealthy) == .current
+    }
+
+    private func recordReceipt(
+        for component: AppleMusicRuntimeComponent,
+        activeImageID: String? = nil
+    ) throws {
+        guard let spec = Self.managedComponentSpec(for: component) else { return }
+        let artifactSHA256: String?
+        if component == .dockerBuildx {
+            artifactSHA256 = try Self.dockerBuildxSHA256(architecture: Self.releaseArchitecture())
+        } else {
+            artifactSHA256 = spec.artifactSHA256
+        }
+        try receiptStore.save(
+            ManagedRuntimeComponentReceipt(
+                component: component,
+                version: spec.targetVersion,
+                artifactSHA256: artifactSHA256,
+                activeImageID: activeImageID
+            )
+        )
+    }
+
     private func ensureWrapperImageAvailable() async throws -> (
         status: ManagedDockerImageStatus,
         wasPulled: Bool
     ) {
         if let wrapperImageInstaller {
-            return try await wrapperImageInstaller(self)
+            let result = try await wrapperImageInstaller(self)
+            if result.status.isAvailable {
+                try recordReceipt(for: .wrapperImage)
+            }
+            return result
         }
 
         let runtime = ColimaDockerRuntime(runtimeManager: self)
         _ = try await runtime.ensureRunning()
         let imageManager = DockerImageManager(runtime: runtime)
         let current = await imageManager.check(.appleMusicWrapper)
-        if current.isAvailable {
-            DiagnosticLog.append("[Install] wrapper 镜像已存在，跳过拉取")
+        if current.isAvailable, isComponentCurrent(.wrapperImage, isHealthy: true) {
+            DiagnosticLog.append("[Install] 受控 wrapper 镜像已是目标版本，跳过更新")
             return (current, false)
         }
 
-        DiagnosticLog.append("[Install] 开始拉取 wrapper 镜像：\(ManagedDockerImage.appleMusicWrapper.imageName)")
-        let pull = try await imageManager.pull(.appleMusicWrapper)
-        guard pull.succeeded else {
-            let detail = pull.standardError.isEmpty ? pull.standardOutput : pull.standardError
-            throw ProcessRunnerError.processFailed("wrapper 镜像拉取失败：\(detail)")
+        guard let spec = Self.managedComponentSpec(for: .wrapperImage),
+              let artifactURL = spec.artifactURL,
+              let expectedSHA256 = spec.artifactSHA256
+        else {
+            throw InstallError.missingDownloadURL("Apple Music wrapper")
         }
-        let status = await imageManager.check(.appleMusicWrapper)
-        guard status.isAvailable else {
-            throw ProcessRunnerError.processFailed("wrapper 镜像拉取完成，但 Docker 未能检验该镜像。")
+
+        DiagnosticLog.append("[Install] 下载受控 wrapper 制品 revision=\(spec.targetVersion)")
+        let archive = try await download(artifactURL, named: "Wrapper.x86_64.\(spec.targetVersion).zip")
+        let actualSHA256: String
+        do {
+            actualSHA256 = try ManagedRuntimeArtifactVerifier.sha256(of: archive)
+        } catch {
+            discardCachedDownload(archive)
+            throw error
         }
-        DiagnosticLog.append("[Install] wrapper 镜像拉取并检验完成")
-        return (status, true)
+        guard actualSHA256.caseInsensitiveCompare(expectedSHA256) == .orderedSame else {
+            discardCachedDownload(archive)
+            throw InstallError.invalidPackage("wrapper 制品 SHA-256 校验失败。")
+        }
+
+        let stagingDirectory = downloadsDirectory.appendingPathComponent("wrapper-\(UUID().uuidString)", isDirectory: true)
+        try fileManager.createDirectory(at: stagingDirectory, withIntermediateDirectories: true)
+        defer { try? fileManager.removeItem(at: stagingDirectory) }
+
+        do {
+            let extract = try await runner.run(
+                executablePath: "/usr/bin/unzip",
+                arguments: ["-q", archive.path, "-d", stagingDirectory.path]
+            )
+            guard extract.succeeded else {
+                throw ProcessRunnerError.processFailed(extract.standardError.isEmpty ? extract.standardOutput : extract.standardError)
+            }
+            for requiredPath in ["Dockerfile", "entrypoint.sh", "wrapper", "rootfs"] {
+                guard fileManager.fileExists(atPath: stagingDirectory.appendingPathComponent(requiredPath).path) else {
+                    throw InstallError.invalidPackage("wrapper 制品缺少 \(requiredPath)。")
+                }
+            }
+
+            let dockerPath = try await runtime.ensureRunning()
+            let build = try await runner.run(
+                executablePath: dockerPath,
+                arguments: runtime.dockerArguments(wrapperBuildDockerArguments(contextPath: stagingDirectory.path)),
+                environment: runtime.runtimeEnvironment
+            )
+            guard build.succeeded else {
+                throw ProcessRunnerError.processFailed(build.standardError.isEmpty ? build.standardOutput : build.standardError)
+            }
+
+            let imageID = try await runner.run(
+                executablePath: dockerPath,
+                arguments: runtime.dockerArguments(["image", "inspect", "--format", "{{.Id}}", ManagedDockerImage.appleMusicWrapper.imageName]),
+                environment: runtime.runtimeEnvironment
+            )
+            guard imageID.succeeded else {
+                throw ProcessRunnerError.processFailed("wrapper 镜像构建完成但无法读取镜像 ID。")
+            }
+            let status = await imageManager.check(.appleMusicWrapper)
+            guard status.isAvailable else {
+                throw ProcessRunnerError.processFailed("wrapper 镜像构建完成，但 Docker 未能检验该镜像。")
+            }
+            try recordReceipt(
+                for: .wrapperImage,
+                activeImageID: imageID.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines)
+            )
+            DiagnosticLog.append("[Install] 受控 wrapper 镜像构建并检验完成 revision=\(spec.targetVersion)")
+            return (status, true)
+        } catch {
+            discardCachedDownload(archive)
+            throw error
+        }
+    }
+
+    func wrapperBuildDockerArguments(contextPath: String) -> [String] {
+        [
+            "buildx", "build",
+            "--load",
+            "--platform", ManagedDockerImage.appleMusicWrapper.platform,
+            "--label", "com.shengjiacheng.getoudio.component=wrapper",
+            "--label", "com.shengjiacheng.getoudio.version=\(Self.wrapperVersion)",
+            "--tag", ManagedDockerImage.appleMusicWrapper.imageName,
+            contextPath
+        ]
     }
 
     @discardableResult
@@ -791,12 +1085,12 @@ public final class AppleMusicRuntimeManager {
     }
 
     private func executableStatus(_ component: AppleMusicRuntimeComponent, url: URL) -> AppleMusicRuntimeComponentStatus {
-        let isReady = isRegularExecutable(url)
-        return AppleMusicRuntimeComponentStatus(
+        let isInstalled = isRegularExecutable(url)
+        return managedStatus(
             component: component,
-            isReady: isReady,
-            resolvedPath: isReady ? url.path : nil,
-            detail: isReady ? url.path : unavailableExecutableDetail(url)
+            isInstalled: isInstalled,
+            resolvedPath: isInstalled ? url.path : nil,
+            detail: isInstalled ? url.path : unavailableExecutableDetail(url)
         )
     }
 
@@ -815,11 +1109,39 @@ public final class AppleMusicRuntimeManager {
             if !fileManager.fileExists(atPath: shareURL.path) { missing.append(shareURL.path) }
             detail = "缺少：" + missing.joined(separator: "，")
         }
-        return AppleMusicRuntimeComponentStatus(
+        return managedStatus(
             component: .lima,
-            isReady: isReady,
+            isInstalled: isReady,
             resolvedPath: isReady ? limaURL.path : nil,
             detail: detail
+        )
+    }
+
+    private func managedStatus(
+        component: AppleMusicRuntimeComponent,
+        isInstalled: Bool,
+        resolvedPath: String?,
+        detail: String
+    ) -> AppleMusicRuntimeComponentStatus {
+        guard let spec = Self.managedComponentSpec(for: component) else {
+            return AppleMusicRuntimeComponentStatus(
+                component: component,
+                isReady: isInstalled,
+                resolvedPath: resolvedPath,
+                detail: detail
+            )
+        }
+        let state = managedComponentUpdateState(component, isInstalled: isInstalled)
+        let receipt = receiptStore.receipt(for: component)
+        let currentDetail = state == .current ? detail : "\(state.displayName)：目标 \(spec.targetVersion)。\(detail)"
+        return AppleMusicRuntimeComponentStatus(
+            component: component,
+            isReady: state == .current,
+            resolvedPath: resolvedPath,
+            detail: currentDetail,
+            installedVersion: receipt?.version,
+            targetVersion: spec.targetVersion,
+            updateState: state
         )
     }
 

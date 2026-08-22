@@ -18,6 +18,7 @@ public enum AppleMusicWrapperLoginPhase: String, Codable, Equatable, Sendable {
     case notInitialized
     case starting
     case waitingForVerificationCode
+    case verificationCodeSubmitted
     case authenticating
     case authenticated
     case failed
@@ -33,7 +34,7 @@ public struct AppleMusicWrapperLoginStatus: Codable, Equatable, Sendable {
     }
 
     public var isInProgress: Bool {
-        [.starting, .waitingForVerificationCode, .authenticating].contains(phase)
+        [.starting, .waitingForVerificationCode, .verificationCodeSubmitted, .authenticating].contains(phase)
     }
 
     public var canSubmitVerificationCode: Bool {
@@ -42,6 +43,61 @@ public struct AppleMusicWrapperLoginStatus: Codable, Equatable, Sendable {
 
     public var isAuthenticated: Bool {
         phase == .authenticated
+    }
+}
+
+public struct AppleMusicWrapperLoginSnapshot: Codable, Equatable, Sendable {
+    public var revision: UInt64
+    public var status: AppleMusicWrapperLoginStatus
+
+    public init(revision: UInt64, status: AppleMusicWrapperLoginStatus) {
+        self.revision = revision
+        self.status = status
+    }
+}
+
+public final class AppleMusicWrapperLoginSnapshotStore {
+    private let snapshotURL: URL
+    private let fileManager: FileManager
+
+    public init(
+        rootURL: URL,
+        fileManager: FileManager = .default
+    ) {
+        snapshotURL = rootURL.appendingPathComponent("wrapper-login-status.json")
+        self.fileManager = fileManager
+    }
+
+    public convenience init(
+        container: SharedContainer,
+        fileManager: FileManager = .default
+    ) {
+        self.init(rootURL: container.url(for: .appleMusicRuntimeIPC), fileManager: fileManager)
+    }
+
+    public func snapshot() -> AppleMusicWrapperLoginSnapshot? {
+        guard let data = try? Data(contentsOf: snapshotURL) else { return nil }
+        return try? JSONDecoder().decode(AppleMusicWrapperLoginSnapshot.self, from: data)
+    }
+
+    @discardableResult
+    public func saveIfChanged(_ status: AppleMusicWrapperLoginStatus) throws -> AppleMusicWrapperLoginSnapshot {
+        let current = snapshot()
+        if let current, current.status == status {
+            return current
+        }
+        let snapshot = AppleMusicWrapperLoginSnapshot(
+            revision: (current?.revision ?? 0) + 1,
+            status: status
+        )
+        try fileManager.createDirectory(at: snapshotURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try JSONEncoder().encode(snapshot).write(to: snapshotURL, options: .atomic)
+        return snapshot
+    }
+
+    public func remove() throws {
+        guard fileManager.fileExists(atPath: snapshotURL.path) else { return }
+        try fileManager.removeItem(at: snapshotURL)
     }
 }
 
@@ -288,6 +344,10 @@ public final class AppleMusicRuntimeAgentClient {
     public func progress() -> AppleMusicRuntimeProgress? {
         guard let data = try? Data(contentsOf: progressURL()) else { return nil }
         return try? JSONDecoder().decode(AppleMusicRuntimeProgress.self, from: data)
+    }
+
+    public func wrapperLoginSnapshot() -> AppleMusicWrapperLoginSnapshot? {
+        AppleMusicWrapperLoginSnapshotStore(rootURL: ipcDirectory, fileManager: fileManager).snapshot()
     }
 
     public func requestDownloadCancellation() throws {

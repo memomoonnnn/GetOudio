@@ -158,6 +158,33 @@ public final class DockerImageManager {
         }
     }
 
+    public func checkLegacyImage(for image: ManagedDockerImage) async -> ManagedDockerImageStatus? {
+        let runtimeStatus = await runtime.check()
+        guard runtimeStatus.isRunning, let dockerPath = runtimeStatus.dockerPath else {
+            return nil
+        }
+
+        for legacyImageName in image.legacyImageNames {
+            do {
+                let result = try await runner.run(
+                    executablePath: dockerPath,
+                    arguments: runtime.dockerArguments(["image", "inspect", legacyImageName]),
+                    environment: runtime.runtimeEnvironment
+                )
+                if result.succeeded {
+                    return ManagedDockerImageStatus(
+                        image: image,
+                        isAvailable: true,
+                        detail: "检测到旧版 wrapper 镜像 \(legacyImageName)，请检查并更新"
+                    )
+                }
+            } catch {
+                return nil
+            }
+        }
+        return nil
+    }
+
     public func pull(_ image: ManagedDockerImage) async throws -> ProcessResult {
         let dockerPath = try await runtime.ensureRunning()
         return try await runner.run(

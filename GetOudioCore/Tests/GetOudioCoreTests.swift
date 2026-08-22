@@ -1256,22 +1256,75 @@ final class GetOudioCoreTests: XCTestCase {
         XCTAssertTrue(status.isInProgress)
     }
 
-    func testAppleMusicWrapperLoginStatusRecognizesAuthenticationAndFailure() {
-        let authenticated = AppleMusicWrapperRuntime.loginStatus(
-            logs: "[.] response type 6",
-            isRunning: true,
-            hasCompletedMarker: false
-        )
-        let failed = AppleMusicWrapperRuntime.loginStatus(
-            logs: "[.] response type 4\n[!] login failed",
+    func testAppleMusicWrapperLoginStatusDoesNotKeepStoppedContainerWaitingForCode() {
+        let status = AppleMusicWrapperRuntime.loginStatus(
+            logs: "[.] credentialHandler: {2FA: true}\n[!] Waiting for input...\n[!] Failed to get 2FA Code in 60s. Exiting...",
             isRunning: false,
             hasCompletedMarker: false
         )
 
-        XCTAssertTrue(authenticated.isAuthenticated)
-        XCTAssertFalse(authenticated.canSubmitVerificationCode)
+        XCTAssertEqual(status.phase, .failed)
+        XCTAssertFalse(status.isInProgress)
+    }
+
+    func testAppleMusicWrapperLoginStatusRecognizesAuthenticationAndFailure() {
+        let keyServerReady = AppleMusicWrapperRuntime.loginStatus(
+            logs: "[+] account info cached successfully\n[!] listening key request on 0.0.0.0:40020",
+            isRunning: true,
+            hasCompletedMarker: false
+        )
+        let cachedOnly = AppleMusicWrapperRuntime.loginStatus(
+            logs: "[+] account info cached successfully",
+            isRunning: true,
+            hasCompletedMarker: false
+        )
+        let failed = AppleMusicWrapperRuntime.loginStatus(
+            logs: "[!] auth failed: response type 4\n[!] login failed",
+            isRunning: false,
+            hasCompletedMarker: false
+        )
+        let legacySuccessMarkerOnly = AppleMusicWrapperRuntime.loginStatus(
+            logs: "[.] response type 6",
+            isRunning: true,
+            hasCompletedMarker: false
+        )
+
+        XCTAssertTrue(keyServerReady.isAuthenticated)
+        XCTAssertEqual(cachedOnly.phase, .starting)
         XCTAssertEqual(failed.phase, .failed)
         XCTAssertFalse(failed.isInProgress)
+        XCTAssertEqual(legacySuccessMarkerOnly.phase, .starting)
+    }
+
+    func testAppleMusicWrapperVerificationCodeSubmissionIsInProgressButCannotBeSubmittedTwice() {
+        let status = AppleMusicWrapperLoginStatus(
+            phase: .verificationCodeSubmitted,
+            message: "验证码已写入，等待 wrapper 读取"
+        )
+
+        XCTAssertTrue(status.isInProgress)
+        XCTAssertFalse(status.canSubmitVerificationCode)
+    }
+
+    func testAppleMusicWrapperLoginSnapshotStoreOnlyAdvancesForChangedStatus() throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = AppleMusicWrapperLoginSnapshotStore(rootURL: root)
+        let waiting = AppleMusicWrapperLoginStatus(
+            phase: .waitingForVerificationCode,
+            message: "已发送验证码，请输入后提交"
+        )
+        let first = try store.saveIfChanged(waiting)
+        let unchanged = try store.saveIfChanged(waiting)
+        let authenticating = try store.saveIfChanged(AppleMusicWrapperLoginStatus(
+            phase: .authenticating,
+            message: "验证码已提交，正在验证"
+        ))
+
+        XCTAssertEqual(first.revision, 1)
+        XCTAssertEqual(unchanged.revision, first.revision)
+        XCTAssertEqual(authenticating.revision, 2)
+        XCTAssertEqual(store.snapshot(), authenticating)
     }
 
     func testAppleMusicWrapperLoginStatusPrefersPersistedCompletionMarker() {
@@ -1298,27 +1351,165 @@ final class GetOudioCoreTests: XCTestCase {
         let manager = AppleMusicRuntimeManager(rootURL: root, settingsStore: store, resourceRoot: nil)
         let wrapper = AppleMusicWrapperRuntime(runtimeManager: manager, settingsStore: store)
         try wrapper.writeVerificationCode("123456")
-        let codeURL = try wrapper.dataDirectory().appendingPathComponent("2fa.txt")
+        let codeURL = try wrapper.verificationCodeURL()
+        let legacyCodeURL = try wrapper.dataDirectory().appendingPathComponent("2fa.txt")
+        try Data("legacy".utf8).write(to: legacyCodeURL)
+        XCTAssertEqual(
+            codeURL.path,
+            root.appendingPathComponent("wrapper-data/rootfs/data/data/com.apple.android.music/files/2fa.txt").path
+        )
         XCTAssertTrue(FileManager.default.fileExists(atPath: codeURL.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: legacyCodeURL.path))
 
         try wrapper.clearVerificationCode()
 
         XCTAssertFalse(FileManager.default.fileExists(atPath: codeURL.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: legacyCodeURL.path))
     }
 
     func testAppleMusicWrapperIsManagedDockerImage() {
-        #if arch(arm64)
-        XCTAssertEqual(ManagedDockerImage.appleMusicWrapper.imageName, "ghcr.io/itouakirai/wrapper:arm")
-        XCTAssertEqual(ManagedDockerImage.appleMusicWrapper.platform, "linux/arm64")
-        #else
-        XCTAssertEqual(ManagedDockerImage.appleMusicWrapper.imageName, "ghcr.io/itouakirai/wrapper:x86")
+        XCTAssertEqual(
+            ManagedDockerImage.appleMusicWrapper.imageName,
+            "get-oudio/wrapper:\(AppleMusicRuntimeManager.wrapperVersion)"
+        )
         XCTAssertEqual(ManagedDockerImage.appleMusicWrapper.platform, "linux/amd64")
-        #endif
         XCTAssertEqual(
             ManagedDockerImage.appleMusicWrapper.upstreamURL.absoluteString,
-            "https://github.com/itouakirai/wrapper"
+            "https://github.com/WorldObservationLog/wrapper"
         )
         XCTAssertFalse(BundledComponent.allCases.map(\.rawValue).contains("appleMusicWrapper"))
+    }
+
+    func testAppleMusicWrapperRecognizesLegacyImageNamesForMigration() {
+        XCTAssertEqual(
+            ManagedDockerImage.appleMusicWrapper.legacyImageNames,
+            [
+                "ghcr.io/itouakirai/wrapper:arm",
+                "ghcr.io/itouakirai/wrapper:x86"
+            ]
+        )
+        XCTAssertEqual(
+            AppleMusicWrapperRuntime.legacyServerContainerNames,
+            ["get-oudio-wrapper-rollback"]
+        )
+    }
+
+    func testDockerBuildxIsPinnedAndWrapperBuildUsesBuildKit() throws {
+        XCTAssertEqual(AppleMusicRuntimeManager.dockerBuildxVersion, "v0.36.1")
+        XCTAssertEqual(
+            try AppleMusicRuntimeManager.dockerBuildxDownloadURL(architecture: "arm64").absoluteString,
+            "https://github.com/docker/buildx/releases/download/v0.36.1/buildx-v0.36.1.darwin-arm64"
+        )
+        XCTAssertEqual(
+            try AppleMusicRuntimeManager.dockerBuildxSHA256(architecture: "arm64"),
+            "214cdc36788602862dbc82b523d58648b4585c7b0ff95218b0817c44db5573d7"
+        )
+        XCTAssertEqual(
+            try AppleMusicRuntimeManager.dockerBuildxSHA256(architecture: "x86_64"),
+            "52a39ee4012d18f83373656712102ebda55656121dcdabbbb1ccfbd41b7debe8"
+        )
+
+        let suiteName = "GetOudioCoreTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let manager = AppleMusicRuntimeManager(rootURL: root, settingsStore: SettingsStore(defaults: defaults), resourceRoot: nil)
+
+        XCTAssertEqual(
+            manager.dockerBuildxURL.path,
+            root.appendingPathComponent("docker-config/cli-plugins/docker-buildx").path
+        )
+        XCTAssertEqual(manager.wrapperBuildDockerArguments(contextPath: "/tmp/wrapper"), [
+            "buildx", "build",
+            "--load",
+            "--platform", "linux/amd64",
+            "--label", "com.shengjiacheng.getoudio.component=wrapper",
+            "--label", "com.shengjiacheng.getoudio.version=\(AppleMusicRuntimeManager.wrapperVersion)",
+            "--tag", ManagedDockerImage.appleMusicWrapper.imageName,
+            "/tmp/wrapper"
+        ])
+    }
+
+    func testColimaVMConfigurationMigrationIsPinnedToVZRosetta() throws {
+        XCTAssertEqual(AppleMusicRuntimeManager.colimaVMArchitecture, "aarch64")
+        XCTAssertEqual(AppleMusicRuntimeManager.colimaVMType, "vz")
+        XCTAssertEqual(AppleMusicRuntimeManager.colimaRuntimeRevision, "v0.10.3-aarch64-vz-rosetta-vm2")
+        XCTAssertEqual(
+            AppleMusicRuntimeManager.managedComponentSpec(for: .colima)?.targetVersion,
+            AppleMusicRuntimeManager.colimaRuntimeRevision
+        )
+        XCTAssertEqual(
+            AppleMusicRuntimeManager.colimaVMArchitecture(
+                fromListJSON: "{\"name\":\"default\",\"arch\":\"aarch64\"}"
+            ),
+            "aarch64"
+        )
+        XCTAssertEqual(
+            AppleMusicRuntimeManager.colimaVMArchitecture(
+                fromListJSON: "[{\"name\":\"default\",\"arch\":\"aarch64\"}]"
+            ),
+            "aarch64"
+        )
+        XCTAssertNil(AppleMusicRuntimeManager.colimaVMArchitecture(fromListJSON: "not-json"))
+    }
+
+    func testAppleMusicWrapperServerArgumentsExposeAllRequiredPorts() throws {
+        let suiteName = "GetOudioCoreTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let manager = AppleMusicRuntimeManager(rootURL: root, settingsStore: SettingsStore(defaults: defaults), resourceRoot: nil)
+        let wrapper = AppleMusicWrapperRuntime(runtimeManager: manager, settingsStore: SettingsStore(defaults: defaults))
+        let mount = "\(root.path)/rootfs/data:/app/rootfs/data"
+
+        XCTAssertEqual(wrapper.serverDockerArguments(mount: mount), [
+            "run", "-d",
+            "--privileged",
+            "--platform", "linux/amd64",
+            "--name", "get-oudio-wrapper",
+            "-v", mount,
+            "-p", "10020:10020",
+            "-p", "20020:20020",
+            "-p", "30020:30020",
+            "-p", "40020:40020",
+            "--entrypoint", "./wrapper",
+            ManagedDockerImage.appleMusicWrapper.imageName,
+            "-H", "0.0.0.0"
+        ])
+        XCTAssertEqual(wrapper.keyServerHealthCheckArguments(), [
+            "--silent",
+            "--show-error",
+            "--output", "/dev/null",
+            "--write-out", "%{http_code}",
+            "--max-time", "3",
+            "http://127.0.0.1:40020/"
+        ])
+    }
+
+    func testAppleMusicWrapperClearsOnlyPersistedInitializationMarker() throws {
+        let suiteName = "GetOudioCoreTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let manager = AppleMusicRuntimeManager(rootURL: root, settingsStore: SettingsStore(defaults: defaults), resourceRoot: nil)
+        let wrapper = AppleMusicWrapperRuntime(runtimeManager: manager, settingsStore: SettingsStore(defaults: defaults))
+        let dataDirectory = root.appendingPathComponent("wrapper-data/rootfs/data", isDirectory: true)
+        let marker = root.appendingPathComponent("wrapper-data/.login-completed")
+        try FileManager.default.createDirectory(at: dataDirectory, withIntermediateDirectories: true)
+        try Data().write(to: marker)
+        try Data("preserved".utf8).write(to: dataDirectory.appendingPathComponent("account.bin"))
+
+        try wrapper.clearAuthenticationState()
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: marker.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: dataDirectory.appendingPathComponent("account.bin").path))
     }
 
     func testGenericRuntimeDependenciesDoNotIncludeAppleMusicRuntime() {
@@ -1491,15 +1682,21 @@ final class GetOudioCoreTests: XCTestCase {
             wrapperImageInstaller: { _ in (wrapperStatus, false) }
         )
         let executable = Data("#!/bin/sh\nexit 0\n".utf8)
-        for url in [manager.colimaURL, manager.limaURL, manager.limactlURL, manager.dockerURL, manager.mp4BoxURL] {
+        let colimaExecutable = Data("#!/bin/sh\nif [ \"$1\" = \"list\" ]; then echo '{\"arch\":\"x86_64\"}'; fi\nexit 0\n".utf8)
+        for url in [manager.colimaURL, manager.limaURL, manager.limactlURL, manager.dockerURL, manager.dockerBuildxURL, manager.mp4BoxURL] {
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            FileManager.default.createFile(atPath: url.path, contents: executable)
+            FileManager.default.createFile(atPath: url.path, contents: url == manager.colimaURL ? colimaExecutable : executable)
             try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
         }
         try FileManager.default.createDirectory(
             at: root.appendingPathComponent("share/lima", isDirectory: true),
             withIntermediateDirectories: true
         )
+        let receiptStore = ManagedRuntimeComponentReceiptStore(rootURL: root)
+        for component in [.colima, .lima, .docker, .dockerBuildx, .gpac] as [AppleMusicRuntimeComponent] {
+            let spec = try XCTUnwrap(AppleMusicRuntimeManager.managedComponentSpec(for: component))
+            try receiptStore.save(ManagedRuntimeComponentReceipt(component: component, version: spec.targetVersion))
+        }
         let downloads = manager.downloadsDirectory
         try FileManager.default.createDirectory(
             at: downloads.appendingPathComponent("gpac-stale/expanded", isDirectory: true),
@@ -1514,7 +1711,7 @@ final class GetOudioCoreTests: XCTestCase {
         let result = try await manager.installManagedRuntime()
 
         XCTAssertTrue(result.installedComponents.isEmpty)
-        XCTAssertEqual(result.messages.filter { $0.contains("跳过") }.count, 5)
+        XCTAssertEqual(result.messages.filter { $0.contains("跳过") }.count, 6)
         XCTAssertTrue(store.isAppleMusicDownloadEnabled)
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: downloads.path), [])
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: colimaCaches.path), [])
@@ -1558,7 +1755,7 @@ final class GetOudioCoreTests: XCTestCase {
             settingsStore: SettingsStore(defaults: defaults),
             resourceRoot: nil
         )
-        for url in [manager.dockerURL, manager.colimaURL, manager.limaURL, manager.limactlURL, manager.mp4BoxURL] {
+        for url in [manager.dockerURL, manager.dockerBuildxURL, manager.colimaURL, manager.limaURL, manager.limactlURL, manager.mp4BoxURL] {
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             FileManager.default.createFile(atPath: url.path, contents: Data("#!/bin/sh\nexit 0\n".utf8))
             try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
@@ -1567,15 +1764,105 @@ final class GetOudioCoreTests: XCTestCase {
             at: root.appendingPathComponent("share/lima", isDirectory: true),
             withIntermediateDirectories: true
         )
+        let receiptStore = ManagedRuntimeComponentReceiptStore(rootURL: root)
+        for component in [.colima, .lima, .docker, .dockerBuildx, .gpac] as [AppleMusicRuntimeComponent] {
+            let spec = try XCTUnwrap(AppleMusicRuntimeManager.managedComponentSpec(for: component))
+            try receiptStore.save(ManagedRuntimeComponentReceipt(component: component, version: spec.targetVersion))
+        }
 
         let statuses = manager.componentStatuses()
         let readyIDs = Set(statuses.filter(\.isReady).map(\.component))
 
         XCTAssertTrue(readyIDs.contains(.docker))
+        XCTAssertTrue(readyIDs.contains(.dockerBuildx))
         XCTAssertTrue(readyIDs.contains(.colima))
         XCTAssertTrue(readyIDs.contains(.lima))
         XCTAssertTrue(readyIDs.contains(.gpac))
         XCTAssertEqual(statuses.first { $0.component == .gpac }?.resolvedPath, manager.mp4BoxURL.path)
+        XCTAssertEqual(
+            statuses.first { $0.component == .wrapperImage }?.resolvedPath,
+            AppleMusicRuntimeManager.defaultVMStateRootURL.path
+        )
+
+        let wrapperStatuses = manager.componentStatuses(
+            wrapperStatus: ManagedDockerImageStatus(
+                image: .appleMusicWrapper,
+                isAvailable: true,
+                detail: "wrapper image ready"
+            )
+        )
+        XCTAssertEqual(
+            wrapperStatuses.first { $0.component == .wrapperImage }?.resolvedPath,
+            AppleMusicRuntimeManager.defaultVMStateRootURL.path
+        )
+    }
+
+    func testManagedRuntimeReceiptStatesAndArtifactHash() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let store = ManagedRuntimeComponentReceiptStore(rootURL: root)
+        let spec = try XCTUnwrap(AppleMusicRuntimeManager.managedComponentSpec(for: .wrapperImage))
+        XCTAssertEqual(store.updateState(for: spec, isInstalled: false), .missing)
+        XCTAssertEqual(store.updateState(for: spec, isInstalled: true), .legacy)
+
+        try store.save(ManagedRuntimeComponentReceipt(component: .wrapperImage, version: "old"))
+        XCTAssertEqual(store.updateState(for: spec, isInstalled: true), .updateAvailable)
+        try store.save(ManagedRuntimeComponentReceipt(component: .wrapperImage, version: spec.targetVersion))
+        XCTAssertEqual(store.updateState(for: spec, isInstalled: true), .current)
+        XCTAssertEqual(
+            ManagedRuntimeComponentReceiptStore(rootURL: root).receipt(for: .wrapperImage)?.version,
+            spec.targetVersion
+        )
+
+        let artifact = root.appendingPathComponent("wrapper.zip")
+        try Data("abc".utf8).write(to: artifact)
+        XCTAssertEqual(
+            try ManagedRuntimeArtifactVerifier.sha256(of: artifact),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        )
+    }
+
+    func testAppleMusicRuntimeStatusDecodesLegacyAgentPayload() throws {
+        let data = Data("""
+        {"component":"docker","isReady":true,"resolvedPath":"/tmp/docker","detail":"/tmp/docker"}
+        """.utf8)
+        let decoded = try JSONDecoder().decode(AppleMusicRuntimeComponentStatus.self, from: data)
+
+        XCTAssertEqual(decoded.component, .docker)
+        XCTAssertNil(decoded.installedVersion)
+        XCTAssertNil(decoded.targetVersion)
+        XCTAssertNil(decoded.updateState)
+    }
+
+    func testDownloaderConfigRenderingPreservesTemplateDecryptAndKeyServer() throws {
+        let suiteName = "GetOudioCoreTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let settings = SettingsStore(defaults: defaults)
+        let runtime = AppleMusicRuntimeManager(rootURL: root, settingsStore: settings, resourceRoot: nil)
+        let service = AppleMusicDownloadService(runtimeManager: runtime, settingsStore: settings, useAgent: false)
+        let rendered = service.renderDownloaderConfig(
+            template: """
+            alac-save-folder: old
+            template-decrypt: true
+            key-server: \"127.0.0.1:40020\"
+            decrypt-m3u8-port: \"127.0.0.1:10020\"
+            get-account-port: \"127.0.0.1:30020\"
+            exit-on-error: false
+            """,
+            outputDirectory: root.appendingPathComponent("output")
+        )
+
+        XCTAssertTrue(rendered.contains("alac-save-folder: \"\(root.path)/output\""))
+        XCTAssertTrue(rendered.contains("template-decrypt: true"))
+        XCTAssertTrue(rendered.contains("key-server: \"127.0.0.1:40020\""))
+        XCTAssertTrue(rendered.contains("decrypt-m3u8-port: \"127.0.0.1:10020\""))
+        XCTAssertTrue(rendered.contains("get-account-port: \"127.0.0.1:30020\""))
+        XCTAssertTrue(rendered.contains("exit-on-error: true"))
     }
 
     func testAppleMusicRuntimeStatusRejectsDirectoryNamedDocker() throws {

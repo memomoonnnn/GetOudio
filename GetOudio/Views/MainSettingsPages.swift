@@ -706,10 +706,10 @@ struct AppleMusicSettingsPage: View {
                     Button {
                         Task { await viewModel.enableAppleMusicRuntime() }
                     } label: {
-                        Label(viewModel.isAppleMusicDownloadEnabled ? "检查并修复" : "启用", systemImage: "arrow.down.to.line")
+                        Label(viewModel.isAppleMusicDownloadEnabled ? "检查并更新" : "启用", systemImage: "arrow.down.to.line")
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(viewModel.isAppleMusicRuntimeBusy)
+                    .disabled(viewModel.isAppleMusicRuntimeUpdateBlocked)
 
                     Button {
                         Task { await viewModel.refreshAppleMusicRuntimeStatus() }
@@ -779,7 +779,7 @@ struct AppleMusicSettingsPage: View {
                     .buttonStyle(.borderedProminent)
                     .disabled(
                         !viewModel.isAppleMusicDownloadEnabled
-                            || viewModel.isInitializingAppleMusicWrapper
+                            || viewModel.isSendingAppleMusicInitializationRequest
                             || viewModel.appleMusicWrapperLoginStatus.isInProgress
                             || viewModel.appleMusicWrapperLoginStatus.isAuthenticated
                             || username.isEmpty
@@ -813,8 +813,8 @@ struct AppleMusicSettingsPage: View {
                         .controlSize(.small)
                 }
 
-                if !viewModel.appleMusicActionMessage.isEmpty {
-                    Text(viewModel.appleMusicActionMessage)
+                if !viewModel.appleMusicInitializationMessage.isEmpty {
+                    Text(viewModel.appleMusicInitializationMessage)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .padding(.vertical, 2)
@@ -907,7 +907,7 @@ struct AppleMusicSettingsPage: View {
                 } else {
                     ForEach(viewModel.appleMusicRuntimeStatuses) { status in
                         HStack(spacing: 12) {
-                            Image(systemName: status.isReady ? "checkmark.circle.fill" : "xmark.circle")
+                            Image(systemName: status.updateState == .updateAvailable || status.updateState == .legacy ? "arrow.triangle.2.circlepath.circle.fill" : (status.isReady ? "checkmark.circle.fill" : "xmark.circle"))
                                 .foregroundStyle(status.isReady ? .green : .secondary)
                                 .frame(width: 18)
 
@@ -919,6 +919,11 @@ struct AppleMusicSettingsPage: View {
                                     .foregroundStyle(.secondary)
                                     .lineLimit(1)
                                     .truncationMode(.middle)
+                                if let updateState = status.updateState, updateState != .current {
+                                    Text("\(updateState.displayName) · 目标 \(status.targetVersion ?? "")")
+                                        .font(.caption2)
+                                        .foregroundStyle(.orange)
+                                }
                             }
 
                             Spacer()

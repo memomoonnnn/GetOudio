@@ -14,7 +14,7 @@ Get Oudio 是 XcodeGen 驱动的 macOS 原生音频工具。`GetOudioCore` 承�
 
 代码改动保持小范围且按职责落位：业务行为优先进入 Core 的 Models/Services 或对应入口源码，进程执行复用 `ProcessRunner` 或现有 runtime 服务，跨进程常量和共享路径进入 Core Support。Extension 只分类、入队、写共享事件和唤醒后台；设置窗口只负责设置；转换、通知派发、下载和 Docker 操作必须由后台 runner 或 Agent 执行。不要为了拆文件增加只转发属性或方法的浅层包装，也不要把 UI 状态、队列消费、权限和进程调用重新揉进一个视图或大 view model。
 
-App Bundle 只携带精简 `ffmpeg`、`ncmdump` 和 `apple-music-downloader`。Docker CLI、Colima、Lima、GPAC/MP4Box 与 wrapper 镜像必须由 AM Runtime Agent 安装到 managed runtime，不得塞回 App Bundle，也不得改用用户系统里的 Homebrew、Docker Desktop、Colima 或 GPAC。内嵌 downloader 的源码由相邻专用 fork `../apple-music-downloader-get-oudio` 维护，本仓库只保存构建产物与 `config.yaml.template`。
+App Bundle 只携带精简 `ffmpeg`、`ncmdump` 和 `apple-music-downloader`。Docker CLI、Colima、Lima、GPAC/MP4Box 与 wrapper 镜像必须由 AM Runtime Agent 安装到 managed runtime，不得塞回 App Bundle，也不得改用用户系统里的 Homebrew、Docker Desktop、Colima 或 GPAC。外部 Runtime 组件的目标修订、制品哈希、安装方式和 receipt 以 Core 规格为真源：状态刷新不得联网或安装，只有用户发起的“检查并更新”可改变组件，且下载或登录进行中必须禁用更新。Apple Silicon 必须通过 Agent 管理的 Colima VZ + Rosetta 运行受控 `linux/amd64` wrapper，禁止回退到可变上游镜像标签或用户 QEMU；wrapper 更新先删除旧服务和旧镜像，不提供跨修订回滚，但必须保留 `rootfs/data`，并在更新成功后只清除 `.login-completed` 初始化标记、引导用户重新初始化。服务容器必须显式映射 10020、20020、30020、40020；容器持续运行且 40020 空请求返回预期 HTTP 400 前不得调用 downloader。内嵌 downloader 的源码由相邻专用 fork `../apple-music-downloader-get-oudio` 维护，本仓库只保存构建产物与 `config.yaml.template`；其模板解密配置必须保持 `template-decrypt: true`、`key-server: 127.0.0.1:40020` 和 account 端口 30020。
 
 需要用户修复应用内配置时，统一由 Core 的 `SettingsGuidanceStore` 传递 `SettingsGuidanceTarget`，后台和无窗口入口经 `SettingsGuidanceLauncher` 启动独立的普通 App 实例，再由 `NormalLauncher`、`MainView` 和目标设置卡片完成页面定位与不拦截操作的闪动遮罩；不得由 HeadlessRunner 或 Extension 直接创建设置窗口，也不得用无关通知代替配置引导。系统权限请求（如麦克风 `AVCaptureDevice.requestAccess`）仍由对应入口直接发起，不属于设置引导。Apple Music Share 缺少 runtime 时引导至“依赖安装”，runtime 就绪但未完成登录时引导至“初始化”，只有其他运行故障才发送中性不可用通知；新增同类引导只扩展目标、页面映射和目标卡片。
 
@@ -62,6 +62,7 @@ Apple Music downloader 的机器协议是 stdout-exclusive 的 `--events=jsonl`�
 | --- | --- |
 | 纯文档 | `git diff --check` 与目标文档 diff |
 | Core 服务、模型、队列、预设、通知协议、Apple Music 参数 | `xcodebuild -project GetOudio.xcodeproj -scheme GetOudioCoreTests -configuration Debug -derivedDataPath build/DerivedData test` |
+| Apple Music runtime、Agent、Colima/Docker、wrapper、登录或 downloader 模板 | Core tests；改动受控组件、登录或服务就绪行为后，完成签名安装，并用授权测试账号验证初始化、40020 空请求的 HTTP 400 与一首测试曲下载 |
 | Audio Bridge 录音控制、缓存、WAV、录后处理或实时管线 | Core tests、`GetOudioRecordingWidget` target build；录后处理至少覆盖首尾裁切、双声道判定、峰值不削波、全静音/损坏文件回退与原子替换；涉及真实设备链路时再进行签名安装验证 |
 | Finder Sync 菜单或分类入口 | `xcodebuild -project GetOudio.xcodeproj -target GetOudioFinderExtension -configuration Debug build CODE_SIGNING_ALLOWED=NO` |
 | App 启动、窗口、扩展嵌入、Info.plist、URL scheme、entitlements、图标或注册 | `bash script/build_and_run.sh --install` 或等价签名构建，并检查相关 `pluginkit` 注册 |

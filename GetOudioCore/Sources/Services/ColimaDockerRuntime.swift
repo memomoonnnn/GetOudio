@@ -96,6 +96,9 @@ public final class ColimaDockerRuntime {
                 arguments: [
                     "start",
                     "--runtime", "docker",
+                    "--arch", AppleMusicRuntimeManager.colimaVMArchitecture,
+                    "--vm-type", AppleMusicRuntimeManager.colimaVMType,
+                    "--vz-rosetta",
                     "--disk", "1",
                     "--root-disk", "6",
                     "--downloader", "curl",

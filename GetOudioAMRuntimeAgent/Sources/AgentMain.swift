@@ -29,6 +29,7 @@ enum GetOudioAMRuntimeAgent {
                 try await writeStatus(manager: manager)
             case "install":
                 _ = try await manager.installManagedRuntime()
+                try await wrapperRuntime(manager: manager, container: container).finalizeManagedImageUpdate(resetAuthentication: true)
                 try await writeStatus(manager: manager)
             case "uninstall":
                 try await manager.uninstallManagedRuntime()
@@ -83,6 +84,7 @@ enum GetOudioAMRuntimeAgent {
 
     private static func runDaemon(container: SharedContainer) async throws {
         let client = AppleMusicRuntimeAgentClient(container: container)
+        let loginMonitor = WrapperLoginStatusMonitor(container: container)
         DiagnosticLog.append(
             "[Agent] started pid=\(ProcessInfo.processInfo.processIdentifier) "
                 + "bundle=\(Bundle.main.bundleURL.path) "
@@ -91,7 +93,11 @@ enum GetOudioAMRuntimeAgent {
         )
         while true {
             do {
-                try await processPendingRequests(container: container, client: client)
+                try await processPendingRequests(
+                    container: container,
+                    client: client,
+                    loginMonitor: loginMonitor
+                )
             } catch {
                 DiagnosticLog.append("[Agent] request loop failed: \(error.localizedDescription)")
             }
@@ -101,7 +107,8 @@ enum GetOudioAMRuntimeAgent {
 
     private static func processPendingRequests(
         container: SharedContainer,
-        client: AppleMusicRuntimeAgentClient
+        client: AppleMusicRuntimeAgentClient,
+        loginMonitor: WrapperLoginStatusMonitor
     ) async throws {
         let directory = try client.requestDirectory()
         let requestURLs = (try FileManager.default.contentsOfDirectory(
@@ -110,12 +117,18 @@ enum GetOudioAMRuntimeAgent {
             options: [.skipsHiddenFiles]
         ))
         .filter { $0.lastPathComponent.hasSuffix(".request.json") }
-        .sorted { $0.lastPathComponent < $1.lastPathComponent }
+        .sorted {
+            let lhsDate = (try? $0.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? .distantPast
+            let rhsDate = (try? $1.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? .distantPast
+            return lhsDate == rhsDate
+                ? $0.lastPathComponent < $1.lastPathComponent
+                : lhsDate < rhsDate
+        }
 
         for requestURL in requestURLs {
             let data = try Data(contentsOf: requestURL)
             let request = try JSONDecoder().decode(AppleMusicRuntimeAgentRequestEnvelope.self, from: data)
-            let response = await handle(request, container: container)
+            let response = await handle(request, container: container, loginMonitor: loginMonitor)
             let responseURL = directory.appendingPathComponent("\(request.id.uuidString).response.json")
             try JSONEncoder().encode(response).write(to: responseURL, options: .atomic)
             try? FileManager.default.removeItem(at: requestURL)
@@ -124,7 +137,8 @@ enum GetOudioAMRuntimeAgent {
 
     private static func handle(
         _ request: AppleMusicRuntimeAgentRequestEnvelope,
-        container: SharedContainer
+        container: SharedContainer,
+        loginMonitor: WrapperLoginStatusMonitor
     ) async -> AppleMusicRuntimeAgentResponseEnvelope {
         do {
             let resourceRoot = request.resourceRootPath.map {
@@ -141,9 +155,13 @@ enum GetOudioAMRuntimeAgent {
                 return AppleMusicRuntimeAgentResponseEnvelope(id: request.id, statusReport: try await statusReport(manager: manager))
             case "install":
                 _ = try await manager.installManagedRuntime()
+                let wrapper = wrapperRuntime(manager: manager, container: container)
+                try await wrapper.finalizeManagedImageUpdate(resetAuthentication: true)
+                _ = await loginMonitor.reconcile(runtime: wrapper)
                 return AppleMusicRuntimeAgentResponseEnvelope(id: request.id, statusReport: try await statusReport(manager: manager))
             case "uninstall":
                 try await manager.uninstallManagedRuntime()
+                await loginMonitor.recordNotInitialized(message: "Apple Music 下载功能尚未启用")
                 return AppleMusicRuntimeAgentResponseEnvelope(id: request.id, statusReport: try await statusReport(manager: manager))
             case "download":
                 guard let downloadRequest = request.downloadRequest else {
@@ -159,23 +177,50 @@ enum GetOudioAMRuntimeAgent {
                 guard let initializeRequest = request.initializeRequest else {
                     throw ProcessRunnerError.processFailed("initialize 请求缺少凭据。")
                 }
-                let summary = await worker(resourceRoot: resourceRoot, manager: manager, container: container).initializeWrapper(
+                let wrapper = wrapperRuntime(manager: manager, container: container)
+                await loginMonitor.prepareForInitialization()
+                let summary = await worker(
+                    resourceRoot: resourceRoot,
+                    manager: manager,
+                    container: container,
+                    wrapperRuntime: wrapper
+                ).initializeWrapper(
                     username: initializeRequest.username,
                     password: initializeRequest.password,
                     verificationCode: initializeRequest.verificationCode,
                     useSystemProxy: initializeRequest.useSystemProxy
                 )
+                if summary.failureCount == 0 {
+                    await loginMonitor.beginMonitoring(runtime: wrapper)
+                } else {
+                    await loginMonitor.recordInitializationFailure()
+                }
                 return AppleMusicRuntimeAgentResponseEnvelope(id: request.id, summary: summary)
             case "submit-code":
                 guard let verificationRequest = request.verificationRequest else {
                     throw ProcessRunnerError.processFailed("submit-code 请求缺少验证码。")
                 }
-                let summary = await worker(resourceRoot: resourceRoot, manager: manager, container: container).submitWrapperVerificationCode(verificationRequest.code)
+                let wrapper = wrapperRuntime(manager: manager, container: container)
+                let summary = await worker(
+                    resourceRoot: resourceRoot,
+                    manager: manager,
+                    container: container,
+                    wrapperRuntime: wrapper
+                ).submitWrapperVerificationCode(verificationRequest.code)
+                if summary.failureCount == 0 {
+                    await loginMonitor.recordVerificationCodeSubmitted()
+                    await loginMonitor.beginMonitoring(runtime: wrapper)
+                } else {
+                    _ = await loginMonitor.reconcile(runtime: wrapper)
+                }
                 return AppleMusicRuntimeAgentResponseEnvelope(id: request.id, summary: summary)
             case "wrapper-status":
+                let status = await loginMonitor.reconcile(
+                    runtime: wrapperRuntime(manager: manager, container: container)
+                )
                 return AppleMusicRuntimeAgentResponseEnvelope(
                     id: request.id,
-                    wrapperLoginStatus: await wrapperRuntime(manager: manager, container: container).loginStatus()
+                    wrapperLoginStatus: status
                 )
             default:
                 throw ProcessRunnerError.processFailed("未知 Downloader Runtime Agent 命令：\(request.command)")
@@ -191,10 +236,15 @@ enum GetOudioAMRuntimeAgent {
 
     private static func statusReport(manager: AppleMusicRuntimeManager) async throws -> AppleMusicRuntimeAgentStatusReport {
         let runtime = ColimaDockerRuntime(runtimeManager: manager)
-        let imageStatus = await DockerImageManager(runtime: runtime).check(
+        let imageManager = DockerImageManager(runtime: runtime)
+        let targetImageStatus = await imageManager.check(
             .appleMusicWrapper,
             assumeAvailableWhenRuntimeStopped: manager.isEnabled
         )
+        let legacyImageStatus = targetImageStatus.isAvailable
+            ? nil
+            : await imageManager.checkLegacyImage(for: .appleMusicWrapper)
+        let imageStatus = legacyImageStatus ?? targetImageStatus
         let statuses = manager.componentStatuses(wrapperStatus: imageStatus)
         let missingCount = statuses.filter { !$0.isReady }.count
         let message = missingCount == 0 && manager.isEnabled
@@ -212,11 +262,13 @@ enum GetOudioAMRuntimeAgent {
     private static func worker(
         resourceRoot: URL?,
         manager: AppleMusicRuntimeManager,
-        container: SharedContainer
+        container: SharedContainer,
+        wrapperRuntime: AppleMusicWrapperRuntime? = nil
     ) -> AppleMusicDownloadService {
         AppleMusicDownloadService(
             componentManager: BundledComponentManager(resourceRoot: resourceRoot),
             runtimeManager: manager,
+            wrapperRuntime: wrapperRuntime,
             settingsStore: SettingsStore(container: container),
             agentClient: AppleMusicRuntimeAgentClient(container: container),
             useAgent: false
