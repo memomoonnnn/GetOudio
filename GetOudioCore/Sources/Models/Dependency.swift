@@ -132,6 +132,16 @@ public enum ManagedDockerImage: String, CaseIterable, Identifiable, Codable, Sen
             return URL(string: "https://github.com/WorldObservationLog/wrapper")!
         }
     }
+
+    public var legacyImageNames: [String] {
+        switch self {
+        case .appleMusicWrapper:
+            return [
+                "ghcr.io/itouakirai/wrapper:arm",
+                "ghcr.io/itouakirai/wrapper:x86"
+            ]
+        }
+    }
 }
 
 public struct ManagedDockerImageStatus: Codable, Identifiable, Equatable, Sendable {

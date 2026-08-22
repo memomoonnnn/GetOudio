@@ -5,7 +5,8 @@ public final class AppleMusicWrapperRuntime {
     public let image: ManagedDockerImage = .appleMusicWrapper
     static let loginContainerName = "get-oudio-wrapper-login"
     static let serverContainerName = "get-oudio-wrapper"
-    static let rollbackServerContainerName = "get-oudio-wrapper-rollback"
+    static let legacyServerContainerNames = ["get-oudio-wrapper-rollback"]
+    static let verificationCodeRelativePath = "data/com.apple.android.music/files/2fa.txt"
     private let runner: ProcessRunner
     private let runtime: ColimaDockerRuntime
     private let dockerImageManager: DockerImageManager
@@ -49,16 +50,25 @@ public final class AppleMusicWrapperRuntime {
         guard !trimmed.isEmpty else {
             return
         }
-        let fileURL = try dataDirectory().appendingPathComponent("2fa.txt")
+        let fileURL = try verificationCodeURL()
+        try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         try trimmed.write(to: fileURL, atomically: true, encoding: .utf8)
         DiagnosticLog.append("[WrapperLogin] 2FA code file written path=\(fileURL.path)")
     }
 
     func clearVerificationCode() throws {
-        let fileURL = try dataDirectory().appendingPathComponent("2fa.txt")
-        if FileManager.default.fileExists(atPath: fileURL.path) {
+        let directory = try dataDirectory()
+        let codeURLs = [
+            directory.appendingPathComponent(Self.verificationCodeRelativePath),
+            directory.appendingPathComponent("2fa.txt")
+        ]
+        for fileURL in codeURLs where FileManager.default.fileExists(atPath: fileURL.path) {
             try FileManager.default.removeItem(at: fileURL)
         }
+    }
+
+    func verificationCodeURL() throws -> URL {
+        try dataDirectory().appendingPathComponent(Self.verificationCodeRelativePath)
     }
 
     public func ensureImageAvailable() async throws {
@@ -70,6 +80,44 @@ public final class AppleMusicWrapperRuntime {
                 "Apple Music wrapper 缺失或不是当前受控版本。请在 Apple Music 设置中点击“检查并更新”。"
             )
         }
+    }
+
+    public func finalizeManagedImageUpdate(resetAuthentication: Bool = false) async throws {
+        try await ensureImageAvailable()
+        let dockerPath = try await runtime.ensureRunning()
+        let login = await loginStatus()
+        guard !login.isInProgress else {
+            DiagnosticLog.append("[WrapperServer] legacy image cleanup deferred while login is in progress")
+            return
+        }
+
+        if resetAuthentication {
+            try await removeWrapperServerContainer(dockerPath: dockerPath)
+            await removeLegacyWrapperImages(dockerPath: dockerPath)
+            try clearAuthenticationState()
+            DiagnosticLog.append("[WrapperServer] runtime update reset initialization state; rootfs/data preserved")
+            return
+        }
+
+        let existingImage = try await runner.run(
+            executablePath: dockerPath,
+            arguments: runtime.dockerArguments(["inspect", "-f", "{{.Config.Image}}", Self.serverContainerName]),
+            environment: runtime.runtimeEnvironment
+        )
+
+        if existingImage.succeeded,
+           existingImage.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines) != image.imageName {
+            guard (await loginStatus()).isAuthenticated else {
+                DiagnosticLog.append("[WrapperServer] legacy container cleanup deferred because authentication is not confirmed")
+                return
+            }
+            try await removeWrapperServerContainer(dockerPath: dockerPath)
+            await removeLegacyWrapperImages(dockerPath: dockerPath)
+            try await ensureServerRunning()
+            return
+        }
+
+        await removeLegacyWrapperImages(dockerPath: dockerPath)
     }
 
     public func initialize(
@@ -230,7 +278,7 @@ public final class AppleMusicWrapperRuntime {
                 ]),
                 environment: runtime.runtimeEnvironment
             )
-            let codeURL = try dataDirectory().appendingPathComponent("2fa.txt")
+            let codeURL = try verificationCodeURL()
             DiagnosticLog.append(
                 "[WrapperLogin][\(stage)] state=\(sanitized(state.standardOutput + state.standardError)) "
                     + "2faExists=\(FileManager.default.fileExists(atPath: codeURL.path)) "
@@ -299,16 +347,20 @@ public final class AppleMusicWrapperRuntime {
         isRunning: Bool,
         hasCompletedMarker: Bool
     ) -> AppleMusicWrapperLoginStatus {
-        if hasCompletedMarker || logs.contains("response type 6") {
+        let hasReadyKeyServer = logs.contains("[+] account info cached successfully")
+            && logs.contains("[!] listening key request on 0.0.0.0:40020")
+        if hasCompletedMarker || logs.contains("response type 6") || hasReadyKeyServer {
             return AppleMusicWrapperLoginStatus(phase: .authenticated, message: "初始化已完成")
         }
-        if logs.contains("login failed") || logs.contains("response type 4") {
+        if logs.contains("login failed")
+            || logs.contains("response type 4")
+            || logs.contains("Failed to get 2FA Code") {
             return AppleMusicWrapperLoginStatus(phase: .failed, message: "登录失败，可以重新初始化")
         }
-        if logs.contains("Code file detected! Logging in") {
+        if isRunning, logs.contains("Code file detected! Logging in") {
             return AppleMusicWrapperLoginStatus(phase: .authenticating, message: "验证码已提交，正在验证")
         }
-        if logs.contains("2FA: true") || logs.contains("Waiting for input") {
+        if isRunning, logs.contains("2FA: true") || logs.contains("Waiting for input") {
             return AppleMusicWrapperLoginStatus(
                 phase: .waitingForVerificationCode,
                 message: "已发送验证码，请输入后提交"
@@ -359,7 +411,6 @@ public final class AppleMusicWrapperRuntime {
             ]),
             environment: runtime.runtimeEnvironment
         )
-        var hasRollbackContainer = false
         if inspect.succeeded {
             let status = inspect.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines)
             let existingImage = try await runner.run(
@@ -370,7 +421,8 @@ public final class AppleMusicWrapperRuntime {
             if existingImage.succeeded,
                existingImage.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines) == image.imageName {
                 if status == "running" {
-                    try await verifyServerPortMappings(dockerPath: dockerPath)
+                    try await verifyServerReadiness(dockerPath: dockerPath)
+                    await removeLegacyWrapperImages(dockerPath: dockerPath)
                     return
                 }
 
@@ -380,7 +432,8 @@ public final class AppleMusicWrapperRuntime {
                     environment: runtime.runtimeEnvironment
                 )
                 if start.succeeded {
-                    try await verifyServerPortMappings(dockerPath: dockerPath)
+                    try await verifyServerReadiness(dockerPath: dockerPath)
+                    await removeLegacyWrapperImages(dockerPath: dockerPath)
                     DiagnosticLog.append("[WrapperServer] existing container started name=\(Self.serverContainerName) previousStatus=\(status)")
                     return
                 }
@@ -389,22 +442,8 @@ public final class AppleMusicWrapperRuntime {
                         + "previousStatus=\(status) stderr=\(sanitized(start.standardError))"
                 )
             }
-            _ = try? await runner.run(
-                executablePath: dockerPath,
-                arguments: runtime.dockerArguments(["stop", Self.serverContainerName]),
-                environment: runtime.runtimeEnvironment
-            )
-            _ = try? await runner.run(
-                executablePath: dockerPath,
-                arguments: runtime.dockerArguments(["rm", "-f", Self.rollbackServerContainerName]),
-                environment: runtime.runtimeEnvironment
-            )
-            let rename = try await runner.run(
-                executablePath: dockerPath,
-                arguments: runtime.dockerArguments(["rename", Self.serverContainerName, Self.rollbackServerContainerName]),
-                environment: runtime.runtimeEnvironment
-            )
-            hasRollbackContainer = rename.succeeded
+            try await removeWrapperServerContainer(dockerPath: dockerPath)
+            await removeLegacyWrapperImages(dockerPath: dockerPath)
         }
 
         let runtimeDirectory = try runtimeDirectory()
@@ -421,9 +460,10 @@ public final class AppleMusicWrapperRuntime {
                 environment: self.runtime.runtimeEnvironment
             )
             guard result.succeeded else {
-                throw ProcessRunnerError.executableNotFound(result.standardError.isEmpty ? "Apple Music wrapper container" : result.standardError)
+                throw ProcessRunnerError.processFailed(result.standardError.isEmpty ? "Apple Music wrapper container 启动失败" : result.standardError)
             }
-            try await verifyServerPortMappings(dockerPath: dockerPath)
+            try await verifyServerReadiness(dockerPath: dockerPath)
+            await removeLegacyWrapperImages(dockerPath: dockerPath)
             DiagnosticLog.append("[WrapperServer] started managed image=\(image.imageName)")
         } catch {
             _ = try? await runner.run(
@@ -431,18 +471,6 @@ public final class AppleMusicWrapperRuntime {
                 arguments: runtime.dockerArguments(["rm", "-f", Self.serverContainerName]),
                 environment: runtime.runtimeEnvironment
             )
-            if hasRollbackContainer {
-                _ = try? await runner.run(
-                    executablePath: dockerPath,
-                    arguments: runtime.dockerArguments(["rename", Self.rollbackServerContainerName, Self.serverContainerName]),
-                    environment: runtime.runtimeEnvironment
-                )
-                _ = try? await runner.run(
-                    executablePath: dockerPath,
-                    arguments: runtime.dockerArguments(["start", Self.serverContainerName]),
-                    environment: runtime.runtimeEnvironment
-                )
-            }
             throw error
         }
     }
@@ -468,6 +496,67 @@ public final class AppleMusicWrapperRuntime {
         return arguments
     }
 
+    func keyServerHealthCheckArguments() -> [String] {
+        [
+            "--silent",
+            "--show-error",
+            "--output", "/dev/null",
+            "--write-out", "%{http_code}",
+            "--max-time", "3",
+            "http://127.0.0.1:40020/"
+        ]
+    }
+
+    private func verifyServerReadiness(dockerPath: String) async throws {
+        try await verifyServerPortMappings(dockerPath: dockerPath)
+        var lastDetail = "40020 尚未开始监听"
+
+        for attempt in 1...15 {
+            let state = try await runner.run(
+                executablePath: dockerPath,
+                arguments: runtime.dockerArguments([
+                    "inspect", "-f", "{{.State.Running}}", Self.serverContainerName
+                ]),
+                environment: runtime.runtimeEnvironment
+            )
+            let isRunning = state.succeeded
+                && state.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines) == "true"
+            if isRunning {
+                let health = try await runner.run(
+                    executablePath: "/usr/bin/curl",
+                    arguments: keyServerHealthCheckArguments()
+                )
+                let statusCode = health.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines)
+                if health.succeeded, statusCode == "400" {
+                    return
+                }
+                let detail = health.standardError.isEmpty ? statusCode : health.standardError
+                lastDetail = detail.isEmpty ? "40020 返回非预期响应" : detail
+            } else {
+                lastDetail = "wrapper 容器未运行"
+            }
+
+            if attempt < 15 {
+                try await Task.sleep(nanoseconds: 1_000_000_000)
+            }
+        }
+
+        let logs = try? await runner.run(
+            executablePath: dockerPath,
+            arguments: runtime.dockerArguments(["logs", "--tail", "120", Self.serverContainerName]),
+            environment: runtime.runtimeEnvironment
+        )
+        let logOutput = logs.map { $0.standardOutput + $0.standardError } ?? ""
+        if logOutput.localizedCaseInsensitiveContains("Account must sign in")
+            || logOutput.localizedCaseInsensitiveContains("token invalid or expired") {
+            try? clearAuthenticationState()
+            throw ProcessRunnerError.processFailed("Apple Music 登录已失效，请重新初始化。")
+        }
+        let logSummary = wrapperLogSummary(logOutput)
+        let detail = logSummary.isEmpty ? lastDetail : logSummary
+        throw ProcessRunnerError.processFailed("Apple Music wrapper 的 40020 key server 未就绪：\(sanitized(detail))")
+    }
+
     private func verifyServerPortMappings(dockerPath: String) async throws {
         let result = try await runner.run(
             executablePath: dockerPath,
@@ -484,12 +573,64 @@ public final class AppleMusicWrapperRuntime {
         }
     }
 
+    private func removeLegacyWrapperImages(dockerPath: String) async {
+        for containerName in Self.legacyServerContainerNames {
+            do {
+                let result = try await runner.run(
+                    executablePath: dockerPath,
+                    arguments: runtime.dockerArguments(["rm", "-f", containerName]),
+                    environment: runtime.runtimeEnvironment
+                )
+                if result.succeeded {
+                    DiagnosticLog.append("[WrapperServer] removed legacy container=\(containerName)")
+                }
+            } catch {
+                DiagnosticLog.append("[WrapperServer] legacy container cleanup failed container=\(containerName) error=\(error.localizedDescription)")
+            }
+        }
+
+        for legacyImageName in image.legacyImageNames {
+            do {
+                let result = try await runner.run(
+                    executablePath: dockerPath,
+                    arguments: runtime.dockerArguments(["image", "rm", "-f", legacyImageName]),
+                    environment: runtime.runtimeEnvironment
+                )
+                if result.succeeded {
+                    DiagnosticLog.append("[WrapperServer] removed legacy image=\(legacyImageName)")
+                }
+            } catch {
+                DiagnosticLog.append("[WrapperServer] legacy image cleanup failed image=\(legacyImageName) error=\(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func removeWrapperServerContainer(dockerPath: String) async throws {
+        let result = try await runner.run(
+            executablePath: dockerPath,
+            arguments: runtime.dockerArguments(["rm", "-f", Self.serverContainerName]),
+            environment: runtime.runtimeEnvironment
+        )
+        guard result.succeeded || result.standardError.localizedCaseInsensitiveContains("No such container") else {
+            throw ProcessRunnerError.processFailed(
+                result.standardError.isEmpty ? result.standardOutput : result.standardError
+            )
+        }
+        DiagnosticLog.append("[WrapperServer] removed existing service container before managed image start")
+    }
+
     private func dataDirectory(in runtimeDirectory: URL) -> URL {
         runtimeDirectory.appendingPathComponent("rootfs/data", isDirectory: true)
     }
 
     private var loginCompletedMarkerURL: URL {
         runtimeManager.wrapperDataDirectory.appendingPathComponent(".login-completed")
+    }
+
+    public func clearAuthenticationState() throws {
+        if FileManager.default.fileExists(atPath: loginCompletedMarkerURL.path) {
+            try FileManager.default.removeItem(at: loginCompletedMarkerURL)
+        }
     }
 
     private func markAuthenticationCompleted() throws {

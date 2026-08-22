@@ -29,6 +29,7 @@ enum GetOudioAMRuntimeAgent {
                 try await writeStatus(manager: manager)
             case "install":
                 _ = try await manager.installManagedRuntime()
+                try await wrapperRuntime(manager: manager, container: container).finalizeManagedImageUpdate(resetAuthentication: true)
                 try await writeStatus(manager: manager)
             case "uninstall":
                 try await manager.uninstallManagedRuntime()
@@ -141,6 +142,7 @@ enum GetOudioAMRuntimeAgent {
                 return AppleMusicRuntimeAgentResponseEnvelope(id: request.id, statusReport: try await statusReport(manager: manager))
             case "install":
                 _ = try await manager.installManagedRuntime()
+                try await wrapperRuntime(manager: manager, container: container).finalizeManagedImageUpdate(resetAuthentication: true)
                 return AppleMusicRuntimeAgentResponseEnvelope(id: request.id, statusReport: try await statusReport(manager: manager))
             case "uninstall":
                 try await manager.uninstallManagedRuntime()
@@ -191,10 +193,15 @@ enum GetOudioAMRuntimeAgent {
 
     private static func statusReport(manager: AppleMusicRuntimeManager) async throws -> AppleMusicRuntimeAgentStatusReport {
         let runtime = ColimaDockerRuntime(runtimeManager: manager)
-        let imageStatus = await DockerImageManager(runtime: runtime).check(
+        let imageManager = DockerImageManager(runtime: runtime)
+        let targetImageStatus = await imageManager.check(
             .appleMusicWrapper,
             assumeAvailableWhenRuntimeStopped: manager.isEnabled
         )
+        let legacyImageStatus = targetImageStatus.isAvailable
+            ? nil
+            : await imageManager.checkLegacyImage(for: .appleMusicWrapper)
+        let imageStatus = legacyImageStatus ?? targetImageStatus
         let statuses = manager.componentStatuses(wrapperStatus: imageStatus)
         let missingCount = statuses.filter { !$0.isReady }.count
         let message = missingCount == 0 && manager.isEnabled

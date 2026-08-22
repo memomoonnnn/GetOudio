@@ -14,7 +14,7 @@ Vorbis 使用 `libvorbis`、Ogg muxer、`.ogg` 和 `-q:a 3/6/10`。Opus 使用 `
 
 内嵌 downloader 必须通过 `bash script/build_apple_music_downloader.sh` 从相邻 fork 构建同步；需要其他源码路径时使用 `APPLE_MUSIC_DOWNLOADER_SOURCE=/path/to/source`。脚本目标为 `darwin/arm64`、`CGO_ENABLED=0`，使用 `go build -trimpath -ldflags="-s -w"`，并使用 `build/apple-music-downloader/` 下的专用 Go caches。不得用上游默认产物手工替换，也不得提交 fork 源码、module cache 或中间产物。
 
-替换后二进制至少检查 `go version -m`、`otool -L` 和文件体积，确认来源、目标架构、无 CGO 依赖且仅依赖 macOS 系统库；随后运行 Core tests，重点覆盖 `AppleMusicDownloadFormat`、`AppleMusicDownloadService.downloaderArguments` 和进度解析。
+替换后二进制至少检查 `go version -m`、`otool -L` 和文件体积，确认来源、目标架构、无 CGO 依赖且仅依赖 macOS 系统库；随后运行 Core tests，重点覆盖 `AppleMusicDownloadFormat`、`AppleMusicDownloadService.downloaderArguments` 和进度解析。涉及 `runv4` 或模板解密时，内嵌二进制、`config.yaml.template` 与受控 wrapper 修订必须作为同一发布组合验证：模板须启用 `template-decrypt` 并指向 40020 key server，签名安装后以授权测试账号完成初始化、40020 空请求 HTTP 400 和一首测试曲下载，不能只凭二进制构建成功发布。
 
 ## Icons
 
