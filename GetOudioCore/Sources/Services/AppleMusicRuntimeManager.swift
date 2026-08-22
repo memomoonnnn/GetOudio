@@ -257,12 +257,18 @@ public final class AppleMusicRuntimeManager {
 
     public func componentStatuses(wrapperStatus: ManagedDockerImageStatus? = nil) -> [AppleMusicRuntimeComponentStatus] {
         let downloaderStatus = BundledComponentManager(resourceRoot: resourceRoot).check(.appleMusicDownloader)
+        let wrapperRuntimeDirectory = Self.defaultVMStateRootURL.path
         let wrapper = wrapperStatus.map {
-            managedStatus(component: .wrapperImage, isInstalled: $0.isAvailable, resolvedPath: nil, detail: $0.detail)
+            managedStatus(
+                component: .wrapperImage,
+                isInstalled: $0.isAvailable,
+                resolvedPath: wrapperRuntimeDirectory,
+                detail: $0.detail
+            )
         } ?? AppleMusicRuntimeComponentStatus(
             component: .wrapperImage,
             isReady: false,
-            resolvedPath: nil,
+            resolvedPath: wrapperRuntimeDirectory,
             detail: "启用并初始化 Apple Music 后安装",
             targetVersion: Self.wrapperVersion,
             updateState: .missing

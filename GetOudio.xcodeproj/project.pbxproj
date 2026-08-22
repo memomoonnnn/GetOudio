@@ -66,6 +66,7 @@
 		915F26D681FDC2E5CA3D9B83 /* DependencyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88FFAF2F427E7BBA50C57633 /* DependencyManager.swift */; };
 		91E4AFF82D841A7EC3CAEE5C /* FileCategory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4092C290A220FE1E53D899C9 /* FileCategory.swift */; };
 		93C6BE7D8BA717C02E07961C /* GetOudioCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 49BFF2708ED14CF05FA36161 /* GetOudioCore.framework */; };
+		94B503FAF86BD08AE270224D /* WrapperLoginStatusMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7087533764B2069EFD8E9423 /* WrapperLoginStatusMonitor.swift */; };
 		9592ABD5238190A0FECF2673 /* AppleMusicRuntimeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9C68E3D12622013AF3CB161 /* AppleMusicRuntimeManager.swift */; };
 		9842A7C37AD50688EED63C16 /* RecordingWAVWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7A6DA16595F336C14E58DFD /* RecordingWAVWriter.swift */; };
 		995A3254ABC5325D7D583905 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D84480E867AAD02E3F55067 /* main.swift */; };
@@ -271,6 +272,7 @@
 		6687368FC009B08493D049E3 /* ShareEventQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareEventQueue.swift; sourceTree = "<group>"; };
 		6BE0DC2B93928C094187FC44 /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
 		7085A54F704E59442755202F /* NormalLauncher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NormalLauncher.swift; sourceTree = "<group>"; };
+		7087533764B2069EFD8E9423 /* WrapperLoginStatusMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WrapperLoginStatusMonitor.swift; sourceTree = "<group>"; };
 		7277FA0381ED5023AA2D587E /* NCMFileIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = NCMFileIcon.icns; sourceTree = "<group>"; };
 		730C0C3FEA5DE504A597E570 /* AppleMusicShareDownloadCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleMusicShareDownloadCoordinator.swift; sourceTree = "<group>"; };
 		74D3AADF75639B9295A0B4BF /* AppConstants.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConstants.swift; sourceTree = "<group>"; };
@@ -608,6 +610,7 @@
 			isa = PBXGroup;
 			children = (
 				F194F1D1BF8520F04C51A8C1 /* AgentMain.swift */,
+				7087533764B2069EFD8E9423 /* WrapperLoginStatusMonitor.swift */,
 			);
 			path = Sources;
 			sourceTree = "<group>";
@@ -1030,6 +1033,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				3629BE86D263E7B1F003F248 /* AgentMain.swift in Sources */,
+				94B503FAF86BD08AE270224D /* WrapperLoginStatusMonitor.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

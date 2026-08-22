@@ -219,8 +219,6 @@ public final class AppleMusicWrapperRuntime {
                 + "mount=\(mount) image=\(image.imageName) "
                 + "proxy=\(useSystemProxy ? (systemProxyURL()?.absoluteString ?? "unavailable") : "direct")"
         )
-        startLoginDiagnosticsMonitor()
-        startLoginCompletionMonitor()
         return result
     }
 
@@ -342,6 +340,20 @@ public final class AppleMusicWrapperRuntime {
         }
     }
 
+    public func stopLoginAttempt() async {
+        do {
+            let dockerPath = try await runtime.ensureRunning()
+            _ = try await runner.run(
+                executablePath: dockerPath,
+                arguments: runtime.dockerArguments(["rm", "-f", Self.loginContainerName]),
+                environment: runtime.runtimeEnvironment
+            )
+            DiagnosticLog.append("[WrapperLogin] stopped timed-out login container")
+        } catch {
+            DiagnosticLog.append("[WrapperLogin] failed to stop timed-out login container: \(error.localizedDescription)")
+        }
+    }
+
     static func loginStatus(
         logs: String,
         isRunning: Bool,
@@ -349,11 +361,12 @@ public final class AppleMusicWrapperRuntime {
     ) -> AppleMusicWrapperLoginStatus {
         let hasReadyKeyServer = logs.contains("[+] account info cached successfully")
             && logs.contains("[!] listening key request on 0.0.0.0:40020")
-        if hasCompletedMarker || logs.contains("response type 6") || hasReadyKeyServer {
+        if hasCompletedMarker || (isRunning && hasReadyKeyServer) {
             return AppleMusicWrapperLoginStatus(phase: .authenticated, message: "初始化已完成")
         }
         if logs.contains("login failed")
-            || logs.contains("response type 4")
+            || logs.contains("auth failed: response type")
+            || logs.contains("auth error:")
             || logs.contains("Failed to get 2FA Code") {
             return AppleMusicWrapperLoginStatus(phase: .failed, message: "登录失败，可以重新初始化")
         }
@@ -370,29 +383,6 @@ public final class AppleMusicWrapperRuntime {
             return AppleMusicWrapperLoginStatus(phase: .starting, message: "正在登录并等待 Apple 响应")
         }
         return AppleMusicWrapperLoginStatus(phase: .failed, message: "登录容器已停止，可以重新初始化")
-    }
-
-    private func startLoginDiagnosticsMonitor() {
-        Task {
-            var previousDelay: UInt64 = 0
-            for delay: UInt64 in [2, 10, 30, 60] {
-                try? await Task.sleep(nanoseconds: (delay - previousDelay) * 1_000_000_000)
-                await logLoginDiagnostics(stage: "\(delay)s")
-                previousDelay = delay
-            }
-        }
-    }
-
-    private func startLoginCompletionMonitor() {
-        Task {
-            for _ in 0..<120 {
-                try? await Task.sleep(nanoseconds: 500_000_000)
-                let status = await loginStatus()
-                if status.isAuthenticated || status.phase == .failed {
-                    return
-                }
-            }
-        }
     }
 
     public func ensureServerRunning() async throws {

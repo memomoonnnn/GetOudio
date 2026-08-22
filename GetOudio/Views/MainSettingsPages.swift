@@ -779,7 +779,7 @@ struct AppleMusicSettingsPage: View {
                     .buttonStyle(.borderedProminent)
                     .disabled(
                         !viewModel.isAppleMusicDownloadEnabled
-                            || viewModel.isInitializingAppleMusicWrapper
+                            || viewModel.isSendingAppleMusicInitializationRequest
                             || viewModel.appleMusicWrapperLoginStatus.isInProgress
                             || viewModel.appleMusicWrapperLoginStatus.isAuthenticated
                             || username.isEmpty
@@ -813,8 +813,8 @@ struct AppleMusicSettingsPage: View {
                         .controlSize(.small)
                 }
 
-                if !viewModel.appleMusicActionMessage.isEmpty {
-                    Text(viewModel.appleMusicActionMessage)
+                if !viewModel.appleMusicInitializationMessage.isEmpty {
+                    Text(viewModel.appleMusicInitializationMessage)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .padding(.vertical, 2)

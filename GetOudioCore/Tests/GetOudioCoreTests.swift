@@ -1268,11 +1268,6 @@ final class GetOudioCoreTests: XCTestCase {
     }
 
     func testAppleMusicWrapperLoginStatusRecognizesAuthenticationAndFailure() {
-        let authenticated = AppleMusicWrapperRuntime.loginStatus(
-            logs: "[.] response type 6",
-            isRunning: true,
-            hasCompletedMarker: false
-        )
         let keyServerReady = AppleMusicWrapperRuntime.loginStatus(
             logs: "[+] account info cached successfully\n[!] listening key request on 0.0.0.0:40020",
             isRunning: true,
@@ -1284,17 +1279,52 @@ final class GetOudioCoreTests: XCTestCase {
             hasCompletedMarker: false
         )
         let failed = AppleMusicWrapperRuntime.loginStatus(
-            logs: "[.] response type 4\n[!] login failed",
+            logs: "[!] auth failed: response type 4\n[!] login failed",
             isRunning: false,
             hasCompletedMarker: false
         )
+        let legacySuccessMarkerOnly = AppleMusicWrapperRuntime.loginStatus(
+            logs: "[.] response type 6",
+            isRunning: true,
+            hasCompletedMarker: false
+        )
 
-        XCTAssertTrue(authenticated.isAuthenticated)
-        XCTAssertFalse(authenticated.canSubmitVerificationCode)
         XCTAssertTrue(keyServerReady.isAuthenticated)
         XCTAssertEqual(cachedOnly.phase, .starting)
         XCTAssertEqual(failed.phase, .failed)
         XCTAssertFalse(failed.isInProgress)
+        XCTAssertEqual(legacySuccessMarkerOnly.phase, .starting)
+    }
+
+    func testAppleMusicWrapperVerificationCodeSubmissionIsInProgressButCannotBeSubmittedTwice() {
+        let status = AppleMusicWrapperLoginStatus(
+            phase: .verificationCodeSubmitted,
+            message: "验证码已写入，等待 wrapper 读取"
+        )
+
+        XCTAssertTrue(status.isInProgress)
+        XCTAssertFalse(status.canSubmitVerificationCode)
+    }
+
+    func testAppleMusicWrapperLoginSnapshotStoreOnlyAdvancesForChangedStatus() throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = AppleMusicWrapperLoginSnapshotStore(rootURL: root)
+        let waiting = AppleMusicWrapperLoginStatus(
+            phase: .waitingForVerificationCode,
+            message: "已发送验证码，请输入后提交"
+        )
+        let first = try store.saveIfChanged(waiting)
+        let unchanged = try store.saveIfChanged(waiting)
+        let authenticating = try store.saveIfChanged(AppleMusicWrapperLoginStatus(
+            phase: .authenticating,
+            message: "验证码已提交，正在验证"
+        ))
+
+        XCTAssertEqual(first.revision, 1)
+        XCTAssertEqual(unchanged.revision, first.revision)
+        XCTAssertEqual(authenticating.revision, 2)
+        XCTAssertEqual(store.snapshot(), authenticating)
     }
 
     func testAppleMusicWrapperLoginStatusPrefersPersistedCompletionMarker() {
@@ -1749,6 +1779,22 @@ final class GetOudioCoreTests: XCTestCase {
         XCTAssertTrue(readyIDs.contains(.lima))
         XCTAssertTrue(readyIDs.contains(.gpac))
         XCTAssertEqual(statuses.first { $0.component == .gpac }?.resolvedPath, manager.mp4BoxURL.path)
+        XCTAssertEqual(
+            statuses.first { $0.component == .wrapperImage }?.resolvedPath,
+            AppleMusicRuntimeManager.defaultVMStateRootURL.path
+        )
+
+        let wrapperStatuses = manager.componentStatuses(
+            wrapperStatus: ManagedDockerImageStatus(
+                image: .appleMusicWrapper,
+                isAvailable: true,
+                detail: "wrapper image ready"
+            )
+        )
+        XCTAssertEqual(
+            wrapperStatuses.first { $0.component == .wrapperImage }?.resolvedPath,
+            AppleMusicRuntimeManager.defaultVMStateRootURL.path
+        )
     }
 
     func testManagedRuntimeReceiptStatesAndArtifactHash() throws {
