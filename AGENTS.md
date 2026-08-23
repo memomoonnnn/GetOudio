@@ -1,77 +1,58 @@
 # AGENTS.md
 
-本文件是 AI Agent 修改本仓库时必须先读的根级操作指南。它只保留全仓库护栏、任务路由和验证入口；专项实现约束位于 `docs/agent-guides/`，开始相关任务前必须读取对应文件，并以当前 `project.yml`、源码和脚本为最终真源，不得用本文或历史经验替代现场检查。
+本文件是修改本仓库前必须阅读的根级指南。它只定义项目结构、跨域护栏、复用规则、任务路由和验证入口；具体行为约束在 `docs/agent-guides/`。始终以当前 `project.yml`、源码和脚本为真源，不得以本文或历史记录替代现场检查。
 
-## Project Overview
+## 项目结构与复用
 
-Get Oudio 是 XcodeGen 驱动的 macOS 原生音频工具。`GetOudioCore` 承载模型、服务、队列、共享容器和进程执行；Finder Sync、Share Extension、Open With 与录音 Widget 只接收系统输入并转交后台；`HeadlessRunner` 负责日常转换，`RecordingRunner` 负责 Pro Tools Audio Bridge 实时录音，独立的 `GetOudioAMRuntimeAgent` 管理 Apple Music runtime。直接启动 App 才显示设置窗口，其他入口应保持无窗口、无 Dock 干扰。
+| 位置 | 职责 |
+| --- | --- |
+| `GetOudioCore/` | 跨进程模型、服务、共享容器、设置、队列、路径和进程执行的唯一归属。 |
+| `GetOudio/` | 普通 App 的启动路由、设置模型和 SwiftUI 视图；日常转换由 `HeadlessRunner`，录音由 `RecordingRunner`。 |
+| `GetOudioAMRuntimeAgent/` | 受控 Apple Music runtime 及其下载任务。 |
+| `GetOudioFinderExtension/`、`GetOudioShareExtension/`、`GetOudioRecordingWidget/` | 仅接收系统输入、写共享状态并唤醒后台，不执行转换、下载或实时音频。 |
+| `script/` 与 `project.yml` | 构建、安装和 target 定义；`project.yml` 是 XcodeGen 真源。 |
 
-## Source of Truth and Boundaries
+Core 的 `Models` 定义领域值和协议，`Services` 承担流程与副作用，`Support` 放共享基础设施；App 的 `App` 放生命周期和 runner，`Models` 放页面协调，`Views` 放展示与局部交互。跨页面 UI 原语放在既有 `SettingsUI.swift` 等共享视图文件，不能把服务、队列或权限调用塞进 View。
 
-可修改源码主要位于 `GetOudio/`、`GetOudioCore/`、`GetOudioAMRuntimeAgent/`、`GetOudioFinderExtension/`、`GetOudioShareExtension/`、`GetOudioRecordingWidget/`、`script/` 和 `project.yml`。涉及 target、sources、resources、Info.plist 注入、entitlements、签名或构建设置时，`project.yml` 是真源，修改后运行 `xcodegen generate`；`GetOudio.xcodeproj/project.pbxproj` 和 `build/` 是生成或本地输出，不能反向当作源码真源。
+新增内容前先搜索上述目录和关联测试，优先扩展现有模型、服务、共享机制、组件、交互和术语。跨 target 的状态、路径、协议、权限、队列和进程执行必须进入 Core；仅属于单一入口的适配留在该入口。不得创建平行的 `UserDefaults`、文件路径、任务队列、runner、状态副本或只转发属性/方法的包装层。
 
-不得碰触 `.git/`、与当前任务无关的未提交改动、用户 App Group 数据、Apple Music 输出目录、Keychain 凭据或任务范围外的第三方二进制。文件系统和共享设置统一经 `SharedContainer` 与基于其 suite defaults 构造的 `SettingsStore`，不得在调用点创建 `UserDefaults(suiteName:)`、拼接 `Library/Group Containers` 路径、以 `.standard` 或普通 Application Support 静默降级。新增网络、虚拟化、App Group、文件访问或 Hardened Runtime 能力时必须同步检查对应 target 的 entitlements，不能通过关闭沙盒或移除安全作用域访问绕过权限。
+新增 UI 或交互前先检查同类设置页、`SettingsUI.swift`、`SettingsDocumentationView.swift` 和 `MainView.swift`。重复使用卡片、间距、说明、侧栏、注意力高亮和交互状态的既有模式；只有行为会被多个页面或入口复用时，才抽到共享 View/Modifier/模型。不得为局部页面重新定义已有视觉语言、完成状态或导航机制。
 
-代码改动保持小范围且按职责落位：业务行为优先进入 Core 的 Models/Services 或对应入口源码，进程执行复用 `ProcessRunner` 或现有 runtime 服务，跨进程常量和共享路径进入 Core Support。Extension 只分类、入队、写共享事件和唤醒后台；设置窗口只负责设置；转换、通知派发、下载和 Docker 操作必须由后台 runner 或 Agent 执行。不要为了拆文件增加只转发属性或方法的浅层包装，也不要把 UI 状态、队列消费、权限和进程调用重新揉进一个视图或大 view model。
+## 全局边界
 
-App Bundle 只携带精简 `ffmpeg`、`ncmdump` 和 `apple-music-downloader`。Docker CLI、Colima、Lima、GPAC/MP4Box 与 wrapper 镜像必须由 AM Runtime Agent 安装到 managed runtime，不得塞回 App Bundle，也不得改用用户系统里的 Homebrew、Docker Desktop、Colima 或 GPAC。外部 Runtime 组件的目标修订、制品哈希、安装方式和 receipt 以 Core 规格为真源：状态刷新不得联网或安装，只有用户发起的“检查并更新”可改变组件。下载、登录或本地 Runtime 操作进行时，安装、更新和卸载必须在 UI 与模型方法两层由同一门禁拒绝，并说明当前不可执行原因。Apple Silicon 必须通过 Agent 管理的 Colima VZ + Rosetta 运行受控 `linux/amd64` wrapper，禁止回退到可变上游镜像标签或用户 QEMU；wrapper 更新先删除旧服务和旧镜像，不提供跨修订回滚，但必须保留 `rootfs/data`，并在更新成功后只清除 `.login-completed` 初始化标记、引导用户重新初始化。服务容器必须显式映射 10020、20020、30020、40020；容器持续运行且 40020 空请求返回预期 HTTP 400 前不得调用 downloader。内嵌 downloader 的源码由相邻专用 fork `../apple-music-downloader-get-oudio` 维护，本仓库只保存构建产物与 `config.yaml.template`；其模板解密配置必须保持 `template-decrypt: true`、`key-server: 127.0.0.1:40020` 和 account 端口 30020。
+可修改源码主要位于上述目录及 `project.yml`。修改 target、sources、resources、Info.plist 注入、entitlements、签名或构建设置时，修改 `project.yml` 并运行 `xcodegen generate`；`GetOudio.xcodeproj/project.pbxproj` 和 `build/` 是生成或本地输出，不能反向作为真源。
 
-需要用户完成设置时，统一以 Core 的 `SettingsAttentionItem` 标识；完成状态保留在其所属设置的真源中，`SettingsAttentionState.outstandingItems` 只据此派生侧栏红点和当前页待高亮项，不得另存一份红点状态。新增项必须同时定义完成判定、`MainSidebarItem` 映射和目标卡片的 `SettingsAttentionPulseOverlay`；说明类还必须列入 `SettingsAttentionState` 的说明项集合，并仅在用户首次展开 `MarkdownDocumentView` 时由 `SettingsStore.openedSettingsDocumentationItems` 持久化，不能把显示或滚动到说明视为已查看。遮罩必须执行有限的显式亮起/熄灭阶段，结束、任务取消或视图消失时均无动画清除，不能以重复动画叠加独立结束计时。
+不得修改 `.git/`、无关未提交改动、用户 App Group 数据、Apple Music 输出、Keychain 凭据或任务范围外的第三方二进制。App Group 固定为 `group.com.shengjiacheng.GetOudio`；文件系统和共享设置只能经 `SharedContainer` 及其 suite defaults 构造的 `SettingsStore` 访问。`SharedContainer.production()` 失败必须作为可观察错误终止当前入口；`diagnostic(rootURL:defaults:)` 仅用于测试或显式 Debug，Release 不得响应其环境变量，容器解析失败时只写系统日志。新增网络、虚拟化、App Group、文件访问或 Hardened Runtime 能力时，必须同步检查对应 target 的 entitlements，不能以关闭沙盒或移除安全作用域绕过权限。
 
-跨进程定向仍使用 `SettingsAttentionRequestStore` 的 120 秒、消费一次请求，后台和无窗口入口经 `SettingsAttentionLauncher` 启动独立的普通 App 实例，再由 `NormalLauncher`、`MainView` 和目标设置卡片完成页面定位；它不保存完成状态。不得由 HeadlessRunner 或 Extension 直接创建设置窗口，也不得用无关通知代替配置引导。系统权限请求（如麦克风 `AVCaptureDevice.requestAccess`）仍由对应入口直接发起，不属于设置引导。Apple Music Share 缺少 runtime 时引导至“依赖安装”，runtime 就绪但未完成登录时引导至“初始化”，只有其他运行故障才发送中性不可用通知。
+凭据不得写入 UserDefaults、日志、配置文件或命令诊断输出。完成类通知写入 `NotificationEventQueue`，由 `NotificationService.dispatchPendingNotificationEvents()` 统一派发；所有本地通知标题固定为 `Get Oudio`，差异写入正文。
 
-## Audio Bridge Recording
+## 专项指南路由
 
-录音 Widget 只打开 `getoudio://recording/toggle`；`RecordingControlCoordinator` 经 `RecordingControlStore` 原子预约会话、写命令并监督独立的 `RecordingRunner`，不得让 Widget、设置窗口或普通启动实例持有音频单元。录音 Runner 使用用户保存的设备 UID 绑定输入 AUHAL，将 `DefaultOutputDevice` 暂时切到所选 `Pro Tools Audio Bridge 2-A/2-B`，同时把监听 AUHAL 绑定到切换前的播放设备；不得修改 `DefaultSystemOutputDevice`。macOS 输出和 DAW 输入使用同一 2-A 或 2-B 是 Pro Tools Audio Bridge 的正常用法，不能因为这一拓扑而强制改为双 Bridge。
-
-输入回调、监听回调不得分配内存、写磁盘、写日志、调度主线程或等待信号量；实时错误只写入预分配的原子状态，由 Runner 健康检查统一停止和记录。监听环形缓冲的欠载、丢帧及输入回调/PCM 静音状态必须保留为诊断数据；静音是合法信号，不能自动停止录音。若日志出现 `input health` 的“无回调”或“所有 PCM 块静音”，即使设备仍显示可用，也应先在“音频 MIDI 设置”打开并刷新该 Bridge 的输入/输出页，再判断路由或代码是否有问题。
-
-录后处理只适用于本录音器已完成的 24-bit PCM WAV/RF64 成品，由 Core 的 `RecordingPostProcessor` 流式扫描和写入；不得在实时回调中处理，也不得改用 ffmpeg、AVFoundation 离线效果或任意格式的通用解码路径。`RecordingPostProcessingOptions` 经 `SettingsStore` 的 suite defaults 持久化：开启“去除头尾的无声片段”或“峰值标准化”任一项即处理，无总开关；静音阈值限定 `-90...0 dBFS`、额外垫付限定 `0...1000 ms`，默认分别为 `-50 dBFS` 与 `150 ms`，标准化峰值固定为 `-0.1 dBFS`。裁切仅移除两端所有声道均低于阈值的帧，不得触碰中间静音；处理必须在 WAV finalize、默认媒体输出恢复后进行，先写缓存目录内暂存文件并验证后再原子替换缓存成品。默认缓存位于 App Group；用户指定缓存位置时，直接管理该目录内的录音 WAV，并以 security-scoped bookmark 维持访问，设置页必须提醒用户专门为 Get Oudio 新建缓存文件夹。全程静音、非受支持 WAV/RF64 或任何处理/替换失败时必须保留原始 WAV，并把回退原因带入完成通知。
-
-## File and Folder Access
-
-Finder Sync 的 `directoryURLs` 只决定菜单可见范围；新建 Finder 授权由 `SettingsStore.finderDirectoryAuthorizations` 保存授权根及其覆盖的已配置目录，移除目录时只撤销 Finder 来源的关联，最后一个关联移除后才删除该授权根。`directoryBookmarks` 是默认打开方式和既有安装的兼容授权来源；不得自动删除或把它改写为 Finder 授权。`finderDirectoryURLs` 只保存界面配置路径，只有 `DirectoryChooser` 或等价的用户文件选择操作返回的目录才能由 `FinderDirectorySettingsModel` 写入授权；不得根据旧路径、默认目录或已持久化路径静默伪造授权。设置页统一称为“文件/文件夹访问权限”：添加文件夹时保存所选文件夹的 bookmark；“重置”要求用户在原生面板确认一个覆盖默认桌面、文稿、下载、影片和音乐文件夹的祖先目录，再恢复默认列表并保存该祖先 bookmark，不能要求用户逐项移除后重新添加。默认打开方式的 `DirectoryAccessAuthorizer` 同样只能要求用户选择源文件夹或其祖先；`ScopedJobAccess` 可以持有祖先作用域，但 `outputDirectoryURL` 始终是输入文件的父目录，不能因祖先授权而把转换结果改写到授权根。`NCMOutputMode` 必须使用 Core 枚举；NCM 自定义输出只恢复 `ncmCustomOutputBookmarkData`，不复用通用授权。所有 NCM、音频转码与媒体提取在调用工具前都应检查实际输出目录可访问且可写；ncmdump 即使退出码为 0，也必须确认匹配的输出音频已新增或更新后才能报告成功。
-
-## Required Task Guides
-
-开始任务前按改动面读取下列指南；跨多个改动面时读取所有相关文件。
+开始任务前按改动面阅读下列指南；跨多个改动面时全部阅读。
 
 | 改动面 | 必读指南 |
 | --- | --- |
-| 启动路由、Open With、设置模型、设置窗口、Dock 或 SwiftUI/AppKit 布局 | `docs/agent-guides/app-architecture-and-ui.md` |
-| Finder Sync、Share Extension、格式分类、默认打开方式或外置磁盘权限 | `docs/agent-guides/system-integrations.md` |
-| Apple Music runtime、Agent、Colima/Docker、wrapper、下载、代理、凭据或通知事件 | `docs/agent-guides/apple-music-runtime.md` |
-| ffmpeg、转码预设、图标或内嵌 apple-music-downloader 构建 | `docs/agent-guides/bundled-tools-and-assets.md` |
-| 构建、测试、安装、日志、插件注册或已知诊断陷阱 | `docs/agent-guides/validation-and-troubleshooting.md` |
+| 启动路由、Open With、Dock、无窗口执行或 runner | `docs/agent-guides/launch-and-execution.md` |
+| 设置模型、设置页面、注意力引导、窗口或 SwiftUI/AppKit 布局 | `docs/agent-guides/settings-and-window-ui.md` |
+| Audio Bridge、录音 Widget、WAV、缓存或录后处理 | `docs/agent-guides/recording.md` |
+| Finder Sync、文件授权、格式分类或默认打开方式 | `docs/agent-guides/finder-and-open-with.md` |
+| Share Extension 的激活、输入解析或宿主可见性 | `docs/agent-guides/share-extension.md` |
+| Apple Music 组件安装、更新、卸载或 Colima/Lima | `docs/agent-guides/apple-music-runtime-components.md` |
+| wrapper、登录、验证码、代理、容器或 40020 就绪状态 | `docs/agent-guides/apple-music-wrapper-and-login.md` |
+| Apple Music 下载、JSONL、Agent 或通知队列 | `docs/agent-guides/apple-music-download-and-notifications.md` |
+| 转码预设、ffmpeg 或音频格式能力 | `docs/agent-guides/conversion-tools.md` |
+| 内嵌 `apple-music-downloader` 构建或替换 | `docs/agent-guides/apple-music-downloader-build.md` |
+| 主图标、Share 图标或 Icon Composer | `docs/agent-guides/icons.md` |
+| 通用构建模式、日志机制或诊断环境 | `docs/agent-guides/validation.md` |
 
-## Global Constraints
+## 验证与提交
 
-App Group 标识固定为 `group.com.shengjiacheng.GetOudio`。任务队列、共享设置、launch marker、诊断日志、通知事件和 Apple Music runtime 必须通过共享容器或 suite defaults 访问。`SharedContainer.production()` 缺少 App Group URL 或 suite defaults 时应抛出可观察错误并关闭当前入口；`diagnostic(rootURL:defaults:)` 只用于测试或显式 Debug 诊断，Release 不得响应 `GET_OUDIO_DIAGNOSTIC_SHARED_CONTAINER_ROOT`。容器解析失败时先写系统日志，不得调用依赖同一容器的 `DiagnosticLog`。
+验证必须匹配改动面：Core 服务、模型、队列、预设、通知协议或 Apple Music 参数运行 `xcodebuild -project GetOudio.xcodeproj -scheme GetOudioCoreTests -configuration Debug -derivedDataPath build/DerivedData test`；Finder Sync 改动构建该 target；安装、签名、Info.plist、entitlements、图标、URL scheme 或扩展嵌入使用 `bash script/build_and_run.sh --install` 并检查相关 `pluginkit` 注册。录音和 Apple Music runtime 的额外验收要求见对应专项指南。不得将 `swift test`、`swift build` 或 `Package.swift` 当作默认入口。
 
-凭据不得写入 UserDefaults、日志、配置文件或命令诊断输出。完成类通知不得依赖正在等待的窗口或客户端进程，应写入 `NotificationEventQueue`，再由 `NotificationService.dispatchPendingNotificationEvents()` 统一派发；Apple Music Share 下载由 Agent 执行，完成后由 Agent 写事件并唤醒主 App/headless 路径。新增任何用户可见的本地通知横幅时，标题必须固定为 `Get Oudio`，状态或操作差异写入正文，不得以标题区分。
+提交前运行 `git status --short`，排除用户已有改动、`build/`、`.DS_Store` 和无关生成差异。除非用户明确要求，不要提交或暂存。
 
-Apple Music downloader 的机器协议是 stdout-exclusive 的 `--events=jsonl`：Core 只以结构化事件更新状态，未知总量不得伪造百分比，`item_started` 和阶段切换也不得自行生成进度横幅；共享进度仅在下载器真实 `progress` 心跳到达时推进通知版本并转发一次。下载阶段显示百分比，解密和元数据阶段使用明确的状态文案，避免把阶段内百分比误作整体下载进度；`run_completed` 的成功/失败曲数才是完成汇总真源。Apple Music 的格式选择和完成通知播放提醒音，其余通知静音；失败完成通知只显示汇总和“复制错误信息”操作，具体报告经通知响应写入剪贴板，不得直接塞入横幅正文。
+## AGENTS 文档维护
 
-`conversion-log.txt` 是用户可选的调试日志，默认关闭；开关由设置页“授权/关于”中的“高级”卡片展示，并通过 `DiagnosticSettingsModel` 写入 `SettingsStore.isDebugLoggingEnabled`。所有新增诊断必须复用 `DiagnosticLog.configure(container:)` 和 `DiagnosticLog.append(_:level:)`，不得直接向该文件使用 `FileHandle`、`Data.write` 或其他旁路写入，也不得在调用点读取或创建 UserDefaults。普通诊断默认是 `.debug`，仅汇总性的转换结果可标记为 `.info`；无论级别为何，开关关闭时不得创建或追加该文件，原有文件仅保留不增长。不得在轮询、菜单频繁刷新、进度回调、音频实时回调或其他高频路径逐次写日志；应记录一次性的状态转换、聚合结果，或先以原子状态累积后由非实时健康检查限频输出。
+收到“更新 AGENTS.md”或同类指令时，先判断规则的最窄归属：跨仓库结构、复用、数据安全、任务路由或验证入口才更新本文件；领域实现约束更新相应专项指南。规则必须同时是已在当前源码、测试或已完成验收中证实的、可长期复用的、能改变后续实现或验证决策的内容；否则不写入，并说明无需形成持久规则。
 
-必须保留 `GetOudio/Resources/AppIcon.icon` 这一 Icon Composer 源资产。不得替换成手工 `.icns`、静态 `AppIcon.appiconset` 或构建位图；源码 Info.plist 只维护 `CFBundleIconName = AppIcon`。Share Extension 独立使用 `GetOudioShareExtension/Resources/icon.icns`，不得让它编译主 App 图标源。
-
-## Validation Matrix
-
-验证范围必须与改动面匹配；不要默认运行沙箱内 unsigned 完整 App 构建，因为它容易把 AppIcon、签名和安装噪声混入无关判断。
-
-| 改动面 | 最低验证 |
-| --- | --- |
-| 纯文档 | `git diff --check` 与目标文档 diff |
-| Core 服务、模型、队列、预设、通知协议、Apple Music 参数 | `xcodebuild -project GetOudio.xcodeproj -scheme GetOudioCoreTests -configuration Debug -derivedDataPath build/DerivedData test` |
-| Apple Music runtime、Agent、Colima/Docker、wrapper、登录或 downloader 模板 | Core tests；改动受控组件、登录或服务就绪行为后，完成签名安装，并用授权测试账号验证初始化、40020 空请求的 HTTP 400 与一首测试曲下载 |
-| Audio Bridge 录音控制、缓存、WAV、录后处理或实时管线 | Core tests、`GetOudioRecordingWidget` target build；录后处理至少覆盖首尾裁切、双声道判定、峰值不削波、全静音/损坏文件回退与原子替换；涉及真实设备链路时再进行签名安装验证 |
-| Finder Sync 菜单或分类入口 | `xcodebuild -project GetOudio.xcodeproj -target GetOudioFinderExtension -configuration Debug build CODE_SIGNING_ALLOWED=NO` |
-| App 启动、窗口、扩展嵌入、Info.plist、URL scheme、entitlements、图标或注册 | `bash script/build_and_run.sh --install` 或等价签名构建，并检查相关 `pluginkit` 注册 |
-| 本地 unsigned 启动诊断 | `bash script/build_and_run.sh`；启动验证使用 `bash script/build_and_run.sh --verify` |
-
-本仓库不是 SwiftPM 项目，没有统一格式化命令；不得把 `swift test`、`swift build` 或 `Package.swift` 当作默认入口。沙箱内 XCTest 若仅因 `com.apple.testmanagerd.control` 被拒绝而失败，应在非沙箱环境用同一命令复验后再判断代码失败。更具体的命令、日志和验收条件见专项指南。
-
-## Before Commit
-
-提交前运行 `git status --short`，确认只有本任务改动；尤其不要带入用户已有更改、`build/`、`.DS_Store` 或无关生成工程差异。修改 `project.yml` 后运行 `xcodegen generate` 并核对生成结果；替换二进制、修改通知协议或安装相关行为时，必须完成对应专项指南中的附加验证。除非用户明确要求，不要提交或暂存改动。
+不得记录一次性调试过程、临时环境状态、未验证推测、版本事件、故障复盘或与当前代码脱节的参数。每条规则只保留一个权威位置；迁移规则时先写入目标指南再删除旧副本，避免根级摘要与专项细节并存。文档修改后运行 `git diff --check`，并检查改动只覆盖必要内容。
