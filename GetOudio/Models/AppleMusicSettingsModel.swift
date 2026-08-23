@@ -26,7 +26,6 @@ final class AppleMusicSettingsModel: ObservableObject {
     private let appleMusicAgentClient: AppleMusicRuntimeAgentClient
     private let appleMusicDownloadService: AppleMusicDownloadService
     private let appleMusicAgentLauncher = AppleMusicRuntimeAgentLauncher.shared
-    private var runtimeProgressTask: Task<Void, Never>?
     private var latestAppleMusicWrapperLoginSnapshotRevision: UInt64 = 0
 
     init(container: SharedContainer, store: SettingsStore) {
@@ -49,9 +48,11 @@ final class AppleMusicSettingsModel: ObservableObject {
     }
 
     var isAppleMusicRuntimeUpdateBlocked: Bool {
-        isAppleMusicRuntimeBusy
-            || canStopAppleMusicDownload
-            || appleMusicWrapperLoginStatus.isInProgress
+        !appleMusicRuntimeOperationAvailability.isAvailable
+    }
+
+    var appleMusicRuntimeOperationBlockedMessage: String {
+        appleMusicRuntimeOperationAvailability.blockedMessage
     }
 
     var appleMusicInitializationMessage: String {
@@ -115,14 +116,13 @@ final class AppleMusicSettingsModel: ObservableObject {
 
     func enableAppleMusicRuntime() async {
         guard !isAppleMusicRuntimeUpdateBlocked else {
-            appleMusicRuntimeMessage = "请先完成当前 Apple Music 下载或登录，再检查并更新 Runtime。"
+            appleMusicRuntimeMessage = appleMusicRuntimeOperationBlockedMessage
             return
         }
         isManagingAppleMusicRuntime = true
         appleMusicRuntimeMessage = isAppleMusicDownloadEnabled
             ? "正在通过 Downloader Runtime Agent 检查并更新 Runtime..."
             : "正在通过 Downloader Runtime Agent 安装 Runtime..."
-        startRuntimeProgressPolling()
         do {
             try await appleMusicAgentLauncher.ensureRunning()
             let report = try await appleMusicAgentClient.install()
@@ -133,14 +133,16 @@ final class AppleMusicSettingsModel: ObservableObject {
         } catch {
             appleMusicRuntimeMessage = "Downloader Runtime 安装失败：\(error.localizedDescription)"
         }
-        stopRuntimeProgressPolling()
         isManagingAppleMusicRuntime = false
     }
 
     func uninstallAppleMusicRuntime() async {
+        guard !isAppleMusicRuntimeUpdateBlocked else {
+            appleMusicRuntimeMessage = appleMusicRuntimeOperationBlockedMessage
+            return
+        }
         isManagingAppleMusicRuntime = true
         appleMusicRuntimeMessage = "正在卸载 Downloader Runtime..."
-        startRuntimeProgressPolling()
         do {
             try await appleMusicAgentLauncher.ensureRunning()
             let report = try await appleMusicAgentClient.uninstall()
@@ -151,7 +153,6 @@ final class AppleMusicSettingsModel: ObservableObject {
         } catch {
             appleMusicRuntimeMessage = "Downloader Runtime 卸载失败：\(error.localizedDescription)"
         }
-        stopRuntimeProgressPolling()
         isManagingAppleMusicRuntime = false
     }
 
@@ -259,36 +260,12 @@ final class AppleMusicSettingsModel: ObservableObject {
         }
     }
 
-    private func startRuntimeProgressPolling() {
-        runtimeProgressTask?.cancel()
-        runtimeProgressTask = Task { [weak self] in
-            while !Task.isCancelled {
-                guard let appleMusicAgentClient = self?.appleMusicAgentClient else {
-                    return
-                }
-                let progress = await Task.detached {
-                    appleMusicAgentClient.progress()
-                }.value
-                await MainActor.run {
-                    self?.appleMusicRuntimeProgress = progress
-                    if progress?.isActive == true, let statuses = progress?.statuses {
-                        self?.appleMusicRuntimeStatuses = statuses
-                    }
-                    if let progress, progress.isActive {
-                        self?.appleMusicRuntimeMessage = progress.message
-                    }
-                }
-                try? await Task.sleep(nanoseconds: 300_000_000)
-            }
-        }
-    }
-
-    private func stopRuntimeProgressPolling() {
-        runtimeProgressTask?.cancel()
-        runtimeProgressTask = nil
-        appleMusicRuntimeProgress = appleMusicAgentClient.progress()
-        if appleMusicRuntimeProgress?.isActive == true, let statuses = appleMusicRuntimeProgress?.statuses {
-            appleMusicRuntimeStatuses = statuses
-        }
+    private var appleMusicRuntimeOperationAvailability: AppleMusicRuntimeOperationAvailability {
+        AppleMusicRuntimeOperationAvailability(
+            isManagingRuntime: isManagingAppleMusicRuntime,
+            isRefreshingRuntimeStatus: isRefreshingAppleMusicRuntimeStatus,
+            progress: appleMusicRuntimeProgress,
+            loginStatus: appleMusicWrapperLoginStatus
+        )
     }
 }

@@ -5,6 +5,7 @@ public final class SettingsStore {
     public enum Keys {
         public static let enabledPresetIDs = "enabledPresetIDs"
         public static let finderDirectoryPaths = "finderDirectoryPaths"
+        public static let finderDirectoryAuthorizations = "finderDirectoryAuthorizations"
         public static let directoryBookmarks = "directoryBookmarks"
         public static let ncmOutputMode = "ncmOutputMode"
         public static let ncmCustomOutputPath = "ncmCustomOutputPath"
@@ -63,9 +64,16 @@ public final class SettingsStore {
         }
     }
 
-    public var ncmOutputMode: String {
-        get { defaults.string(forKey: Keys.ncmOutputMode) ?? "sourceDirectory" }
-        set { defaults.set(newValue, forKey: Keys.ncmOutputMode) }
+    public var ncmOutputMode: NCMOutputMode {
+        get {
+            let mode = defaults.string(forKey: Keys.ncmOutputMode)
+                .flatMap(NCMOutputMode.init(rawValue:)) ?? .sourceDirectory
+            if defaults.string(forKey: Keys.ncmOutputMode) != mode.rawValue {
+                defaults.set(mode.rawValue, forKey: Keys.ncmOutputMode)
+            }
+            return mode
+        }
+        set { defaults.set(newValue.rawValue, forKey: Keys.ncmOutputMode) }
     }
 
     public var ncmCustomOutputURL: URL? {
@@ -85,7 +93,6 @@ public final class SettingsStore {
     public func setNCMCustomOutputDirectory(_ directoryURL: URL) throws {
         ncmCustomOutputURL = directoryURL
         ncmCustomOutputBookmarkData = try DirectoryAccess.bookmarkData(for: directoryURL)
-        try storeDirectoryBookmark(for: directoryURL)
     }
 
     public func ncmCustomOutputAccess() throws -> SecurityScopedDirectoryAccess {
@@ -98,10 +105,23 @@ public final class SettingsStore {
 
     public func directoryBookmarkData(for directoryURL: URL) -> Data? {
         let targetPath = Self.normalizedDirectoryPath(for: directoryURL)
-        return directoryBookmarks
+        let genericBookmark = directoryBookmarks
             .filter { path, _ in targetPath == path || targetPath.hasPrefix(path + "/") }
-            .max { $0.key.count < $1.key.count }?
-            .value
+            .max { $0.key.count < $1.key.count }
+        let finderBookmark = finderDirectoryAuthorizations
+            .filter { $0.covers(targetPath) }
+            .max { $0.rootPath.count < $1.rootPath.count }
+
+        switch (genericBookmark, finderBookmark) {
+        case let (.some(generic), .some(finder)):
+            return generic.key.count >= finder.rootPath.count ? generic.value : finder.bookmarkData
+        case let (.some(generic), .none):
+            return generic.value
+        case let (.none, .some(finder)):
+            return finder.bookmarkData
+        case (.none, .none):
+            return nil
+        }
     }
 
     public func storeDirectoryBookmark(for directoryURL: URL) throws {
@@ -109,6 +129,52 @@ public final class SettingsStore {
         var bookmarks = directoryBookmarks
         bookmarks[path] = try DirectoryAccess.bookmarkData(for: directoryURL)
         defaults.set(bookmarks, forKey: Keys.directoryBookmarks)
+    }
+
+    public func storeFinderDirectoryAuthorizations(for directoryURLs: [URL]) throws {
+        let paths = Array(Set(directoryURLs.map(Self.normalizedDirectoryPath(for:))))
+        let newAuthorizations = try paths.map { path in
+            let directoryURL = URL(fileURLWithPath: path, isDirectory: true)
+            return FinderDirectoryAuthorization(
+                rootPath: path,
+                bookmarkData: try DirectoryAccess.bookmarkData(for: directoryURL),
+                authorizedDirectoryPaths: [path]
+            )
+        }
+        var authorizations = finderDirectoryAuthorizations
+        for newAuthorization in newAuthorizations {
+            if let index = authorizations.firstIndex(where: { $0.rootPath == newAuthorization.rootPath }) {
+                authorizations[index].authorizedDirectoryPaths.formUnion(newAuthorization.authorizedDirectoryPaths)
+                authorizations[index].bookmarkData = newAuthorization.bookmarkData
+            } else {
+                authorizations.append(newAuthorization)
+            }
+        }
+        saveFinderDirectoryAuthorizations(authorizations)
+    }
+
+    public func replaceFinderDirectoryAuthorizations(
+        authorizationRoot: URL,
+        directories: [URL]
+    ) throws {
+        let rootPath = Self.normalizedDirectoryPath(for: authorizationRoot)
+        let directoryPaths = Set(directories.map(Self.normalizedDirectoryPath(for:)))
+        let authorization = FinderDirectoryAuthorization(
+            rootPath: rootPath,
+            bookmarkData: try DirectoryAccess.bookmarkData(for: authorizationRoot),
+            authorizedDirectoryPaths: directoryPaths
+        )
+        saveFinderDirectoryAuthorizations([authorization])
+    }
+
+    public func removeFinderDirectoryAuthorization(for directoryURL: URL) {
+        let path = Self.normalizedDirectoryPath(for: directoryURL)
+        let authorizations = finderDirectoryAuthorizations.compactMap { authorization -> FinderDirectoryAuthorization? in
+            var authorization = authorization
+            authorization.authorizedDirectoryPaths.remove(path)
+            return authorization.authorizedDirectoryPaths.isEmpty ? nil : authorization
+        }
+        saveFinderDirectoryAuthorizations(authorizations)
     }
 
     public var appleMusicOutputURL: URL {
@@ -255,7 +321,34 @@ public final class SettingsStore {
         }
     }
 
+    private var finderDirectoryAuthorizations: [FinderDirectoryAuthorization] {
+        guard let data = defaults.data(forKey: Keys.finderDirectoryAuthorizations) else {
+            return []
+        }
+        return (try? JSONDecoder().decode([FinderDirectoryAuthorization].self, from: data)) ?? []
+    }
+
+    private func saveFinderDirectoryAuthorizations(_ authorizations: [FinderDirectoryAuthorization]) {
+        let sorted = authorizations.sorted { $0.rootPath < $1.rootPath }
+        defaults.set(try? JSONEncoder().encode(sorted), forKey: Keys.finderDirectoryAuthorizations)
+    }
+
     private static func normalizedDirectoryPath(for url: URL) -> String {
         url.standardizedFileURL.resolvingSymlinksInPath().path
+    }
+}
+
+private struct FinderDirectoryAuthorization: Codable, Equatable {
+    var rootPath: String
+    var bookmarkData: Data
+    var authorizedDirectoryPaths: Set<String>
+
+    func covers(_ targetPath: String) -> Bool {
+        guard targetPath == rootPath || targetPath.hasPrefix(rootPath + "/") else {
+            return false
+        }
+        return authorizedDirectoryPaths.contains { path in
+            targetPath == path || targetPath.hasPrefix(path + "/")
+        }
     }
 }

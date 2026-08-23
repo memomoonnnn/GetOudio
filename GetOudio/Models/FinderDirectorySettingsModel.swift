@@ -27,12 +27,12 @@ final class FinderDirectorySettingsModel: ObservableObject {
 
     func removeFinderDirectories(at offsets: IndexSet) {
         for index in offsets.sorted(by: >) {
-            finderDirectories.remove(at: index)
+            removeFinderDirectory(finderDirectories[index])
         }
-        saveFinderDirectories()
     }
 
     func removeFinderDirectory(_ url: URL) {
+        store.removeFinderDirectoryAuthorization(for: url)
         finderDirectories.removeAll { $0 == url }
         saveFinderDirectories()
     }
@@ -61,7 +61,10 @@ final class FinderDirectorySettingsModel: ObservableObject {
         }
 
         do {
-            try store.storeDirectoryBookmark(for: authorizationRoot)
+            try store.replaceFinderDirectoryAuthorizations(
+                authorizationRoot: authorizationRoot,
+                directories: defaultDirectories
+            )
             finderDirectories = defaultDirectories
             saveFinderDirectories(message: "已重置默认文件/文件夹访问权限；重启 Finder 后生效。")
         } catch {
@@ -72,7 +75,7 @@ final class FinderDirectorySettingsModel: ObservableObject {
     private func appendFinderDirectories(_ urls: [URL]) {
         guard !urls.isEmpty else { return }
         do {
-            try urls.forEach { try store.storeDirectoryBookmark(for: $0) }
+            try store.storeFinderDirectoryAuthorizations(for: urls)
         } catch {
             finderDirectoryMessage = "无法保存文件/文件夹访问权限：\(error.localizedDescription)"
             return

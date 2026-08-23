@@ -43,7 +43,7 @@ public final class NCMConversionService {
 
                 let customOutputAccess: SecurityScopedDirectoryAccess?
                 let outputDirectory: URL
-                if settingsStore.ncmOutputMode == "customDirectory" {
+                if settingsStore.ncmOutputMode == .customDirectory {
                     let outputAccess = try settingsStore.ncmCustomOutputAccess()
                     customOutputAccess = outputAccess
                     outputDirectory = outputAccess.directoryURL

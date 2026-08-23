@@ -4,7 +4,7 @@ import GetOudioCore
 
 @MainActor
 final class NCMSettingsModel: ObservableObject {
-    @Published var ncmOutputMode: String
+    @Published var ncmOutputMode: NCMOutputMode
     @Published var ncmCustomOutputURL: URL?
 
     private let store: SettingsStore
@@ -15,8 +15,8 @@ final class NCMSettingsModel: ObservableObject {
         ncmCustomOutputURL = store.ncmCustomOutputURL
     }
 
-    func setNCMOutputMode(_ mode: String) {
-        guard mode != "customDirectory" || store.ncmCustomOutputBookmarkData != nil else {
+    func setNCMOutputMode(_ mode: NCMOutputMode) {
+        guard mode != .customDirectory || store.ncmCustomOutputBookmarkData != nil else {
             chooseNCMOutputDirectory()
             return
         }
@@ -29,7 +29,7 @@ final class NCMSettingsModel: ObservableObject {
         do {
             try store.setNCMCustomOutputDirectory(url)
             ncmCustomOutputURL = url
-            setNCMOutputMode("customDirectory")
+            setNCMOutputMode(.customDirectory)
         } catch {
             DiagnosticLog.append("ncm custom output authorization failed \(error.localizedDescription)", level: .error)
         }

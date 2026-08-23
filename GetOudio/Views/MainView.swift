@@ -4,6 +4,7 @@ import SwiftUI
 
 struct MainView: View {
     @StateObject private var settingsViewModel: SettingsViewModel
+    @ObservedObject private var attentionState: SettingsAttentionState
     @State private var selection: MainSidebarItem? = .overview
     @State private var attentionPresentation = SettingsAttentionPresentation.none
     private let checkForUpdates: () -> Void
@@ -13,7 +14,9 @@ struct MainView: View {
         initialSettingsAttention: SettingsAttentionItem? = nil,
         checkForUpdates: @escaping () -> Void
     ) {
-        _settingsViewModel = StateObject(wrappedValue: SettingsViewModel(container: container))
+        let settingsViewModel = SettingsViewModel(container: container)
+        _settingsViewModel = StateObject(wrappedValue: settingsViewModel)
+        _attentionState = ObservedObject(wrappedValue: settingsViewModel.attentionState)
         _selection = State(initialValue: Self.initialSelection(for: initialSettingsAttention))
         _attentionPresentation = State(initialValue: SettingsAttentionPresentation(
             items: initialSettingsAttention.map { [$0] } ?? [],
@@ -56,10 +59,10 @@ struct MainView: View {
             guard attentionPresentation.highlightRequestID == 0 else { return }
             select(selection ?? .overview)
         }
-        .onChange(of: outstandingAttentionItems) {
+        .onChange(of: attentionState.outstandingItems) {
             guard let selection else { return }
             attentionPresentation = SettingsAttentionPresentation(
-                items: outstandingAttentionItems.filter { $0.sidebarItem == selection },
+                items: attentionState.outstandingItems.filter { $0.sidebarItem == selection },
                 highlightRequestID: attentionPresentation.highlightRequestID + 1,
                 scrollTarget: nil
             )
@@ -101,7 +104,7 @@ struct MainView: View {
                             MainSidebarRow(
                                 item: item,
                                 isSelected: (selection ?? .overview) == item,
-                                hasAttention: outstandingAttentionItems.contains { $0.sidebarItem == item }
+                                hasAttention: attentionState.outstandingItems.contains { $0.sidebarItem == item }
                             )
                         }
                         .buttonStyle(.plain)
@@ -132,26 +135,26 @@ struct MainView: View {
                 presetSettings: settingsViewModel.presetSettings,
                 defaultOpenWithSettings: settingsViewModel.defaultOpenWithSettings,
                 attention: attentionPresentation,
-                markDocumentationOpened: settingsViewModel.markSettingsDocumentationOpened
+                markDocumentationOpened: attentionState.markDocumentationOpened
             )
         case .ncm:
             NCMSettingsPage(
                 ncmSettings: settingsViewModel.ncmSettings,
                 defaultOpenWithSettings: settingsViewModel.defaultOpenWithSettings,
                 attention: attentionPresentation,
-                markDocumentationOpened: settingsViewModel.markSettingsDocumentationOpened
+                markDocumentationOpened: attentionState.markDocumentationOpened
             )
         case .appleMusic:
             AppleMusicSettingsPage(
                 viewModel: settingsViewModel.appleMusicSettings,
                 attention: attentionPresentation,
-                markDocumentationOpened: settingsViewModel.markSettingsDocumentationOpened
+                markDocumentationOpened: attentionState.markDocumentationOpened
             )
         case .recording:
             RecordingSettingsPage(
                 viewModel: settingsViewModel.recordingSettings,
                 attention: attentionPresentation,
-                markDocumentationOpened: settingsViewModel.markSettingsDocumentationOpened
+                markDocumentationOpened: attentionState.markDocumentationOpened
             )
         }
     }
@@ -159,7 +162,7 @@ struct MainView: View {
     private func select(_ item: MainSidebarItem) {
         selection = item
         attentionPresentation = SettingsAttentionPresentation(
-            items: outstandingAttentionItems.filter { $0.sidebarItem == item },
+            items: attentionState.outstandingItems.filter { $0.sidebarItem == item },
             highlightRequestID: attentionPresentation.highlightRequestID + 1,
             scrollTarget: nil
         )
@@ -172,37 +175,6 @@ struct MainView: View {
             highlightRequestID: attentionPresentation.highlightRequestID + 1,
             scrollTarget: item
         )
-    }
-
-    private var outstandingAttentionItems: Set<SettingsAttentionItem> {
-        var items: Set<SettingsAttentionItem> = []
-        let recording = settingsViewModel.recordingSettings
-        let appleMusic = settingsViewModel.appleMusicSettings
-
-        if !recording.microphoneAuthorized {
-            items.insert(.microphonePermission)
-        }
-        if !recording.hasConfiguredInput {
-            items.insert(.recordingInput)
-        }
-        for item in SettingsAttentionItem.documentationItems where !settingsViewModel.hasOpenedSettingsDocumentation(item) {
-            items.insert(item)
-        }
-
-        let dependenciesNeedAttention = !appleMusic.isAppleMusicDownloadEnabled
-            || (appleMusic.hasLoadedAppleMusicRuntimeStatus && (
-                appleMusic.appleMusicRuntimeStatuses.isEmpty
-                    || appleMusic.appleMusicRuntimeStatuses.contains {
-                        !$0.isReady || $0.updateState == .updateAvailable || $0.updateState == .legacy
-                    }
-            ))
-        if dependenciesNeedAttention {
-            items.insert(.appleMusicDependencies)
-        } else if appleMusic.hasLoadedAppleMusicRuntimeStatus,
-                  !appleMusic.appleMusicWrapperLoginStatus.isAuthenticated {
-            items.insert(.appleMusicInitialization)
-        }
-        return items
     }
 
     private static func initialSelection(for item: SettingsAttentionItem?) -> MainSidebarItem {
@@ -360,13 +332,6 @@ private enum MainSidebarItem: String, CaseIterable, Identifiable {
 }
 
 private extension SettingsAttentionItem {
-    static let documentationItems: Set<SettingsAttentionItem> = [
-        .transcodingDocumentation,
-        .ncmDocumentation,
-        .appleMusicDocumentation,
-        .recordingDocumentation
-    ]
-
     var sidebarItem: MainSidebarItem {
         switch self {
         case .microphonePermission:

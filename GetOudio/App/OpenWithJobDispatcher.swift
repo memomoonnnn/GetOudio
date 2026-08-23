@@ -29,7 +29,7 @@ final class OpenWithJobDispatcher {
     }
 
     func enqueueNCMJobs(urls: [URL]) -> Bool {
-        if settingsStore.ncmOutputMode == "sourceDirectory",
+        if settingsStore.ncmOutputMode == .sourceDirectory,
            !ensureSourceDirectoryAccess(for: urls) {
             return false
         }

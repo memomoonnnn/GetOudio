@@ -824,18 +824,77 @@ final class GetOudioCoreTests: XCTestCase {
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
         let store = SettingsStore(defaults: defaults)
-        store.ncmOutputMode = "customDirectory"
+        store.ncmOutputMode = .customDirectory
         store.ncmCustomOutputURL = URL(fileURLWithPath: "/tmp/NCM", isDirectory: true)
         store.appleMusicOutputURL = URL(fileURLWithPath: "/tmp/AppleMusic", isDirectory: true)
         store.appleMusicDownloadFormat = .atmos
         store.isAppleMusicDownloadEnabled = true
 
         let reloaded = SettingsStore(defaults: defaults)
-        XCTAssertEqual(reloaded.ncmOutputMode, "customDirectory")
+        XCTAssertEqual(reloaded.ncmOutputMode, .customDirectory)
         XCTAssertEqual(reloaded.ncmCustomOutputURL?.path, "/tmp/NCM")
         XCTAssertEqual(reloaded.appleMusicOutputURL.path, "/tmp/AppleMusic")
         XCTAssertEqual(reloaded.appleMusicDownloadFormat, .atmos)
         XCTAssertTrue(reloaded.isAppleMusicDownloadEnabled)
+    }
+
+    func testSettingsStoreFallsBackFromUnknownNCMOutputMode() {
+        let suiteName = "GetOudioCoreTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defaults.set("unsupported", forKey: SettingsStore.Keys.ncmOutputMode)
+
+        let store = SettingsStore(defaults: defaults)
+
+        XCTAssertEqual(store.ncmOutputMode, .sourceDirectory)
+        XCTAssertEqual(defaults.string(forKey: SettingsStore.Keys.ncmOutputMode), NCMOutputMode.sourceDirectory.rawValue)
+    }
+
+    func testFinderAuthorizationRemovalRevokesOnlyFinderSource() throws {
+        let suiteName = "GetOudioCoreTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        let root = try makeTemporaryDirectory()
+        defer {
+            try? FileManager.default.removeItem(at: root)
+            defaults.removePersistentDomain(forName: suiteName)
+        }
+        let finderDirectory = root.appendingPathComponent("Finder", isDirectory: true)
+        let genericDirectory = root.appendingPathComponent("Generic", isDirectory: true)
+        try FileManager.default.createDirectory(at: finderDirectory, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: genericDirectory, withIntermediateDirectories: true)
+        let store = SettingsStore(defaults: defaults)
+
+        try store.storeFinderDirectoryAuthorizations(for: [finderDirectory])
+        XCTAssertNotNil(store.directoryBookmarkData(for: finderDirectory.appendingPathComponent("track.mp3")))
+        store.removeFinderDirectoryAuthorization(for: finderDirectory)
+        XCTAssertNil(store.directoryBookmarkData(for: finderDirectory.appendingPathComponent("track.mp3")))
+
+        try store.storeDirectoryBookmark(for: genericDirectory)
+        try store.storeFinderDirectoryAuthorizations(for: [genericDirectory])
+        store.removeFinderDirectoryAuthorization(for: genericDirectory)
+        XCTAssertNotNil(store.directoryBookmarkData(for: genericDirectory.appendingPathComponent("track.mp3")))
+    }
+
+    func testFinderAuthorizationRootRemainsUntilItsLastDirectoryIsRemoved() throws {
+        let suiteName = "GetOudioCoreTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        let root = try makeTemporaryDirectory()
+        defer {
+            try? FileManager.default.removeItem(at: root)
+            defaults.removePersistentDomain(forName: suiteName)
+        }
+        let first = root.appendingPathComponent("First", isDirectory: true)
+        let second = root.appendingPathComponent("Second", isDirectory: true)
+        try FileManager.default.createDirectory(at: first, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: second, withIntermediateDirectories: true)
+        let store = SettingsStore(defaults: defaults)
+
+        try store.replaceFinderDirectoryAuthorizations(authorizationRoot: root, directories: [first, second])
+        store.removeFinderDirectoryAuthorization(for: first)
+        XCTAssertNil(store.directoryBookmarkData(for: first.appendingPathComponent("track.mp3")))
+        XCTAssertNotNil(store.directoryBookmarkData(for: second.appendingPathComponent("track.mp3")))
+        store.removeFinderDirectoryAuthorization(for: second)
+        XCTAssertNil(store.directoryBookmarkData(for: second.appendingPathComponent("track.mp3")))
     }
 
     func testDirectoryBookmarkLookupUsesLongestAuthorizedAncestor() {
@@ -872,6 +931,60 @@ final class GetOudioCoreTests: XCTestCase {
         let store = SettingsStore(defaults: defaults)
 
         XCTAssertFalse(store.isAppleMusicDownloadEnabled)
+    }
+
+    func testAppleMusicRuntimeOperationAvailabilityBlocksMutations() {
+        let idleLogin = AppleMusicWrapperLoginStatus(phase: .notInitialized, message: "")
+        XCTAssertEqual(
+            AppleMusicRuntimeOperationAvailability(
+                isManagingRuntime: false,
+                isRefreshingRuntimeStatus: false,
+                progress: nil,
+                loginStatus: idleLogin
+            ),
+            .available
+        )
+        XCTAssertEqual(
+            AppleMusicRuntimeOperationAvailability(
+                isManagingRuntime: false,
+                isRefreshingRuntimeStatus: false,
+                progress: AppleMusicRuntimeProgress(
+                    message: "下载中",
+                    completedUnitCount: 1,
+                    totalUnitCount: 2,
+                    isActive: true
+                ),
+                loginStatus: idleLogin
+            ),
+            .downloadInProgress
+        )
+        XCTAssertEqual(
+            AppleMusicRuntimeOperationAvailability(
+                isManagingRuntime: false,
+                isRefreshingRuntimeStatus: false,
+                progress: nil,
+                loginStatus: AppleMusicWrapperLoginStatus(phase: .authenticating, message: "")
+            ),
+            .loginInProgress
+        )
+        XCTAssertEqual(
+            AppleMusicRuntimeOperationAvailability(
+                isManagingRuntime: false,
+                isRefreshingRuntimeStatus: true,
+                progress: nil,
+                loginStatus: idleLogin
+            ),
+            .runtimeOperationInProgress
+        )
+        XCTAssertEqual(
+            AppleMusicRuntimeOperationAvailability(
+                isManagingRuntime: true,
+                isRefreshingRuntimeStatus: false,
+                progress: nil,
+                loginStatus: idleLogin
+            ),
+            .runtimeOperationInProgress
+        )
     }
 
     func testAppleMusicSystemProxyIsDisabledByDefaultAndPersists() {
