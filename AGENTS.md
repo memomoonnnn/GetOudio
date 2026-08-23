@@ -24,7 +24,7 @@ Core 的 `Models` 定义领域值和协议，`Services` 承担流程与副作用
 
 不得修改 `.git/`、无关未提交改动、用户 App Group 数据、Apple Music 输出、Keychain 凭据或任务范围外的第三方二进制。App Group 固定为 `group.com.shengjiacheng.GetOudio`；文件系统和共享设置只能经 `SharedContainer` 及其 suite defaults 构造的 `SettingsStore` 访问。`SharedContainer.production()` 失败必须作为可观察错误终止当前入口；`diagnostic(rootURL:defaults:)` 仅用于测试或显式 Debug，Release 不得响应其环境变量，容器解析失败时只写系统日志。新增网络、虚拟化、App Group、文件访问或 Hardened Runtime 能力时，必须同步检查对应 target 的 entitlements，不能以关闭沙盒或移除安全作用域绕过权限。
 
-凭据不得写入 UserDefaults、日志、配置文件或命令诊断输出。完成类通知写入 `NotificationEventQueue`，由 `NotificationService.dispatchPendingNotificationEvents()` 统一派发；所有本地通知标题固定为 `Get Oudio`，差异写入正文。
+凭据不得写入 UserDefaults、日志、配置文件或命令诊断输出。完成或失败类通知必须写入 `NotificationEventQueue`，由 `NotificationService.dispatchPendingNotificationEvents()` 的唯一派发器在系统接受请求后确认删除；被拒绝或耗尽重试的事件进入抑制记录。所有本地通知标题固定为 `Get Oudio`，差异写入正文。
 
 ## 专项指南路由
 
@@ -39,7 +39,7 @@ Core 的 `Models` 定义领域值和协议，`Services` 承担流程与副作用
 | Share Extension 的激活、输入解析或宿主可见性 | `docs/agent-guides/share-extension.md` |
 | Apple Music 组件安装、更新、卸载或 Colima/Lima | `docs/agent-guides/apple-music-runtime-components.md` |
 | wrapper、登录、验证码、代理、容器或 40020 就绪状态 | `docs/agent-guides/apple-music-wrapper-and-login.md` |
-| Apple Music 下载、JSONL、Agent 或通知队列 | `docs/agent-guides/apple-music-download-and-notifications.md` |
+| Apple Music 下载、JSONL、Agent、通知派发或通知授权 | `docs/agent-guides/apple-music-download-and-notifications.md` |
 | 转码预设、ffmpeg 或音频格式能力 | `docs/agent-guides/conversion-tools.md` |
 | 内嵌 `apple-music-downloader` 构建或替换 | `docs/agent-guides/apple-music-downloader-build.md` |
 | 主图标、Share 图标或 Icon Composer | `docs/agent-guides/icons.md` |
