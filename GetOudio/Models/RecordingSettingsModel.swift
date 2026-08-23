@@ -28,6 +28,7 @@ final class RecordingSettingsModel: ObservableObject {
     @Published var usesCustomCacheDirectory: Bool
     @Published var cacheDirectoryPath = ""
     @Published var microphoneAuthorized = false
+    @Published private(set) var hasConfiguredInput = false
     @Published var trimsSilence: Bool
     @Published var normalizesPeak: Bool
     @Published var silenceThresholdDBFS: Double
@@ -53,6 +54,7 @@ final class RecordingSettingsModel: ObservableObject {
 
     func refresh() {
         bridgeDevices = RecordingDeviceService.devices().filter(\.isSupportedProToolsAudioBridge)
+        updateInputConfiguration()
         refreshMicrophonePermission()
         updateCacheDirectoryPath()
         updateCacheSize()
@@ -65,6 +67,7 @@ final class RecordingSettingsModel: ObservableObject {
     func selectBridge(_ uid: String?) {
         selectedBridgeUID = uid
         store.recordingBridgeDeviceUID = uid
+        updateInputConfiguration()
     }
 
     func setCacheLimit(_ bytes: Int64) {
@@ -163,6 +166,12 @@ final class RecordingSettingsModel: ObservableObject {
             fromByteCount: cacheAccess()?.store.completedSize() ?? 0,
             countStyle: .file
         )
+    }
+
+    private func updateInputConfiguration() {
+        hasConfiguredInput = selectedBridgeUID
+            .flatMap(RecordingDeviceService.descriptor(uid:))?
+            .isSupportedProToolsAudioBridge == true
     }
 
     private func updateCacheDirectoryPath() {

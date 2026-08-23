@@ -94,7 +94,7 @@ final class HeadlessRunner: NSObject, NSApplicationDelegate, UNUserNotificationC
         Task {
             let guidance = await appleMusicShareCoordinator.handlePendingAppleMusicDownload(format: format)
             if let guidance {
-                await SettingsGuidanceLauncher.open(guidance, container: container)
+                await SettingsAttentionLauncher.open(guidance, container: container)
             }
             completionHandler()
             endNotificationResponse()
@@ -184,8 +184,8 @@ final class HeadlessRunner: NSObject, NSApplicationDelegate, UNUserNotificationC
         }
 
         let shareHandling = await appleMusicShareCoordinator.handleShareAppleMusicJobs(jobs)
-        if let target = shareHandling.settingsGuidance {
-            await SettingsGuidanceLauncher.open(target, container: container)
+        if let target = shareHandling.settingsAttention {
+            await SettingsAttentionLauncher.open(target, container: container)
         }
         let remainingJobs = shareHandling.remainingJobs
         guard !jobs.isEmpty else {

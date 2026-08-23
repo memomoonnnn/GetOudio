@@ -1,4 +1,5 @@
 import AppKit
+import GetOudioCore
 import SwiftUI
 
 private enum MarkdownTypography {
@@ -188,10 +189,21 @@ enum SettingsDocumentationStore {
 
 struct MarkdownDocumentView: View {
     let id: SettingsDocumentSectionID
+    let attentionItem: SettingsAttentionItem?
+    let highlightRequestID: Int
+    let markOpened: ((SettingsAttentionItem) -> Void)?
     @State private var isExpanded = false
 
-    init(_ id: SettingsDocumentSectionID) {
+    init(
+        _ id: SettingsDocumentSectionID,
+        attentionItem: SettingsAttentionItem? = nil,
+        highlightRequestID: Int = 0,
+        markOpened: ((SettingsAttentionItem) -> Void)? = nil
+    ) {
         self.id = id
+        self.attentionItem = attentionItem
+        self.highlightRequestID = highlightRequestID
+        self.markOpened = markOpened
     }
 
     var body: some View {
@@ -213,6 +225,12 @@ struct MarkdownDocumentView: View {
                     .padding(16)
                     .transition(.opacity)
             }
+        } cardOverlay: {
+            SettingsAttentionPulseOverlay(requestID: highlightRequestID)
+        }
+        .onChange(of: isExpanded) {
+            guard isExpanded, let attentionItem else { return }
+            markOpened?(attentionItem)
         }
     }
 }

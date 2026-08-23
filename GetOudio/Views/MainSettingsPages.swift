@@ -12,7 +12,23 @@ private enum SettingsMetrics {
     static let groupTitleFont = Font.system(size: 12.5, weight: .semibold)
 }
 
-private struct SettingsGuidancePulseOverlay: View {
+struct SettingsAttentionPresentation {
+    let items: Set<SettingsAttentionItem>
+    let highlightRequestID: Int
+    let scrollTarget: SettingsAttentionItem?
+
+    static let none = SettingsAttentionPresentation(items: [], highlightRequestID: 0, scrollTarget: nil)
+
+    func highlightRequest(for item: SettingsAttentionItem) -> Int {
+        items.contains(item) ? highlightRequestID : 0
+    }
+}
+
+struct SettingsAttentionPulseOverlay: View {
+    private static let initialDelayNanoseconds: UInt64 = 450_000_000
+    private static let pulseDurationNanoseconds: UInt64 = 160_000_000
+    private static let pulseCount = 3
+
     let requestID: Int
     @State private var isHighlighted = false
 
@@ -26,19 +42,39 @@ private struct SettingsGuidancePulseOverlay: View {
             .allowsHitTesting(false)
             .accessibilityHidden(true)
             .task(id: requestID) {
+                resetHighlight()
                 guard requestID > 0 else { return }
-                withTransaction(Transaction(animation: nil)) {
-                    isHighlighted = false
+                defer { resetHighlight() }
+
+                guard await wait(Self.initialDelayNanoseconds) else { return }
+                for _ in 0..<Self.pulseCount {
+                    withAnimation(.easeInOut(duration: 0.16)) {
+                        isHighlighted = true
+                    }
+                    guard await wait(Self.pulseDurationNanoseconds) else { return }
+
+                    withAnimation(.easeInOut(duration: 0.16)) {
+                        isHighlighted = false
+                    }
+                    guard await wait(Self.pulseDurationNanoseconds) else { return }
                 }
-                try? await Task.sleep(nanoseconds: 450_000_000)
-                guard !Task.isCancelled else { return }
-                withAnimation(.easeInOut(duration: 0.24).repeatCount(5, autoreverses: true)) {
-                    isHighlighted = true
-                }
-                try? await Task.sleep(nanoseconds: 2_400_000_000)
-                guard !Task.isCancelled else { return }
-                isHighlighted = false
             }
+            .onDisappear(perform: resetHighlight)
+    }
+
+    private func resetHighlight() {
+        withTransaction(Transaction(animation: nil)) {
+            isHighlighted = false
+        }
+    }
+
+    private func wait(_ nanoseconds: UInt64) async -> Bool {
+        do {
+            try await Task.sleep(nanoseconds: nanoseconds)
+            return !Task.isCancelled
+        } catch {
+            return false
+        }
     }
 }
 
@@ -48,14 +84,20 @@ struct RecordingSettingsPage: View {
     private static let inputSectionID = "recording-input-section"
 
     @ObservedObject var viewModel: RecordingSettingsModel
-    let inputHighlightRequest: Int
+    let attention: SettingsAttentionPresentation
+    let markDocumentationOpened: (SettingsAttentionItem) -> Void
 
     var body: some View {
         SettingsForm(
-            scrollTarget: Self.inputSectionID,
-            scrollRequestID: inputHighlightRequest
+            scrollTarget: attention.scrollTarget == .recordingInput ? Self.inputSectionID : nil,
+            scrollRequestID: attention.highlightRequest(for: .recordingInput)
         ) {
-            MarkdownDocumentView(.recording)
+            MarkdownDocumentView(
+                .recording,
+                attentionItem: .recordingDocumentation,
+                highlightRequestID: attention.highlightRequest(for: .recordingDocumentation),
+                markOpened: markDocumentationOpened
+            )
 
             // VStack(alignment: .leading, spacing: 8) {
             //     Text("Audio Bridge Recorder")
@@ -88,7 +130,7 @@ struct RecordingSettingsPage: View {
 
                 }
             } cardOverlay: {
-                SettingsGuidancePulseOverlay(requestID: inputHighlightRequest)
+                SettingsAttentionPulseOverlay(requestID: attention.highlightRequest(for: .recordingInput))
             }
             .id(Self.inputSectionID)
 
@@ -440,10 +482,17 @@ struct SettingsForm<Content: View>: View {
 struct TranscodingSettingsPage: View {
     @ObservedObject var presetSettings: PresetSettingsModel
     @ObservedObject var defaultOpenWithSettings: DefaultOpenWithSettingsModel
+    let attention: SettingsAttentionPresentation
+    let markDocumentationOpened: (SettingsAttentionItem) -> Void
 
     var body: some View {
         SettingsForm {
-            MarkdownDocumentView(.transcoding)
+            MarkdownDocumentView(
+                .transcoding,
+                attentionItem: .transcodingDocumentation,
+                highlightRequestID: attention.highlightRequest(for: .transcodingDocumentation),
+                markOpened: markDocumentationOpened
+            )
 
             SettingsSection("默认打开方式", systemImage: "doc.badge.gearshape") {
                 VStack(alignment: .leading, spacing: 12) {
@@ -576,10 +625,17 @@ struct TranscodingSettingsPage: View {
 struct NCMSettingsPage: View {
     @ObservedObject var ncmSettings: NCMSettingsModel
     @ObservedObject var defaultOpenWithSettings: DefaultOpenWithSettingsModel
+    let attention: SettingsAttentionPresentation
+    let markDocumentationOpened: (SettingsAttentionItem) -> Void
 
     var body: some View {
         SettingsForm {
-            MarkdownDocumentView(.ncm)
+            MarkdownDocumentView(
+                .ncm,
+                attentionItem: .ncmDocumentation,
+                highlightRequestID: attention.highlightRequest(for: .ncmDocumentation),
+                markOpened: markDocumentationOpened
+            )
 
             SettingsSection("输出设置", systemImage: "music.note") {
                 VStack(alignment: .leading, spacing: 12) {
@@ -652,8 +708,8 @@ struct AppleMusicSettingsPage: View {
     private static let initializationSectionID = "apple-music-initialization-section"
 
     @ObservedObject var viewModel: AppleMusicSettingsModel
-    let dependencyInstallationHighlightRequest: Int
-    let initializationHighlightRequest: Int
+    let attention: SettingsAttentionPresentation
+    let markDocumentationOpened: (SettingsAttentionItem) -> Void
     @State private var username = ""
     @State private var password = ""
     @State private var verificationCode = ""
@@ -663,7 +719,12 @@ struct AppleMusicSettingsPage: View {
             scrollTarget: scrollTarget,
             scrollRequestID: scrollRequestID
         ) {
-            MarkdownDocumentView(.appleMusic)
+            MarkdownDocumentView(
+                .appleMusic,
+                attentionItem: .appleMusicDocumentation,
+                highlightRequestID: attention.highlightRequest(for: .appleMusicDocumentation),
+                markOpened: markDocumentationOpened
+            )
             dependencyInstallationSettings
             runtimeStatusSettings
             initializationSettings
@@ -734,7 +795,7 @@ struct AppleMusicSettingsPage: View {
                 }
             }
         } cardOverlay: {
-            SettingsGuidancePulseOverlay(requestID: dependencyInstallationHighlightRequest)
+            SettingsAttentionPulseOverlay(requestID: attention.highlightRequest(for: .appleMusicDependencies))
         }
         .id(Self.dependencyInstallationSectionID)
     }
@@ -830,7 +891,7 @@ struct AppleMusicSettingsPage: View {
                         .font(.title2.weight(.bold))
                         .foregroundStyle(.green)
                 }
-                SettingsGuidancePulseOverlay(requestID: initializationHighlightRequest)
+                SettingsAttentionPulseOverlay(requestID: attention.highlightRequest(for: .appleMusicInitialization))
             }
             .allowsHitTesting(false)
         }
@@ -879,13 +940,13 @@ struct AppleMusicSettingsPage: View {
     }
 
     private var scrollRequestID: Int {
-        max(dependencyInstallationHighlightRequest, initializationHighlightRequest)
+        attention.highlightRequestID
     }
 
     private var scrollTarget: String? {
-        if initializationHighlightRequest > dependencyInstallationHighlightRequest {
+        if attention.scrollTarget == .appleMusicInitialization {
             Self.initializationSectionID
-        } else if dependencyInstallationHighlightRequest > 0 {
+        } else if attention.scrollTarget == .appleMusicDependencies {
             Self.dependencyInstallationSectionID
         } else {
             nil

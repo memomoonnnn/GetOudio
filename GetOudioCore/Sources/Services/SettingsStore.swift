@@ -23,6 +23,7 @@ public final class SettingsStore {
         public static let recordingSilenceThresholdDBFS = "recordingSilenceThresholdDBFS"
         public static let recordingSilencePaddingMilliseconds = "recordingSilencePaddingMilliseconds"
         public static let isDebugLoggingEnabled = "isDebugLoggingEnabled"
+        public static let openedSettingsDocumentationItems = "openedSettingsDocumentationItems"
     }
 
     private let defaults: UserDefaults
@@ -156,6 +157,20 @@ public final class SettingsStore {
     public var recordingBridgeDeviceUID: String? {
         get { defaults.string(forKey: Keys.recordingBridgeDeviceUID) }
         set { defaults.set(newValue, forKey: Keys.recordingBridgeDeviceUID) }
+    }
+
+    private var openedSettingsDocumentationItems: Set<String> {
+        Set(defaults.stringArray(forKey: Keys.openedSettingsDocumentationItems) ?? [])
+    }
+
+    public func hasOpenedSettingsDocumentation(_ item: SettingsAttentionItem) -> Bool {
+        openedSettingsDocumentationItems.contains(item.rawValue)
+    }
+
+    public func markSettingsDocumentationOpened(_ item: SettingsAttentionItem) {
+        var items = openedSettingsDocumentationItems
+        guard items.insert(item.rawValue).inserted else { return }
+        defaults.set(items.sorted(), forKey: Keys.openedSettingsDocumentationItems)
     }
 
     public var recordingCacheLimitBytes: Int64 {

@@ -5,21 +5,21 @@ import SwiftUI
 struct MainView: View {
     @StateObject private var settingsViewModel: SettingsViewModel
     @State private var selection: MainSidebarItem? = .overview
-    @State private var recordingInputHighlightRequest = 0
-    @State private var appleMusicDependencyHighlightRequest = 0
-    @State private var appleMusicInitializationHighlightRequest = 0
+    @State private var attentionPresentation = SettingsAttentionPresentation.none
     private let checkForUpdates: () -> Void
 
     init(
         container: SharedContainer,
-        initialSettingsGuidance: SettingsGuidanceTarget? = nil,
+        initialSettingsAttention: SettingsAttentionItem? = nil,
         checkForUpdates: @escaping () -> Void
     ) {
         _settingsViewModel = StateObject(wrappedValue: SettingsViewModel(container: container))
-        _selection = State(initialValue: Self.initialSelection(for: initialSettingsGuidance))
-        _recordingInputHighlightRequest = State(initialValue: initialSettingsGuidance == .recordingInput ? 1 : 0)
-        _appleMusicDependencyHighlightRequest = State(initialValue: initialSettingsGuidance == .appleMusicDependencies ? 1 : 0)
-        _appleMusicInitializationHighlightRequest = State(initialValue: initialSettingsGuidance == .appleMusicInitialization ? 1 : 0)
+        _selection = State(initialValue: Self.initialSelection(for: initialSettingsAttention))
+        _attentionPresentation = State(initialValue: SettingsAttentionPresentation(
+            items: initialSettingsAttention.map { [$0] } ?? [],
+            highlightRequestID: initialSettingsAttention == nil ? 0 : 1,
+            scrollTarget: initialSettingsAttention
+        ))
         self.checkForUpdates = checkForUpdates
     }
 
@@ -39,15 +39,30 @@ struct MainView: View {
             .padding(.top, LayoutConstants.sidebarTopMargin)
         }
         .clipShape(RoundedRectangle(cornerRadius: LayoutConstants.windowCornerRadius, style: .continuous))
-        .onReceive(NotificationCenter.default.publisher(for: .getOudioPresentSettingsGuidance)) { notification in
-            guard let guidance = notification.object as? SettingsGuidanceTarget else { return }
-            present(guidance)
+        .onReceive(NotificationCenter.default.publisher(for: .getOudioPresentSettingsAttention)) { notification in
+            guard let item = notification.object as? SettingsAttentionItem else { return }
+            present(item)
         }
         .onReceive(NotificationCenter.default.publisher(for: .getOudioShowOverviewSettings)) { _ in
-            selection = .overview
+            select(.overview)
         }
         .onReceive(NotificationCenter.default.publisher(for: .getOudioRefreshRecordingMicrophonePermission)) { _ in
             settingsViewModel.recordingSettings.refreshMicrophonePermission()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            settingsViewModel.recordingSettings.refresh()
+        }
+        .onAppear {
+            guard attentionPresentation.highlightRequestID == 0 else { return }
+            select(selection ?? .overview)
+        }
+        .onChange(of: outstandingAttentionItems) {
+            guard let selection else { return }
+            attentionPresentation = SettingsAttentionPresentation(
+                items: outstandingAttentionItems.filter { $0.sidebarItem == selection },
+                highlightRequestID: attentionPresentation.highlightRequestID + 1,
+                scrollTarget: nil
+            )
         }
     }
 
@@ -81,9 +96,13 @@ struct MainView: View {
                 VStack(spacing: SidebarLayout.navigationRowSpacing) {
                     ForEach(MainSidebarItem.allCases) { item in
                         Button {
-                            selection = item
+                            select(item)
                         } label: {
-                            MainSidebarRow(item: item, isSelected: (selection ?? .overview) == item)
+                            MainSidebarRow(
+                                item: item,
+                                isSelected: (selection ?? .overview) == item,
+                                hasAttention: outstandingAttentionItems.contains { $0.sidebarItem == item }
+                            )
                         }
                         .buttonStyle(.plain)
                     }
@@ -105,55 +124,89 @@ struct MainView: View {
                 systemExtensionSettings: settingsViewModel.systemExtensionSettings,
                 recordingSettings: settingsViewModel.recordingSettings,
                 diagnosticSettings: settingsViewModel.diagnosticSettings,
+                attention: attentionPresentation,
                 checkForUpdates: checkForUpdates
             )
         case .transcoding:
             TranscodingSettingsPage(
                 presetSettings: settingsViewModel.presetSettings,
-                defaultOpenWithSettings: settingsViewModel.defaultOpenWithSettings
+                defaultOpenWithSettings: settingsViewModel.defaultOpenWithSettings,
+                attention: attentionPresentation,
+                markDocumentationOpened: settingsViewModel.markSettingsDocumentationOpened
             )
         case .ncm:
             NCMSettingsPage(
                 ncmSettings: settingsViewModel.ncmSettings,
-                defaultOpenWithSettings: settingsViewModel.defaultOpenWithSettings
+                defaultOpenWithSettings: settingsViewModel.defaultOpenWithSettings,
+                attention: attentionPresentation,
+                markDocumentationOpened: settingsViewModel.markSettingsDocumentationOpened
             )
         case .appleMusic:
             AppleMusicSettingsPage(
                 viewModel: settingsViewModel.appleMusicSettings,
-                dependencyInstallationHighlightRequest: appleMusicDependencyHighlightRequest,
-                initializationHighlightRequest: appleMusicInitializationHighlightRequest
+                attention: attentionPresentation,
+                markDocumentationOpened: settingsViewModel.markSettingsDocumentationOpened
             )
         case .recording:
             RecordingSettingsPage(
                 viewModel: settingsViewModel.recordingSettings,
-                inputHighlightRequest: recordingInputHighlightRequest
+                attention: attentionPresentation,
+                markDocumentationOpened: settingsViewModel.markSettingsDocumentationOpened
             )
         }
     }
 
-    private func present(_ guidance: SettingsGuidanceTarget) {
-        switch guidance {
-        case .recordingInput:
-            selection = .recording
-            recordingInputHighlightRequest += 1
-        case .appleMusicDependencies:
-            selection = .appleMusic
-            appleMusicDependencyHighlightRequest += 1
-        case .appleMusicInitialization:
-            selection = .appleMusic
-            appleMusicInitializationHighlightRequest += 1
-        }
+    private func select(_ item: MainSidebarItem) {
+        selection = item
+        attentionPresentation = SettingsAttentionPresentation(
+            items: outstandingAttentionItems.filter { $0.sidebarItem == item },
+            highlightRequestID: attentionPresentation.highlightRequestID + 1,
+            scrollTarget: nil
+        )
     }
 
-    private static func initialSelection(for guidance: SettingsGuidanceTarget?) -> MainSidebarItem {
-        switch guidance {
-        case .recordingInput:
-            .recording
-        case .appleMusicDependencies, .appleMusicInitialization:
-            .appleMusic
-        case nil:
-            .overview
+    private func present(_ item: SettingsAttentionItem) {
+        selection = item.sidebarItem
+        attentionPresentation = SettingsAttentionPresentation(
+            items: [item],
+            highlightRequestID: attentionPresentation.highlightRequestID + 1,
+            scrollTarget: item
+        )
+    }
+
+    private var outstandingAttentionItems: Set<SettingsAttentionItem> {
+        var items: Set<SettingsAttentionItem> = []
+        let recording = settingsViewModel.recordingSettings
+        let appleMusic = settingsViewModel.appleMusicSettings
+
+        if !recording.microphoneAuthorized {
+            items.insert(.microphonePermission)
         }
+        if !recording.hasConfiguredInput {
+            items.insert(.recordingInput)
+        }
+        for item in SettingsAttentionItem.documentationItems where !settingsViewModel.hasOpenedSettingsDocumentation(item) {
+            items.insert(item)
+        }
+
+        let dependenciesNeedAttention = !appleMusic.isAppleMusicDownloadEnabled
+            || (appleMusic.hasLoadedAppleMusicRuntimeStatus && (
+                appleMusic.appleMusicRuntimeStatuses.isEmpty
+                    || appleMusic.appleMusicRuntimeStatuses.contains {
+                        !$0.isReady || $0.updateState == .updateAvailable || $0.updateState == .legacy
+                    }
+            ))
+        if dependenciesNeedAttention {
+            items.insert(.appleMusicDependencies)
+        } else if appleMusic.hasLoadedAppleMusicRuntimeStatus,
+                  !appleMusic.appleMusicWrapperLoginStatus.isAuthenticated {
+            items.insert(.appleMusicInitialization)
+        }
+        return items
+    }
+
+    private static func initialSelection(for item: SettingsAttentionItem?) -> MainSidebarItem {
+        item?.sidebarItem ?? .overview
     }
 }
 
@@ -220,6 +273,7 @@ private extension EnvironmentValues {
 private struct MainSidebarRow: View {
     let item: MainSidebarItem
     let isSelected: Bool
+    let hasAttention: Bool
     @State private var isHovering = false
 
     var body: some View {
@@ -232,6 +286,13 @@ private struct MainSidebarRow: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.92)
             Spacer(minLength: 0)
+            if hasAttention {
+                Circle()
+                    .fill(.red)
+                    .frame(width: 7, height: 7)
+                    .padding(.trailing, SidebarLayout.navigationIconVisualInset)
+                    .accessibilityHidden(true)
+            }
         }
         .foregroundStyle(isSelected ? .white : .primary)
         .padding(.vertical, 11)
@@ -243,6 +304,7 @@ private struct MainSidebarRow: View {
         .contentShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
         .onHover { isHovering = $0 }
         .animation(.easeOut(duration: 0.12), value: isHovering)
+        .accessibilityValue(hasAttention ? "有待完成设置" : "")
     }
 
     private var backgroundColor: Color {
@@ -264,8 +326,7 @@ private enum SidebarLayout {
     static let navigationRowSpacing: CGFloat = 6
     static let iconColumnWidth: CGFloat = 30
     static let navigationIconSize: CGFloat = 16
-    static let iconVisualLeadingInset: CGFloat = contentHorizontalInset
-        + (iconColumnWidth - navigationIconSize) / 2
+    static let navigationIconVisualInset: CGFloat = (iconColumnWidth - navigationIconSize) / 2
 }
 
 private enum MainSidebarItem: String, CaseIterable, Identifiable {
@@ -298,8 +359,32 @@ private enum MainSidebarItem: String, CaseIterable, Identifiable {
     }
 }
 
+private extension SettingsAttentionItem {
+    static let documentationItems: Set<SettingsAttentionItem> = [
+        .transcodingDocumentation,
+        .ncmDocumentation,
+        .appleMusicDocumentation,
+        .recordingDocumentation
+    ]
+
+    var sidebarItem: MainSidebarItem {
+        switch self {
+        case .microphonePermission:
+            .overview
+        case .transcodingDocumentation:
+            .transcoding
+        case .ncmDocumentation:
+            .ncm
+        case .appleMusicDocumentation, .appleMusicDependencies, .appleMusicInitialization:
+            .appleMusic
+        case .recordingDocumentation, .recordingInput:
+            .recording
+        }
+    }
+}
+
 extension Notification.Name {
-    static let getOudioPresentSettingsGuidance = Notification.Name("GetOudioPresentSettingsGuidance")
+    static let getOudioPresentSettingsAttention = Notification.Name("GetOudioPresentSettingsAttention")
     static let getOudioShowOverviewSettings = Notification.Name("GetOudioShowOverviewSettings")
     static let getOudioRefreshRecordingMicrophonePermission = Notification.Name("GetOudioRefreshRecordingMicrophonePermission")
 }
