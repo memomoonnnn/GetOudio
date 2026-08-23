@@ -36,7 +36,7 @@ final class AppleMusicShareDownloadCoordinator {
 
     func handleShareAppleMusicJobs(
         _ jobs: [JobRequest]
-    ) async -> (remainingJobs: [JobRequest], settingsGuidance: SettingsGuidanceTarget?) {
+    ) async -> (remainingJobs: [JobRequest], settingsAttention: SettingsAttentionItem?) {
         let shareJobs = jobs.filter { $0.isShareAppleMusicDownload }
         let remainingJobs = jobs.filter { !$0.isShareAppleMusicDownload }
         guard !shareJobs.isEmpty else {
@@ -48,7 +48,7 @@ final class AppleMusicShareDownloadCoordinator {
 
     func handlePendingAppleMusicDownload(
         format: AppleMusicDownloadFormat
-    ) async -> SettingsGuidanceTarget? {
+    ) async -> SettingsAttentionItem? {
         do {
             guard let batch = try pendingStoreFactory().drain(), !batch.jobs.isEmpty else {
                 await notificationService.notifyUnsupportedDownloadSource(urls: [])
@@ -65,7 +65,7 @@ final class AppleMusicShareDownloadCoordinator {
     private func handleAppleMusicJobs(
         _ jobs: [JobRequest],
         forcedFormat: AppleMusicDownloadFormat? = nil
-    ) async -> SettingsGuidanceTarget? {
+    ) async -> SettingsAttentionItem? {
         switch await appleMusicDownloadAvailability() {
         case .needsRuntimeInstallation:
             DiagnosticLog.append("Apple Music share requires Downloader Runtime installation")

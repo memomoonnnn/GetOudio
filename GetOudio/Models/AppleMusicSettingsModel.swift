@@ -20,6 +20,7 @@ final class AppleMusicSettingsModel: ObservableObject {
     )
     @Published var isManagingAppleMusicRuntime = false
     @Published var isRefreshingAppleMusicRuntimeStatus = false
+    @Published private(set) var hasLoadedAppleMusicRuntimeStatus = false
 
     private let store: SettingsStore
     private let appleMusicAgentClient: AppleMusicRuntimeAgentClient
@@ -105,6 +106,7 @@ final class AppleMusicSettingsModel: ObservableObject {
             isAppleMusicDownloadEnabled = report.isEnabled
             appleMusicRuntimeMessage = report.message
             appleMusicRuntimeProgress = appleMusicAgentClient.progress()
+            hasLoadedAppleMusicRuntimeStatus = true
         } catch {
             isAppleMusicDownloadEnabled = store.isAppleMusicDownloadEnabled
             appleMusicRuntimeMessage = "Downloader Runtime Agent 不可用：\(error.localizedDescription)"

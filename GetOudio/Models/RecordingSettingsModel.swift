@@ -20,6 +20,7 @@ final class RecordingSettingsModel: ObservableObject {
         CacheLimitOption(bytes: 10 * 1_024 * 1_024 * 1_024, title: "10 GB"),
         CacheLimitOption(bytes: 20 * 1_024 * 1_024 * 1_024, title: "20 GB")
     ]
+    static let customCacheDirectoryMessage = "Get Oudio会管理你指定的缓存目录，所以请专门为它新建一个文件夹！"
 
     @Published var bridgeDevices: [AudioDeviceDescriptor] = []
     @Published var selectedBridgeUID: String?
@@ -28,6 +29,7 @@ final class RecordingSettingsModel: ObservableObject {
     @Published var usesCustomCacheDirectory: Bool
     @Published var cacheDirectoryPath = ""
     @Published var microphoneAuthorized = false
+    @Published private(set) var hasConfiguredInput = false
     @Published var trimsSilence: Bool
     @Published var normalizesPeak: Bool
     @Published var silenceThresholdDBFS: Double
@@ -53,6 +55,7 @@ final class RecordingSettingsModel: ObservableObject {
 
     func refresh() {
         bridgeDevices = RecordingDeviceService.devices().filter(\.isSupportedProToolsAudioBridge)
+        updateInputConfiguration()
         refreshMicrophonePermission()
         updateCacheDirectoryPath()
         updateCacheSize()
@@ -65,6 +68,7 @@ final class RecordingSettingsModel: ObservableObject {
     func selectBridge(_ uid: String?) {
         selectedBridgeUID = uid
         store.recordingBridgeDeviceUID = uid
+        updateInputConfiguration()
     }
 
     func setCacheLimit(_ bytes: Int64) {
@@ -113,7 +117,10 @@ final class RecordingSettingsModel: ObservableObject {
     }
 
     func chooseCacheDirectory() {
-        guard let url = DirectoryChooser.chooseDirectory(prompt: "选择缓存位置") else { return }
+        guard let url = DirectoryChooser.chooseDirectory(
+            prompt: "选择缓存位置",
+            message: Self.customCacheDirectoryMessage
+        ) else { return }
         do {
             store.recordingCustomCacheBookmarkData = try url.bookmarkData(
                 options: [.withSecurityScope],
@@ -124,19 +131,9 @@ final class RecordingSettingsModel: ObservableObject {
             store.recordingUsesCustomCacheDirectory = true
             updateCacheDirectoryPath()
             updateCacheSize()
-            message = "录音缓存将保存在 \(url.path)"
         } catch {
             message = error.localizedDescription
         }
-    }
-
-    func restoreDefaultCacheDirectory() {
-        usesCustomCacheDirectory = false
-        store.recordingUsesCustomCacheDirectory = false
-        store.recordingCustomCacheBookmarkData = nil
-        updateCacheDirectoryPath()
-        updateCacheSize()
-        message = "已恢复默认缓存目录；原指定目录中的录音未删除。"
     }
 
     func revealCacheDirectory() {
@@ -163,6 +160,12 @@ final class RecordingSettingsModel: ObservableObject {
             fromByteCount: cacheAccess()?.store.completedSize() ?? 0,
             countStyle: .file
         )
+    }
+
+    private func updateInputConfiguration() {
+        hasConfiguredInput = selectedBridgeUID
+            .flatMap(RecordingDeviceService.descriptor(uid:))?
+            .isSupportedProToolsAudioBridge == true
     }
 
     private func updateCacheDirectoryPath() {

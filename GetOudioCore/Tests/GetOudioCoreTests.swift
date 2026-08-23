@@ -48,11 +48,11 @@ final class GetOudioCoreTests: XCTestCase {
         XCTAssertTrue(firstStore.drainCommands().isEmpty)
     }
 
-    func testSettingsGuidanceStoreConsumesOnlyFreshRequest() {
+    func testSettingsAttentionRequestStoreConsumesOnlyFreshRequest() {
         let suiteName = "GetOudioCoreTests-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
-        let store = SettingsGuidanceStore(defaults: defaults)
+        let store = SettingsAttentionRequestStore(defaults: defaults)
 
         store.request(.appleMusicDependencies)
 
@@ -61,6 +61,19 @@ final class GetOudioCoreTests: XCTestCase {
 
         store.request(.recordingInput, at: Date(timeIntervalSinceNow: -121))
         XCTAssertNil(store.consume())
+    }
+
+    func testSettingsStorePersistsOpenedDocumentationItems() {
+        let suiteName = "GetOudioCoreTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let store = SettingsStore(defaults: defaults)
+
+        XCTAssertFalse(store.hasOpenedSettingsDocumentation(.recordingDocumentation))
+        store.markSettingsDocumentationOpened(.recordingDocumentation)
+
+        XCTAssertTrue(store.hasOpenedSettingsDocumentation(.recordingDocumentation))
+        XCTAssertFalse(store.hasOpenedSettingsDocumentation(.ncmDocumentation))
     }
 
     func testRecordingCacheEvictsOldestCompletedFile() throws {

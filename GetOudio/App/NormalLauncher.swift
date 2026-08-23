@@ -90,7 +90,7 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
 
         recordingControl.recoverStaleSessionIfNeeded()
 
-        if let guidance = SettingsGuidanceStore(container: container).consume() {
+        if let guidance = SettingsAttentionRequestStore(container: container).consume() {
             launchIntent = .settings
             showSettingsWindow(guidance: guidance)
         }
@@ -152,13 +152,13 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
         showSettingsWindow()
     }
 
-    private func showSettingsWindow(guidance: SettingsGuidanceTarget? = nil) {
+    private func showSettingsWindow(guidance: SettingsAttentionItem? = nil) {
         if let mainWindow {
             NSApp.setActivationPolicy(.regular)
             mainWindow.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             if let guidance {
-                NotificationCenter.default.post(name: .getOudioPresentSettingsGuidance, object: guidance)
+                NotificationCenter.default.post(name: .getOudioPresentSettingsAttention, object: guidance)
             }
             return
         }
@@ -166,7 +166,7 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
         let hostingController = NSHostingController(
             rootView: MainView(
                 container: container,
-                initialSettingsGuidance: guidance,
+                initialSettingsAttention: guidance,
                 checkForUpdates: { [weak self] in self?.updaterController.checkForUpdates(nil) }
             )
         )
@@ -286,8 +286,7 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
                     self.finishTransientInteractionIfNeeded()
                 } else {
                     self.launchIntent = .settings
-                    self.showSettingsWindow()
-                    NotificationCenter.default.post(name: .getOudioShowOverviewSettings, object: nil)
+                    self.showSettingsWindow(guidance: .microphonePermission)
                 }
                 NotificationCenter.default.post(name: .getOudioRefreshRecordingMicrophonePermission, object: nil)
             }

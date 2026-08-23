@@ -1,14 +1,20 @@
 import SwiftUI
 
 struct DashboardView: View {
+    private static let authorizationSectionID = "authorization-section"
+
     @ObservedObject var finderSettings: FinderDirectorySettingsModel
     @ObservedObject var systemExtensionSettings: SystemExtensionSettingsModel
     @ObservedObject var recordingSettings: RecordingSettingsModel
     @ObservedObject var diagnosticSettings: DiagnosticSettingsModel
+    let attention: SettingsAttentionPresentation
     let checkForUpdates: () -> Void
 
     var body: some View {
-        SettingsForm {
+        SettingsForm(
+            scrollTarget: attention.scrollTarget == .microphonePermission ? Self.authorizationSectionID : nil,
+            scrollRequestID: attention.highlightRequest(for: .microphonePermission)
+        ) {
             SettingsSection("授权", systemImage: "checkmark.shield") {
                 VStack(alignment: .leading, spacing: 18) {
                         Label("扩展", systemImage: "puzzlepiece.extension")
@@ -105,7 +111,10 @@ struct DashboardView: View {
                         }
                     }
                 }
+            } cardOverlay: {
+                SettingsAttentionPulseOverlay(requestID: attention.highlightRequest(for: .microphonePermission))
             }
+            .id(Self.authorizationSectionID)
 
             SettingsSection("关于", systemImage: "info.circle") {
                 HStack(alignment: .center, spacing: 16) {

@@ -16,6 +16,10 @@ final class NCMSettingsModel: ObservableObject {
     }
 
     func setNCMOutputMode(_ mode: String) {
+        guard mode != "customDirectory" || store.ncmCustomOutputBookmarkData != nil else {
+            chooseNCMOutputDirectory()
+            return
+        }
         ncmOutputMode = mode
         store.ncmOutputMode = mode
     }
