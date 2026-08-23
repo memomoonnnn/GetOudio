@@ -54,6 +54,7 @@ struct MainView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             settingsViewModel.recordingSettings.refresh()
+            settingsViewModel.notificationAuthorization.refresh()
         }
         .onAppear {
             guard attentionPresentation.highlightRequestID == 0 else { return }
@@ -126,6 +127,7 @@ struct MainView: View {
                 finderSettings: settingsViewModel.finderSettings,
                 systemExtensionSettings: settingsViewModel.systemExtensionSettings,
                 recordingSettings: settingsViewModel.recordingSettings,
+                notificationAuthorization: settingsViewModel.notificationAuthorization,
                 diagnosticSettings: settingsViewModel.diagnosticSettings,
                 attention: attentionPresentation,
                 checkForUpdates: checkForUpdates
@@ -334,7 +336,7 @@ private enum MainSidebarItem: String, CaseIterable, Identifiable {
 private extension SettingsAttentionItem {
     var sidebarItem: MainSidebarItem {
         switch self {
-        case .microphonePermission:
+        case .microphonePermission, .notificationPermission:
             .overview
         case .transcodingDocumentation:
             .transcoding

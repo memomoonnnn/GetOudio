@@ -2,6 +2,7 @@ import Foundation
 
 public enum SettingsAttentionItem: String, Codable, Hashable, Sendable {
     case microphonePermission
+    case notificationPermission
     case transcodingDocumentation
     case ncmDocumentation
     case appleMusicDocumentation

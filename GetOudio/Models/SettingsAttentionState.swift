@@ -15,20 +15,24 @@ final class SettingsAttentionState: ObservableObject {
 
     private let store: SettingsStore
     private let recordingSettings: RecordingSettingsModel
+    private let notificationAuthorization: NotificationAuthorizationModel
     private let appleMusicSettings: AppleMusicSettingsModel
     private var observationCancellables = Set<AnyCancellable>()
 
     init(
         store: SettingsStore,
         recordingSettings: RecordingSettingsModel,
+        notificationAuthorization: NotificationAuthorizationModel,
         appleMusicSettings: AppleMusicSettingsModel
     ) {
         self.store = store
         self.recordingSettings = recordingSettings
+        self.notificationAuthorization = notificationAuthorization
         self.appleMusicSettings = appleMusicSettings
 
         [
             recordingSettings.objectWillChange.eraseToAnyPublisher(),
+            notificationAuthorization.objectWillChange.eraseToAnyPublisher(),
             appleMusicSettings.objectWillChange.eraseToAnyPublisher()
         ]
         .forEach { publisher in
@@ -49,6 +53,9 @@ final class SettingsAttentionState: ObservableObject {
         var items: Set<SettingsAttentionItem> = []
         if !recordingSettings.microphoneAuthorized {
             items.insert(.microphonePermission)
+        }
+        if notificationAuthorization.state != .authorized {
+            items.insert(.notificationPermission)
         }
         if !recordingSettings.hasConfiguredInput {
             items.insert(.recordingInput)

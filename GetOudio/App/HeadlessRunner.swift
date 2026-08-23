@@ -70,7 +70,7 @@ final class HeadlessRunner: NSObject, NSApplicationDelegate, UNUserNotificationC
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
-        completionHandler([.banner, .sound])
+        completionHandler(NotificationService.foregroundPresentationOptions)
     }
 
     func userNotificationCenter(
@@ -190,11 +190,13 @@ final class HeadlessRunner: NSObject, NSApplicationDelegate, UNUserNotificationC
         let remainingJobs = shareHandling.remainingJobs
         guard !jobs.isEmpty else {
             DiagnosticLog.append(shareEvents.isEmpty ? "headless no pending jobs" : "headless processed share events")
+            await dispatchScheduledNotificationRetries()
             return
         }
         guard !remainingJobs.isEmpty else {
             DiagnosticLog.append("headless processed share Apple Music jobs")
             acknowledge(claimedJobs, queue: queue)
+            await dispatchScheduledNotificationRetries()
             return
         }
 
@@ -207,6 +209,22 @@ final class HeadlessRunner: NSObject, NSApplicationDelegate, UNUserNotificationC
 
         await notificationService.enqueueAndDispatchConversionFinished(summary: summary, jobs: remainingJobs)
         acknowledge(claimedJobs, queue: queue)
+        await dispatchScheduledNotificationRetries()
+    }
+
+    private func dispatchScheduledNotificationRetries() async {
+        while let retryDate = notificationService.nextPendingNotificationRetryDate() {
+            let delay = retryDate.timeIntervalSinceNow
+            if delay > 0 {
+                DiagnosticLog.append("headless notification retry waiting seconds=\(Int(delay.rounded(.up)))")
+                do {
+                    try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                } catch {
+                    return
+                }
+            }
+            await notificationService.dispatchPendingNotificationEvents()
+        }
     }
 
     private func acknowledge(_ claimedJobs: ClaimedJobBatch?, queue: JobQueue) {

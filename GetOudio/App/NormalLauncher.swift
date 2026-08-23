@@ -254,7 +254,11 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
                 handleRecordingConfiguration(requirements)
             case .failed(let message):
                 DiagnosticLog.append("[Recording] toggle result=failed error=\(message)")
-                Task { await notificationService.notifyRecordingFinished(fileURL: nil, message: message) }
+                do {
+                    try notificationService.enqueueAndWakeRecordingFinished(fileURL: nil, message: message)
+                } catch {
+                    DiagnosticLog.append("[Recording] notification event enqueue failed: \(error.localizedDescription)")
+                }
                 finishTransientInteractionIfNeeded()
             }
             return
@@ -364,7 +368,7 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
-        completionHandler([.banner, .sound])
+        completionHandler(NotificationService.foregroundPresentationOptions)
     }
 
     func userNotificationCenter(

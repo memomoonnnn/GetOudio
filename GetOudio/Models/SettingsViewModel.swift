@@ -12,6 +12,7 @@ final class SettingsViewModel: ObservableObject {
     let defaultOpenWithSettings: DefaultOpenWithSettingsModel
     let appleMusicSettings: AppleMusicSettingsModel
     let recordingSettings: RecordingSettingsModel
+    let notificationAuthorization: NotificationAuthorizationModel
     let diagnosticSettings: DiagnosticSettingsModel
     let attentionState: SettingsAttentionState
 
@@ -24,10 +25,12 @@ final class SettingsViewModel: ObservableObject {
         defaultOpenWithSettings = DefaultOpenWithSettingsModel(store: store)
         appleMusicSettings = AppleMusicSettingsModel(container: container, store: store)
         recordingSettings = RecordingSettingsModel(container: container, store: store)
+        notificationAuthorization = NotificationAuthorizationModel(container: container)
         diagnosticSettings = DiagnosticSettingsModel(container: container, store: store)
         attentionState = SettingsAttentionState(
             store: store,
             recordingSettings: recordingSettings,
+            notificationAuthorization: notificationAuthorization,
             appleMusicSettings: appleMusicSettings
         )
     }
