@@ -16,7 +16,9 @@ Get Oudio 是 XcodeGen 驱动的 macOS 原生音频工具。`GetOudioCore` 承�
 
 App Bundle 只携带精简 `ffmpeg`、`ncmdump` 和 `apple-music-downloader`。Docker CLI、Colima、Lima、GPAC/MP4Box 与 wrapper 镜像必须由 AM Runtime Agent 安装到 managed runtime，不得塞回 App Bundle，也不得改用用户系统里的 Homebrew、Docker Desktop、Colima 或 GPAC。外部 Runtime 组件的目标修订、制品哈希、安装方式和 receipt 以 Core 规格为真源：状态刷新不得联网或安装，只有用户发起的“检查并更新”可改变组件，且下载或登录进行中必须禁用更新。Apple Silicon 必须通过 Agent 管理的 Colima VZ + Rosetta 运行受控 `linux/amd64` wrapper，禁止回退到可变上游镜像标签或用户 QEMU；wrapper 更新先删除旧服务和旧镜像，不提供跨修订回滚，但必须保留 `rootfs/data`，并在更新成功后只清除 `.login-completed` 初始化标记、引导用户重新初始化。服务容器必须显式映射 10020、20020、30020、40020；容器持续运行且 40020 空请求返回预期 HTTP 400 前不得调用 downloader。内嵌 downloader 的源码由相邻专用 fork `../apple-music-downloader-get-oudio` 维护，本仓库只保存构建产物与 `config.yaml.template`；其模板解密配置必须保持 `template-decrypt: true`、`key-server: 127.0.0.1:40020` 和 account 端口 30020。
 
-需要用户修复应用内配置时，统一由 Core 的 `SettingsGuidanceStore` 传递 `SettingsGuidanceTarget`，后台和无窗口入口经 `SettingsGuidanceLauncher` 启动独立的普通 App 实例，再由 `NormalLauncher`、`MainView` 和目标设置卡片完成页面定位与不拦截操作的闪动遮罩；不得由 HeadlessRunner 或 Extension 直接创建设置窗口，也不得用无关通知代替配置引导。系统权限请求（如麦克风 `AVCaptureDevice.requestAccess`）仍由对应入口直接发起，不属于设置引导。Apple Music Share 缺少 runtime 时引导至“依赖安装”，runtime 就绪但未完成登录时引导至“初始化”，只有其他运行故障才发送中性不可用通知；新增同类引导只扩展目标、页面映射和目标卡片。
+需要用户完成设置时，统一以 Core 的 `SettingsAttentionItem` 标识；完成状态保留在其所属设置的真源中，`MainView.outstandingAttentionItems` 只据此派生侧栏红点和当前页待高亮项，不得另存一份红点状态。新增项必须同时定义完成判定、`MainSidebarItem` 映射和目标卡片的 `SettingsAttentionPulseOverlay`；说明类还必须列入 `SettingsAttentionItem.documentationItems`，并仅在用户首次展开 `MarkdownDocumentView` 时由 `SettingsStore.openedSettingsDocumentationItems` 持久化，不能把显示或滚动到说明视为已查看。遮罩必须执行有限的显式亮起/熄灭阶段，结束、任务取消或视图消失时均无动画清除，不能以重复动画叠加独立结束计时。
+
+跨进程定向仍使用 `SettingsAttentionRequestStore` 的 120 秒、消费一次请求，后台和无窗口入口经 `SettingsAttentionLauncher` 启动独立的普通 App 实例，再由 `NormalLauncher`、`MainView` 和目标设置卡片完成页面定位；它不保存完成状态。不得由 HeadlessRunner 或 Extension 直接创建设置窗口，也不得用无关通知代替配置引导。系统权限请求（如麦克风 `AVCaptureDevice.requestAccess`）仍由对应入口直接发起，不属于设置引导。Apple Music Share 缺少 runtime 时引导至“依赖安装”，runtime 就绪但未完成登录时引导至“初始化”，只有其他运行故障才发送中性不可用通知。
 
 ## Audio Bridge Recording
 

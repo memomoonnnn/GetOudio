@@ -157,34 +157,41 @@ struct RecordingSettingsPage: View {
                             .font(.body.monospacedDigit())
                         Spacer()
                         Button("清理") { viewModel.clearCache() }
+                        Button("在访达中显示") { viewModel.revealCacheDirectory() }
                     }
 
                     Divider()
 
-                    Toggle("使用指定缓存目录", isOn: Binding(
-                        get: { viewModel.usesCustomCacheDirectory },
-                        set: { viewModel.setUsesCustomCacheDirectory($0) }
-                    ))
+                    Picker("缓存到", selection: Binding(
+                        get: { viewModel.usesCustomCacheDirectory ? "customDirectory" : "defaultDirectory" },
+                        set: { viewModel.setUsesCustomCacheDirectory($0 == "customDirectory") }
+                    )) {
+                        Text("默认缓存目录").tag("defaultDirectory")
+                        Group {
+                            if viewModel.usesCustomCacheDirectory {
+                                HStack {
+                                    Text(viewModel.cacheDirectoryPath)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                    Spacer()
+                                    Button {
+                                        viewModel.chooseCacheDirectory()
+                                    } label: {
+                                        Label("选择", systemImage: "folder")
+                                    }
+                                }
+                            } else {
+                                Text("指定目录")
+                            }
+                        }
+                        .tag("customDirectory")
+                    }
+                    .pickerStyle(.radioGroup)
 
-                    Text("Get Oudio会管理你指定的缓存目录，所以请专门为它新建一个文件夹！")
+                    Text(RecordingSettingsModel.customCacheDirectoryMessage)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
-
-                    HStack {
-                        Text(viewModel.cacheDirectoryPath)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                        Spacer()
-                        Button("选择目录") { viewModel.chooseCacheDirectory() }
-                    }
-
-                    HStack {
-                        Button("恢复默认缓存目录") { viewModel.restoreDefaultCacheDirectory() }
-                            .disabled(!viewModel.usesCustomCacheDirectory)
-                        Spacer()
-                        Button("在访达中显示") { viewModel.revealCacheDirectory() }
-                    }
                 }
             }
 
@@ -644,21 +651,26 @@ struct NCMSettingsPage: View {
                         set: { ncmSettings.setNCMOutputMode($0) }
                     )) {
                         Text("源文件所在目录").tag("sourceDirectory")
-                        Text("指定目录").tag("customDirectory")
+                        Group {
+                            if ncmSettings.ncmOutputMode == "customDirectory" {
+                                HStack {
+                                    Text(ncmSettings.ncmCustomOutputURL?.path ?? "未选择目录")
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                    Spacer()
+                                    Button {
+                                        ncmSettings.chooseNCMOutputDirectory()
+                                    } label: {
+                                        Label("选择", systemImage: "folder")
+                                    }
+                                }
+                            } else {
+                                Text("指定目录")
+                            }
+                        }
+                        .tag("customDirectory")
                     }
                     .pickerStyle(.radioGroup)
-
-                    HStack {
-                        Text(ncmSettings.ncmCustomOutputURL?.path ?? "未选择指定目录")
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                        Spacer()
-                        Button {
-                            ncmSettings.chooseNCMOutputDirectory()
-                        } label: {
-                            Label("选择目录", systemImage: "folder")
-                        }
-                    }
                 }
             }
 
