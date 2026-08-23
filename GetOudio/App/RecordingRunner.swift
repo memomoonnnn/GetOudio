@@ -89,7 +89,7 @@ final class RecordingRunner: NSObject, NSApplicationDelegate, UNUserNotification
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
-        completionHandler([.banner, .sound])
+        completionHandler(NotificationService.foregroundPresentationOptions)
     }
 
     @objc private func handleGetURLEvent(_ event: NSAppleEventDescriptor, withReplyEvent: NSAppleEventDescriptor) {
@@ -244,7 +244,7 @@ final class RecordingRunner: NSObject, NSApplicationDelegate, UNUserNotification
             completed.errorMessage = finalMessage
             try? self.controlStore.save(completed)
             self.reloadWidget()
-            await self.notificationService.notifyRecordingFinished(fileURL: finalURL, message: finalMessage)
+            self.enqueueRecordingFinished(fileURL: finalURL, message: finalMessage)
             await MainActor.run { NSApp.terminate(nil) }
         }
     }
@@ -296,8 +296,16 @@ final class RecordingRunner: NSObject, NSApplicationDelegate, UNUserNotification
         failed.errorMessage = error.localizedDescription
         try? controlStore.save(failed)
         reloadWidget()
-        await notificationService.notifyRecordingFinished(fileURL: nil, message: error.localizedDescription)
+        enqueueRecordingFinished(fileURL: nil, message: error.localizedDescription)
         await MainActor.run { NSApp.terminate(nil) }
+    }
+
+    private func enqueueRecordingFinished(fileURL: URL?, message: String?) {
+        do {
+            try notificationService.enqueueAndWakeRecordingFinished(fileURL: fileURL, message: message)
+        } catch {
+            DiagnosticLog.append("[Recording] notification event enqueue failed: \(error.localizedDescription)")
+        }
     }
 
     private func reloadWidget() {

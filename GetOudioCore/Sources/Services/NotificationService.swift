@@ -1,7 +1,46 @@
 import Foundation
 import UserNotifications
 
+public protocol NotificationCenterClient: AnyObject {
+    func requestAuthorization(options: UNAuthorizationOptions) async throws -> Bool
+    func authorizationStatus() async -> UNAuthorizationStatus
+    func add(_ request: UNNotificationRequest) async throws
+    func setNotificationCategories(_ categories: Set<UNNotificationCategory>)
+}
+
+public final class SystemNotificationCenterClient: NotificationCenterClient {
+    private let center: UNUserNotificationCenter
+
+    public init(center: UNUserNotificationCenter = .current()) {
+        self.center = center
+    }
+
+    public func requestAuthorization(options: UNAuthorizationOptions) async throws -> Bool {
+        try await center.requestAuthorization(options: options)
+    }
+
+    public func authorizationStatus() async -> UNAuthorizationStatus {
+        await center.notificationSettings().authorizationStatus
+    }
+
+    public func add(_ request: UNNotificationRequest) async throws {
+        try await center.add(request)
+    }
+
+    public func setNotificationCategories(_ categories: Set<UNNotificationCategory>) {
+        center.setNotificationCategories(categories)
+    }
+}
+
 public final class NotificationService {
+    public enum AuthorizationState: Equatable, Sendable {
+        case notDetermined
+        case authorized
+        case denied
+    }
+
+    private static let retryDelays: [TimeInterval] = [2, 10, 60]
+    public static let foregroundPresentationOptions: UNNotificationPresentationOptions = [.banner, .sound]
     public enum AppleMusicNotification {
         public static let formatCategoryIdentifier = "APPLE_MUSIC_DOWNLOAD_FORMAT"
         public static let alacActionIdentifier = "APPLE_MUSIC_DOWNLOAD_ALAC"
@@ -15,18 +54,39 @@ public final class NotificationService {
     }
 
     private let container: SharedContainer
+    private let notificationCenter: any NotificationCenterClient
 
-    public init(container: SharedContainer) {
+    public init(
+        container: SharedContainer,
+        notificationCenter: any NotificationCenterClient = SystemNotificationCenterClient()
+    ) {
         self.container = container
+        self.notificationCenter = notificationCenter
     }
 
-    public func requestAuthorization() async {
+    @discardableResult
+    public func requestAuthorization() async -> Bool {
         registerAppleMusicNotificationCategories()
         do {
-            let granted = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])
+            let granted = try await notificationCenter.requestAuthorization(options: [.alert, .sound])
             DiagnosticLog.append("notification authorization requested granted=\(granted)")
+            return granted
         } catch {
             DiagnosticLog.append("notification authorization failed: \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    public func authorizationState() async -> AuthorizationState {
+        switch await notificationCenter.authorizationStatus() {
+        case .authorized, .provisional, .ephemeral:
+            return .authorized
+        case .denied:
+            return .denied
+        case .notDetermined:
+            return .notDetermined
+        @unknown default:
+            return .denied
         }
     }
 
@@ -76,7 +136,7 @@ public final class NotificationService {
             intentIdentifiers: [],
             options: []
         )
-        UNUserNotificationCenter.current().setNotificationCategories([
+        notificationCenter.setNotificationCategories([
             formatCategory,
             completionCategory,
             appleMusicFailureCategory
@@ -119,10 +179,10 @@ public final class NotificationService {
     }
 
     public func notifyRecordingFinished(fileURL: URL?, message: String? = nil) async {
-        let result = fileURL == nil ? "录音失败" : "录音已结束"
-        let fallback = fileURL.map { "复制了 \($0.lastPathComponent) 到剪贴板。" } ?? "没有生成可用的录音文件。"
-        let detail = message.flatMap { $0.isEmpty ? nil : $0 } ?? fallback
-        await notify(body: "\(result)。\(detail)")
+        _ = await send(
+            recordingFinishedRequest(fileName: fileURL?.lastPathComponent, message: message),
+            context: "recording finished"
+        )
     }
 
     public func notifyUnsupportedDownloadSource(urls: [URL]) async {
@@ -155,12 +215,46 @@ public final class NotificationService {
         do {
             let queue = try NotificationEventQueue(container: container)
             let claimedEvents = try queue.claimPending(limit: limit)
+            let authorization = await authorizationState()
             for claimed in claimedEvents {
+                guard authorization != .denied else {
+                    queue.suppress(claimed, reason: "authorization denied")
+                    continue
+                }
+
+                let accepted: Bool
                 switch claimed.event.kind {
                 case .conversionFinished:
-                    await notifyConversionFinished(summary: claimed.event.summary, jobs: claimed.event.jobs)
+                    guard let summary = claimed.event.summary else {
+                        queue.suppress(claimed, reason: "missing conversion summary")
+                        continue
+                    }
+                    accepted = await send(
+                        conversionFinishedRequest(summary: summary, jobs: claimed.event.jobs, identifier: claimed.event.id.uuidString),
+                        context: "conversion finished id=\(claimed.event.id.uuidString)"
+                    )
+                case .recordingFinished:
+                    guard let recording = claimed.event.recording else {
+                        queue.suppress(claimed, reason: "missing recording payload")
+                        continue
+                    }
+                    accepted = await send(
+                        recordingFinishedRequest(
+                            fileName: recording.fileName,
+                            message: recording.message,
+                            identifier: claimed.event.id.uuidString
+                        ),
+                        context: "recording finished id=\(claimed.event.id.uuidString)"
+                    )
                 }
-                queue.acknowledge(claimed)
+
+                if accepted {
+                    queue.acknowledge(claimed)
+                } else if claimed.event.attemptCount < Self.retryDelays.count {
+                    queue.retry(claimed, after: Self.retryDelays[claimed.event.attemptCount])
+                } else {
+                    queue.suppress(claimed, reason: "schedule failed after retries")
+                }
             }
             return claimedEvents.count
         } catch {
@@ -175,11 +269,39 @@ public final class NotificationService {
             await dispatchPendingNotificationEvents()
         } catch {
             DiagnosticLog.append("notification event enqueue failed: \(error.localizedDescription)")
-            await notifyConversionFinished(summary: summary, jobs: jobs)
+        }
+    }
+
+    public func enqueueRecordingFinished(fileURL: URL?, message: String? = nil) throws {
+        try NotificationEventQueue(container: container).enqueueRecordingFinished(fileURL: fileURL, message: message)
+    }
+
+    public func enqueueAndWakeRecordingFinished(fileURL: URL?, message: String? = nil) throws {
+        try enqueueRecordingFinished(fileURL: fileURL, message: message)
+        NotificationDispatchWaker.wake(container: container)
+    }
+
+    public func nextPendingNotificationRetryDate() -> Date? {
+        do {
+            return try NotificationEventQueue(container: container).nextAttemptDate()
+        } catch {
+            DiagnosticLog.append("notification retry lookup failed: \(error.localizedDescription)")
+            return nil
         }
     }
 
     public func notifyConversionFinished(summary: ConversionSummary, jobs: [JobRequest] = []) async {
+        _ = await send(
+            conversionFinishedRequest(summary: summary, jobs: jobs, identifier: UUID().uuidString),
+            context: "conversion finished"
+        )
+    }
+
+    private func conversionFinishedRequest(
+        summary: ConversionSummary,
+        jobs: [JobRequest],
+        identifier: String
+    ) -> UNNotificationRequest {
         let content = UNMutableNotificationContent()
         let actionName = Self.actionName(for: jobs)
         let isAppleMusicDownload = Self.isAppleMusicDownload(jobs)
@@ -218,11 +340,7 @@ public final class NotificationService {
             content.body = "\(actionName)基本完成，处理了 \(summary.totalCount) 个文件，成功 \(summary.successCount) 个，失败 \(summary.failureCount) 个。\(detail)"
         }
 
-        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
-        await send(
-            request,
-            context: "conversion finished action=\(actionName) success=\(summary.successCount) failure=\(summary.failureCount)"
-        )
+        return UNNotificationRequest(identifier: identifier, content: content, trigger: nil)
     }
 
     private func notify(body: String, sound: UNNotificationSound? = .default) async {
@@ -231,15 +349,33 @@ public final class NotificationService {
         content.body = body
         content.sound = sound
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
-        await send(request, context: "notification title=Get Oudio")
+        _ = await send(request, context: "notification title=Get Oudio")
     }
 
-    private func send(_ request: UNNotificationRequest, context: String) async {
+    private func recordingFinishedRequest(
+        fileName: String?,
+        message: String?,
+        identifier: String = UUID().uuidString
+    ) -> UNNotificationRequest {
+        let result = fileName == nil ? "录音失败" : "录音已结束"
+        let fallback = fileName.map { "复制了 \($0) 到剪贴板。" } ?? "没有生成可用的录音文件。"
+        let detail = message.flatMap { $0.isEmpty ? nil : $0 } ?? fallback
+        let content = UNMutableNotificationContent()
+        content.title = "Get Oudio"
+        content.body = "\(result)。\(detail)"
+        content.sound = .default
+        return UNNotificationRequest(identifier: identifier, content: content, trigger: nil)
+    }
+
+    @discardableResult
+    private func send(_ request: UNNotificationRequest, context: String) async -> Bool {
         do {
-            try await UNUserNotificationCenter.current().add(request)
+            try await notificationCenter.add(request)
             DiagnosticLog.append("notification scheduled id=\(request.identifier) context=\(context)")
+            return true
         } catch {
             DiagnosticLog.append("notification schedule failed context=\(context): \(error.localizedDescription)")
+            return false
         }
     }
 

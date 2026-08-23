@@ -1,4 +1,5 @@
 import CFNetwork
+import UserNotifications
 import XCTest
 @testable import GetOudioCore
 
@@ -685,6 +686,92 @@ final class GetOudioCoreTests: XCTestCase {
             queue.acknowledge(firstClaim)
         }
         XCTAssertTrue(try queue.claimPending().isEmpty)
+    }
+
+    func testNotificationEventQueueDecodesLegacyConversionEvent() throws {
+        struct LegacyEvent: Codable {
+            var id: UUID
+            var kind: NotificationEventKind
+            var summary: ConversionSummary
+            var jobs: [JobRequest]
+            var createdAt: Date
+        }
+
+        let summary = ConversionSummary(successCount: 1, failureCount: 0, messages: [])
+        let legacy = LegacyEvent(
+            id: UUID(),
+            kind: .conversionFinished,
+            summary: summary,
+            jobs: [],
+            createdAt: Date()
+        )
+
+        let decoded = try JSONDecoder().decode(NotificationEvent.self, from: JSONEncoder().encode(legacy))
+
+        XCTAssertEqual(decoded.kind, .conversionFinished)
+        XCTAssertEqual(decoded.summary, summary)
+        XCTAssertEqual(decoded.attemptCount, 0)
+        XCTAssertNil(decoded.nextAttemptAt)
+    }
+
+    func testNotificationEventQueueDefersRetryAndSuppressesRecordingEvent() throws {
+        let rootURL = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+
+        let queue = try NotificationEventQueue(rootURL: rootURL)
+        try queue.enqueueRecordingFinished(
+            fileURL: URL(fileURLWithPath: "/tmp/recording.wav"),
+            message: nil
+        )
+        let firstClaim = try XCTUnwrap(queue.claimPending().first)
+        queue.retry(firstClaim, after: 60)
+
+        XCTAssertTrue(try queue.claimPending(now: Date()).isEmpty)
+        let retryClaim = try XCTUnwrap(queue.claimPending(now: Date().addingTimeInterval(61)).first)
+        XCTAssertEqual(retryClaim.event.kind, .recordingFinished)
+        XCTAssertEqual(retryClaim.event.attemptCount, 1)
+
+        queue.suppress(retryClaim, reason: "test")
+        XCTAssertTrue(try queue.claimPending(now: Date().addingTimeInterval(61)).isEmpty)
+    }
+
+    func testNotificationServiceRendersAndAcknowledgesRecordingOutboxEvent() async throws {
+        let rootURL = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+        let suiteName = "GetOudioCoreTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let container = try SharedContainer.diagnostic(rootURL: rootURL, defaults: defaults)
+        let notificationCenter = TestNotificationCenterClient(status: .authorized)
+        let service = NotificationService(container: container, notificationCenter: notificationCenter)
+        try service.enqueueRecordingFinished(fileURL: URL(fileURLWithPath: "/tmp/recording.wav"))
+
+        let dispatched = await service.dispatchPendingNotificationEvents()
+        XCTAssertEqual(dispatched, 1)
+        let request = try XCTUnwrap(notificationCenter.requests.first)
+        XCTAssertEqual(request.content.title, "Get Oudio")
+        XCTAssertEqual(request.content.body, "录音已结束。复制了 recording.wav 到剪贴板。")
+        XCTAssertEqual(request.content.sound, .default)
+        XCTAssertTrue(try NotificationEventQueue(container: container).claimPending().isEmpty)
+    }
+
+    func testNotificationServiceSuppressesDeniedOutboxEvent() async throws {
+        let rootURL = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+        let suiteName = "GetOudioCoreTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let container = try SharedContainer.diagnostic(rootURL: rootURL, defaults: defaults)
+        let notificationCenter = TestNotificationCenterClient(status: .denied)
+        let service = NotificationService(container: container, notificationCenter: notificationCenter)
+        try service.enqueueRecordingFinished(fileURL: nil, message: "录音异常结束")
+
+        let dispatched = await service.dispatchPendingNotificationEvents()
+        XCTAssertEqual(dispatched, 1)
+        XCTAssertTrue(notificationCenter.requests.isEmpty)
+        XCTAssertTrue(try NotificationEventQueue(container: container).claimPending().isEmpty)
     }
 
     func testSettingsStorePersistsPresetsAndFinderDirectories() {
@@ -2145,5 +2232,31 @@ final class GetOudioCoreTests: XCTestCase {
         for index in 0..<8 {
             data[offset + index] = UInt8(truncatingIfNeeded: value >> UInt64(index * 8))
         }
+    }
+}
+
+private final class TestNotificationCenterClient: NotificationCenterClient {
+    let status: UNAuthorizationStatus
+    private(set) var requests: [UNNotificationRequest] = []
+    private(set) var categories: Set<UNNotificationCategory> = []
+
+    init(status: UNAuthorizationStatus) {
+        self.status = status
+    }
+
+    func requestAuthorization(options: UNAuthorizationOptions) async throws -> Bool {
+        status == .authorized
+    }
+
+    func authorizationStatus() async -> UNAuthorizationStatus {
+        status
+    }
+
+    func add(_ request: UNNotificationRequest) async throws {
+        requests.append(request)
+    }
+
+    func setNotificationCategories(_ categories: Set<UNNotificationCategory>) {
+        self.categories = categories
     }
 }

@@ -1,3 +1,4 @@
+import GetOudioCore
 import SwiftUI
 
 struct DashboardView: View {
@@ -6,14 +7,17 @@ struct DashboardView: View {
     @ObservedObject var finderSettings: FinderDirectorySettingsModel
     @ObservedObject var systemExtensionSettings: SystemExtensionSettingsModel
     @ObservedObject var recordingSettings: RecordingSettingsModel
+    @ObservedObject var notificationAuthorization: NotificationAuthorizationModel
     @ObservedObject var diagnosticSettings: DiagnosticSettingsModel
     let attention: SettingsAttentionPresentation
     let checkForUpdates: () -> Void
 
     var body: some View {
         SettingsForm(
-            scrollTarget: attention.scrollTarget == .microphonePermission ? Self.authorizationSectionID : nil,
-            scrollRequestID: attention.highlightRequest(for: .microphonePermission)
+            scrollTarget: attention.scrollTarget.map(authorizationAttentionItems.contains) == true
+                ? Self.authorizationSectionID
+                : nil,
+            scrollRequestID: authorizationHighlightRequest
         ) {
             SettingsSection("授权", systemImage: "checkmark.shield") {
                 VStack(alignment: .leading, spacing: 18) {
@@ -94,7 +98,7 @@ struct DashboardView: View {
                         Label("权限", systemImage: "lock.shield")
                             .font(.headline)
 
-                        Text("你需要批准麦克风访问权限，这使你可以使用「Get Oudio」的录音功能")
+                        Text("你需要批准以下系统权限，以使用录音功能并接收任务完成提醒。")
                             .font(.callout)
                             .foregroundStyle(.secondary)
 
@@ -109,10 +113,29 @@ struct DashboardView: View {
                                 Button("授权") { recordingSettings.requestMicrophonePermission() }
                             }
                         }
+
+                        Divider()
+
+                        HStack {
+                            Label(
+                                notificationAuthorization.state == .authorized ? "通知权限已启用" : "需要通知权限",
+                                systemImage: notificationAuthorization.state == .authorized ? "checkmark.circle.fill" : "exclamationmark.circle"
+                            )
+                            .foregroundStyle(notificationAuthorization.state == .authorized ? .green : .secondary)
+                            Spacer()
+                            switch notificationAuthorization.state {
+                            case .notDetermined:
+                                Button("授权") { notificationAuthorization.requestAuthorization() }
+                            case .denied:
+                                Button("前往系统设置") { notificationAuthorization.openNotificationSettings() }
+                            case .authorized:
+                                EmptyView()
+                            }
+                        }
                     }
                 }
             } cardOverlay: {
-                SettingsAttentionPulseOverlay(requestID: attention.highlightRequest(for: .microphonePermission))
+                SettingsAttentionPulseOverlay(requestID: authorizationHighlightRequest)
             }
             .id(Self.authorizationSectionID)
 
@@ -186,6 +209,14 @@ struct DashboardView: View {
                 }
             }
         }
+    }
+
+    private var authorizationAttentionItems: Set<SettingsAttentionItem> {
+        [.microphonePermission, .notificationPermission]
+    }
+
+    private var authorizationHighlightRequest: Int {
+        attention.items.isDisjoint(with: authorizationAttentionItems) ? 0 : attention.highlightRequestID
     }
 
     private var versionText: String {

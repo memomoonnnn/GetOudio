@@ -216,12 +216,10 @@ final class RecordingControlCoordinator {
         failed.errorMessage = "录音进程异常退出，已恢复播放设备并修复可用音频。"
         try? controlStore.save(failed)
         WidgetCenter.shared.reloadTimelines(ofKind: AppConstants.recordingWidgetKind)
-        Task {
-            await NotificationService(container: container).notifyRecordingFinished(
+        enqueueRecordingFinished(
                 fileURL: recoveredURL,
                 message: failed.errorMessage ?? "录音异常结束"
-            )
-        }
+        )
     }
 
     private func launchNewAppInstance(sessionID: UUID) {
@@ -257,11 +255,17 @@ final class RecordingControlCoordinator {
         failed.errorMessage = message
         try? controlStore.save(failed)
         WidgetCenter.shared.reloadTimelines(ofKind: AppConstants.recordingWidgetKind)
-        Task {
-            await NotificationService(container: container).notifyRecordingFinished(
-                fileURL: nil,
+        enqueueRecordingFinished(fileURL: nil, message: message)
+    }
+
+    private func enqueueRecordingFinished(fileURL: URL?, message: String) {
+        do {
+            try NotificationService(container: container).enqueueAndWakeRecordingFinished(
+                fileURL: fileURL,
                 message: message
             )
+        } catch {
+            DiagnosticLog.append("[Recording] notification event enqueue failed: \(error.localizedDescription)")
         }
     }
 
