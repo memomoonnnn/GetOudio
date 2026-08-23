@@ -6,6 +6,15 @@
         <description>Get Oudio release updates.</description>
         <language>zh-CN</language>
         <item>
+            <title>1.2.3</title>
+            <pubDate>Mon, 24 Aug 2026 00:22:53 +0800</pubDate>
+            <link>https://github.com/memomoonnnn/GetOudio/releases</link>
+            <sparkle:version>7</sparkle:version>
+            <sparkle:shortVersionString>1.2.3</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/memomoonnnn/GetOudio/releases/download/v1.2.3/GetOudio.dmg" length="16986569" type="application/octet-stream" sparkle:edSignature="x8OtcPyfEtFylgIOxpZ2tbmdNvQbzzDCO1qWy1PJ7pWM9jetVUk+NZdNZnAVhir5DZeeQdCOvtlQXvuOgqKCCw=="/>
+        </item>
+        <item>
             <title>1.2.2</title>
             <pubDate>Mon, 20 Jul 2026 10:07:22 +0800</pubDate>
             <link>https://github.com/memomoonnnn/GetOudio/releases</link>
