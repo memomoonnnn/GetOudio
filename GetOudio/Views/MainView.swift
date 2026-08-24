@@ -10,7 +10,7 @@ struct MainView: View {
     private let checkForUpdates: () -> Void
 
     init(
-        container: SharedContainer,
+        container: AgentDataStore,
         initialSettingsAttention: SettingsAttentionItem? = nil,
         checkForUpdates: @escaping () -> Void
     ) {
@@ -55,10 +55,13 @@ struct MainView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             settingsViewModel.recordingSettings.refresh()
             settingsViewModel.notificationAuthorization.refresh()
+            settingsViewModel.backgroundAgentAuthorization.refresh()
         }
         .onAppear {
-            guard attentionPresentation.highlightRequestID == 0 else { return }
-            select(selection ?? .overview)
+            if attentionPresentation.highlightRequestID == 0 {
+                select(selection ?? .overview)
+            }
+            settingsViewModel.backgroundAgentAuthorization.installOnFirstSettingsPresentationIfNeeded()
         }
         .onChange(of: attentionState.outstandingItems) {
             guard let selection else { return }
@@ -128,6 +131,7 @@ struct MainView: View {
                 systemExtensionSettings: settingsViewModel.systemExtensionSettings,
                 recordingSettings: settingsViewModel.recordingSettings,
                 notificationAuthorization: settingsViewModel.notificationAuthorization,
+                backgroundAgentAuthorization: settingsViewModel.backgroundAgentAuthorization,
                 diagnosticSettings: settingsViewModel.diagnosticSettings,
                 attention: attentionPresentation,
                 checkForUpdates: checkForUpdates
@@ -336,7 +340,7 @@ private enum MainSidebarItem: String, CaseIterable, Identifiable {
 private extension SettingsAttentionItem {
     var sidebarItem: MainSidebarItem {
         switch self {
-        case .microphonePermission, .notificationPermission:
+        case .microphonePermission, .notificationPermission, .backgroundActivity:
             .overview
         case .transcodingDocumentation:
             .transcoding

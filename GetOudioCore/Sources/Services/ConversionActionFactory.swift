@@ -7,7 +7,7 @@ public struct ConversionActionFactory {
         self.settingsStore = settingsStore
     }
 
-    public init(container: SharedContainer) {
+    public init(container: AgentDataStore) {
         self.init(settingsStore: SettingsStore(container: container))
     }
 

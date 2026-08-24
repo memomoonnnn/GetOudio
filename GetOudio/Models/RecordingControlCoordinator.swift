@@ -23,14 +23,14 @@ final class RecordingControlCoordinator {
         case failed(String)
     }
 
-    private let container: SharedContainer
+    private let container: AgentDataStore
     private let store: SettingsStore
     private let controlStore: RecordingControlStore?
     private var supervisionTimer: Timer?
     private var supervisionSawActiveState = false
     private var supervisionStartedAt = Date.distantPast
 
-    init(container: SharedContainer) {
+    init(container: AgentDataStore) {
         self.container = container
         store = SettingsStore(container: container)
         do {
@@ -71,8 +71,7 @@ final class RecordingControlCoordinator {
                 DiagnosticLog.append("[Recording] concurrent toggle converted to stop request")
                 return .requestedStop
             }
-            LaunchMarkerStore(container: container).mark(.recording)
-            DiagnosticLog.append("[Recording] preflight passed; session reserved id=\(reservation.id.uuidString) and launch marker written")
+            DiagnosticLog.append("[Recording] preflight passed; session reserved id=\(reservation.id.uuidString)")
             launchNewAppInstance(sessionID: reservation.id)
             beginSupervision(sessionID: reservation.id, onFinished: onRunnerFinished)
             return .launchedRunner
@@ -223,23 +222,19 @@ final class RecordingControlCoordinator {
     }
 
     private func launchNewAppInstance(sessionID: UUID) {
-        let configuration = NSWorkspace.OpenConfiguration()
-        configuration.activates = false
-        configuration.createsNewApplicationInstance = true
-        if let diagnosticRoot = ProcessInfo.processInfo.environment[SharedContainer.diagnosticRootEnvironmentKey] {
-            configuration.environment = [SharedContainer.diagnosticRootEnvironmentKey: diagnosticRoot]
+        guard let executableURL = Bundle.main.executableURL else {
+            failPendingLaunch(sessionID: sessionID, message: "未找到录音后台可执行文件。")
+            return
         }
-        NSWorkspace.shared.openApplication(
-            at: Bundle.main.bundleURL,
-            configuration: configuration
-        ) { [weak self] _, error in
-            if let error {
-                DiagnosticLog.append("[Recording] runner launch failed error=\(error.localizedDescription)")
-                guard let self else { return }
-                self.failPendingLaunch(sessionID: sessionID, message: error.localizedDescription)
-            } else {
-                DiagnosticLog.append("[Recording] runner launch request completed")
-            }
+        let process = Process()
+        process.executableURL = executableURL
+        process.arguments = ["--recording-runner"]
+        do {
+            try process.run()
+            DiagnosticLog.append("[Recording] runner launched pid=\(process.processIdentifier)")
+        } catch {
+            DiagnosticLog.append("[Recording] runner launch failed error=\(error.localizedDescription)")
+            failPendingLaunch(sessionID: sessionID, message: error.localizedDescription)
         }
     }
 
@@ -248,7 +243,6 @@ final class RecordingControlCoordinator {
         let current = controlStore.snapshot()
         guard current.id == sessionID, current.phase == .starting else { return }
         _ = controlStore.drainCommands()
-        LaunchMarkerStore(container: container).clear()
         var failed = current
         failed.phase = .failed
         failed.stopReason = .startupFailure

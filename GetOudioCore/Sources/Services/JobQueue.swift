@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 public struct ClaimedJobBatch: Sendable {
@@ -20,16 +21,24 @@ public final class JobQueue {
         try fileManager.createDirectory(at: self.fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
     }
 
-    public convenience init(container: SharedContainer, fileManager: FileManager = .default) throws {
+    public convenience init(container: AgentDataStore, fileManager: FileManager = .default) throws {
         try self.init(fileURL: container.url(for: .jobQueue), fileManager: fileManager)
     }
 
     public func enqueue(_ jobs: [JobRequest]) throws {
         guard !jobs.isEmpty else { return }
+        let lock = try queueLock()
+        defer { lock.unlock() }
         var existing = try read()
-        existing.append(contentsOf: jobs)
+        let existingIDs = Set(existing.map(\.id))
+        let newJobs = jobs.filter { !existingIDs.contains($0.id) }
+        guard !newJobs.isEmpty else {
+            DiagnosticLog.append("queue enqueue skipped duplicate count=\(jobs.count)")
+            return
+        }
+        existing.append(contentsOf: newJobs)
         try write(existing)
-        DiagnosticLog.append("queue enqueue count=\(jobs.count) total=\(existing.count)")
+        DiagnosticLog.append("queue enqueue count=\(newJobs.count) total=\(existing.count)")
     }
 
     public func read() throws -> [JobRequest] {
@@ -55,6 +64,8 @@ public final class JobQueue {
     }
 
     public func claimPending(staleClaimMaxAge: TimeInterval = 300) throws -> ClaimedJobBatch? {
+        let lock = try queueLock()
+        defer { lock.unlock() }
         try requeueStaleClaim(maxAge: staleClaimMaxAge)
 
         guard fileManager.fileExists(atPath: fileURL.path) else {
@@ -83,6 +94,8 @@ public final class JobQueue {
     }
 
     public func acknowledge(_ claim: ClaimedJobBatch) throws {
+        let lock = try queueLock()
+        defer { lock.unlock() }
         guard fileManager.fileExists(atPath: claim.fileURL.path) else {
             return
         }
@@ -94,6 +107,19 @@ public final class JobQueue {
     private func write(_ jobs: [JobRequest]) throws {
         let data = try encoder.encode(jobs)
         try data.write(to: fileURL, options: [.atomic])
+    }
+
+    private func queueLock() throws -> QueueLock {
+        let lockURL = fileURL.appendingPathExtension("lock")
+        let descriptor = open(lockURL.path, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR)
+        guard descriptor >= 0 else {
+            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+        }
+        guard flock(descriptor, LOCK_EX) == 0 else {
+            close(descriptor)
+            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+        }
+        return QueueLock(descriptor: descriptor)
     }
 
     private func requeueStaleClaim(maxAge: TimeInterval) throws {
@@ -132,5 +158,18 @@ public final class JobQueue {
             ? "\(baseName).processing"
             : "\(baseName).processing.\(pathExtension)"
         return directory.appendingPathComponent(fileName)
+    }
+}
+
+private final class QueueLock {
+    private let descriptor: Int32
+
+    init(descriptor: Int32) {
+        self.descriptor = descriptor
+    }
+
+    func unlock() {
+        flock(descriptor, LOCK_UN)
+        close(descriptor)
     }
 }

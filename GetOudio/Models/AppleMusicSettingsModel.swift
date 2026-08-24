@@ -25,10 +25,9 @@ final class AppleMusicSettingsModel: ObservableObject {
     private let store: SettingsStore
     private let appleMusicAgentClient: AppleMusicRuntimeAgentClient
     private let appleMusicDownloadService: AppleMusicDownloadService
-    private let appleMusicAgentLauncher = AppleMusicRuntimeAgentLauncher.shared
     private var latestAppleMusicWrapperLoginSnapshotRevision: UInt64 = 0
 
-    init(container: SharedContainer, store: SettingsStore) {
+    init(container: AgentDataStore, store: SettingsStore) {
         self.store = store
         appleMusicAgentClient = AppleMusicRuntimeAgentClient(container: container)
         appleMusicDownloadService = AppleMusicDownloadService(container: container)
@@ -101,7 +100,7 @@ final class AppleMusicSettingsModel: ObservableObject {
         }
 
         do {
-            try await appleMusicAgentLauncher.ensureRunning()
+            try await BackgroundAgentRegistration.ensureAvailable()
             let report = try await appleMusicAgentClient.status()
             appleMusicRuntimeStatuses = report.statuses
             isAppleMusicDownloadEnabled = report.isEnabled
@@ -124,7 +123,7 @@ final class AppleMusicSettingsModel: ObservableObject {
             ? "正在通过 Downloader Runtime Agent 检查并更新 Runtime..."
             : "正在通过 Downloader Runtime Agent 安装 Runtime..."
         do {
-            try await appleMusicAgentLauncher.ensureRunning()
+            try await BackgroundAgentRegistration.ensureAvailable()
             let report = try await appleMusicAgentClient.install()
             appleMusicRuntimeStatuses = report.statuses
             isAppleMusicDownloadEnabled = report.isEnabled
@@ -144,7 +143,7 @@ final class AppleMusicSettingsModel: ObservableObject {
         isManagingAppleMusicRuntime = true
         appleMusicRuntimeMessage = "正在卸载 Downloader Runtime..."
         do {
-            try await appleMusicAgentLauncher.ensureRunning()
+            try await BackgroundAgentRegistration.ensureAvailable()
             let report = try await appleMusicAgentClient.uninstall()
             appleMusicRuntimeStatuses = report.statuses
             isAppleMusicDownloadEnabled = report.isEnabled
@@ -166,7 +165,7 @@ final class AppleMusicSettingsModel: ObservableObject {
         appleMusicInitializationRequestMessage = "正在提交初始化请求..."
         defer { isSendingAppleMusicInitializationRequest = false }
         do {
-            try await appleMusicAgentLauncher.ensureRunning()
+            try await BackgroundAgentRegistration.ensureAvailable()
             let summary = await appleMusicDownloadService.initializeWrapper(
                 username: username,
                 password: password,
@@ -192,7 +191,7 @@ final class AppleMusicSettingsModel: ObservableObject {
         appleMusicInitializationRequestMessage = "正在提交验证码..."
         defer { isSubmittingAppleMusicVerificationCode = false }
         do {
-            try await appleMusicAgentLauncher.ensureRunning()
+            try await BackgroundAgentRegistration.ensureAvailable()
             let summary = await appleMusicDownloadService.submitWrapperVerificationCode(code)
             appleMusicInitializationRequestMessage = summary.failureCount == 0
                 ? nil
@@ -239,7 +238,7 @@ final class AppleMusicSettingsModel: ObservableObject {
         }
 
         do {
-            try await appleMusicAgentLauncher.ensureRunning()
+            try await BackgroundAgentRegistration.ensureAvailable()
             let status = try await appleMusicAgentClient.wrapperLoginStatus()
             applyAppleMusicWrapperLoginStatus(status)
         } catch {

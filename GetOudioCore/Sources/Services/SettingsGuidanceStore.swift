@@ -3,6 +3,7 @@ import Foundation
 public enum SettingsAttentionItem: String, Codable, Hashable, Sendable {
     case microphonePermission
     case notificationPermission
+    case backgroundActivity
     case transcodingDocumentation
     case ncmDocumentation
     case appleMusicDocumentation
@@ -28,7 +29,7 @@ public struct SettingsAttentionRequestStore {
         self.defaults = defaults
     }
 
-    public init(container: SharedContainer) {
+    public init(container: AgentDataStore) {
         self.init(defaults: container.defaults)
     }
 

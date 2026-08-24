@@ -36,10 +36,10 @@ final class RecordingSettingsModel: ObservableObject {
     @Published var silencePaddingMilliseconds: Int
     @Published var message = ""
 
-    private let container: SharedContainer
+    private let container: AgentDataStore
     private let store: SettingsStore
 
-    init(container: SharedContainer, store: SettingsStore) {
+    init(container: AgentDataStore, store: SettingsStore) {
         self.container = container
         self.store = store
         selectedBridgeUID = store.recordingBridgeDeviceUID

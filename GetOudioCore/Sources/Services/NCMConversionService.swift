@@ -15,7 +15,7 @@ public final class NCMConversionService {
         self.settingsStore = settingsStore
     }
 
-    public convenience init(container: SharedContainer) {
+    public convenience init(container: AgentDataStore) {
         self.init(settingsStore: SettingsStore(container: container))
     }
 

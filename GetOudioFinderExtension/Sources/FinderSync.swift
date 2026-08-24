@@ -13,27 +13,13 @@ private final class FinderActionContext: NSObject {
 }
 
 @objc final class FinderSync: FIFinderSync {
-    private let container: SharedContainer?
-    private let settingsStore: SettingsStore?
-    private let actionFactory: ConversionActionFactory?
+    private let agent = BackgroundAgentClient()
+    private var configuration: BackgroundAgentFinderConfiguration?
     private var lastAudioSelection: [URL] = []
 
     override init() {
-        do {
-            let container = try SharedContainer.forCurrentProcess()
-            DiagnosticLog.configure(container: container)
-            self.container = container
-            let settingsStore = SettingsStore(container: container)
-            self.settingsStore = settingsStore
-            self.actionFactory = ConversionActionFactory(settingsStore: settingsStore)
-        } catch {
-            container = nil
-            settingsStore = nil
-            actionFactory = nil
-            NSLog("Get Oudio Finder extension shared container unavailable: \(error.localizedDescription)")
-        }
         super.init()
-        reloadObservedDirectories()
+        refreshConfiguration()
     }
 
     override var toolbarItemName: String {
@@ -49,8 +35,10 @@ private final class FinderActionContext: NSObject {
     }
 
     override func menu(for menuKind: FIMenuKind) -> NSMenu? {
-        guard container != nil, actionFactory != nil else { return nil }
-        reloadObservedDirectories()
+        guard configuration != nil else {
+            refreshConfiguration()
+            return nil
+        }
 
         let menu = NSMenu(title: "Get Oudio")
 
@@ -172,8 +160,7 @@ private final class FinderActionContext: NSObject {
         return JobRequest(
             fileURL: fileURL,
             fileBookmarkData: JobRequest.securityScopedBookmarkData(for: fileURL),
-            directoryBookmarkData: settingsStore?.directoryBookmarkData(for: directoryURL)
-                ?? JobRequest.securityScopedBookmarkData(for: directoryURL),
+            directoryBookmarkData: JobRequest.securityScopedBookmarkData(for: directoryURL),
             category: category,
             operation: operation,
             source: .finderSync
@@ -186,25 +173,15 @@ private final class FinderActionContext: NSObject {
             return
         }
 
-        do {
-            DiagnosticLog.append("finder enqueue start count=\(jobs.count) operations=\(jobs.map { operationDescription($0.operation) }.joined(separator: ","))")
-            guard let container else { return }
-            let intake = try JobIntake(container: container)
-            try intake.enqueue(jobs, launchSource: .finderSync)
-            openContainingApp()
-        } catch {
-            DiagnosticLog.append("finder enqueue failed \(error.localizedDescription)")
-            NSLog("Get Oudio Finder extension failed to enqueue jobs: \(error.localizedDescription)")
+        DiagnosticLog.append("finder enqueue start count=\(jobs.count) operations=\(jobs.map { operationDescription($0.operation) }.joined(separator: ","))")
+        Task { [agent] in
+            do {
+                try await agent.enqueue(jobs)
+            } catch {
+                DiagnosticLog.append("finder enqueue failed \(error.localizedDescription)")
+                NSLog("Get Oudio Finder extension failed to enqueue jobs: \(error.localizedDescription)")
+            }
         }
-    }
-
-    @objc private func openContainingApp() {
-        guard let url = URL(string: "\(AppConstants.appURLScheme)://run-queued") else {
-            return
-        }
-
-        DiagnosticLog.append("finder open url \(url.absoluteString)")
-        NSWorkspace.shared.open(url)
     }
 
     private func operationDescription(_ operation: JobOperation) -> String {
@@ -221,11 +198,11 @@ private final class FinderActionContext: NSObject {
     }
 
     private func reloadObservedDirectories() {
-        FIFinderSyncController.default().directoryURLs = Set(settingsStore?.finderDirectoryURLs ?? [])
+        FIFinderSyncController.default().directoryURLs = Set(configuration?.finderDirectories ?? [])
     }
 
     private func enabledPresets() -> [ConversionPreset] {
-        actionFactory?.enabledPresets() ?? []
+        configuration?.enabledPresets ?? []
     }
 
     private func runPreset(_ preset: ConversionPreset) {
@@ -233,7 +210,23 @@ private final class FinderActionContext: NSObject {
         let urls = selectedURLs.isEmpty ? lastAudioSelection : selectedURLs
         DiagnosticLog.append("finder audio action preset=\(preset.rawValue) selected=\(urls.count)")
 
-        enqueue(actionFactory?.audioTranscodeJobs(for: urls, preset: preset, source: .finderSync) ?? [])
+        enqueue(urls
+            .filter { FileCategory.classify($0) == .audio }
+            .map { makeJob(fileURL: $0, category: .audio, operation: .transcode(preset)) })
+    }
+
+    private func refreshConfiguration() {
+        Task { [weak self, agent] in
+            do {
+                let configuration = try await agent.finderConfiguration()
+                await MainActor.run {
+                    self?.configuration = configuration
+                    self?.reloadObservedDirectories()
+                }
+            } catch {
+                NSLog("Get Oudio Finder extension agent unavailable: \(error.localizedDescription)")
+            }
+        }
     }
 
     private func actionSelector(for preset: ConversionPreset) -> Selector {

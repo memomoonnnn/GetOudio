@@ -16,6 +16,7 @@ final class SettingsAttentionState: ObservableObject {
     private let store: SettingsStore
     private let recordingSettings: RecordingSettingsModel
     private let notificationAuthorization: NotificationAuthorizationModel
+    private let backgroundAgentAuthorization: BackgroundAgentAuthorizationModel
     private let appleMusicSettings: AppleMusicSettingsModel
     private var observationCancellables = Set<AnyCancellable>()
 
@@ -23,16 +24,19 @@ final class SettingsAttentionState: ObservableObject {
         store: SettingsStore,
         recordingSettings: RecordingSettingsModel,
         notificationAuthorization: NotificationAuthorizationModel,
+        backgroundAgentAuthorization: BackgroundAgentAuthorizationModel,
         appleMusicSettings: AppleMusicSettingsModel
     ) {
         self.store = store
         self.recordingSettings = recordingSettings
         self.notificationAuthorization = notificationAuthorization
+        self.backgroundAgentAuthorization = backgroundAgentAuthorization
         self.appleMusicSettings = appleMusicSettings
 
         [
             recordingSettings.objectWillChange.eraseToAnyPublisher(),
             notificationAuthorization.objectWillChange.eraseToAnyPublisher(),
+            backgroundAgentAuthorization.objectWillChange.eraseToAnyPublisher(),
             appleMusicSettings.objectWillChange.eraseToAnyPublisher()
         ]
         .forEach { publisher in
@@ -56,6 +60,9 @@ final class SettingsAttentionState: ObservableObject {
         }
         if notificationAuthorization.state != .authorized {
             items.insert(.notificationPermission)
+        }
+        if backgroundAgentAuthorization.state != .enabled {
+            items.insert(.backgroundActivity)
         }
         if !recordingSettings.hasConfiguredInput {
             items.insert(.recordingInput)

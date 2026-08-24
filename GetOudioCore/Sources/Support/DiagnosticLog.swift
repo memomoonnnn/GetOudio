@@ -12,12 +12,14 @@ public enum DiagnosticLog {
     private static var configuredLogURL: URL?
     private static var configuredSettingsStore: SettingsStore?
 
-    public static func configure(container: SharedContainer) {
+    public static func configure(store: AgentDataStore) {
         lock.lock()
-        configuredLogURL = container.url(for: .conversionLog)
-        configuredSettingsStore = SettingsStore(container: container)
+        configuredLogURL = store.url(for: .conversionLog)
+        configuredSettingsStore = SettingsStore(container: store)
         lock.unlock()
     }
+
+    @available(*, deprecated, renamed: "configure(store:)")
 
     public static func append(_ message: String, level: Level = .debug) {
         lock.lock()

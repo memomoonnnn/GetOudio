@@ -34,7 +34,7 @@ public final class SettingsStore {
         seedDefaultsIfNeeded()
     }
 
-    public convenience init(container: SharedContainer) {
+    public convenience init(container: AgentDataStore) {
         self.init(defaults: container.defaults)
     }
 

@@ -7,12 +7,11 @@ import UserNotifications
 /// It never creates windows itself; missing configuration opens a separate settings instance.
 final class HeadlessRunner: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
 
-    private let container: SharedContainer
+    private let container: AgentDataStore
     private let audioService = AudioConversionService()
     private let mediaService = MediaExtractionService()
     private let ncmService: NCMConversionService
     private let amService: AppleMusicDownloadService
-    private let appleMusicAgentLauncher = AppleMusicRuntimeAgentLauncher.shared
     private let notificationService: NotificationService
     private let appleMusicShareCoordinator: AppleMusicShareDownloadCoordinator
     private let lifecycleLock = NSLock()
@@ -20,7 +19,7 @@ final class HeadlessRunner: NSObject, NSApplicationDelegate, UNUserNotificationC
     private var activeNotificationResponses = 0
     private var terminationTask: Task<Void, Never>?
 
-    init(container: SharedContainer) {
+    init(container: AgentDataStore) {
         self.container = container
         ncmService = NCMConversionService(container: container)
         amService = AppleMusicDownloadService(container: container)
@@ -31,7 +30,7 @@ final class HeadlessRunner: NSObject, NSApplicationDelegate, UNUserNotificationC
 
     // MARK: - Entry point
 
-    static func main(container: SharedContainer) {
+    static func main(container: AgentDataStore) {
         let app = NSApplication.shared
         app.setActivationPolicy(.accessory)
         let runner = HeadlessRunner(container: container)
@@ -160,10 +159,7 @@ final class HeadlessRunner: NSObject, NSApplicationDelegate, UNUserNotificationC
 
     // MARK: - Job processing
 
-    private func processAndNotify() async {
-        // Clear extension launch markers so a subsequent direct launch isn't misidentified
-        LaunchMarkerStore(container: container).clear()
-
+    func processAndNotify() async {
         await notificationService.dispatchPendingNotificationEvents()
 
         let shareEvents: [ShareEvent]
@@ -268,7 +264,7 @@ final class HeadlessRunner: NSObject, NSApplicationDelegate, UNUserNotificationC
             totalSuccess += s.successCount; totalFailure += s.failureCount; messages += s.messages
         }
         if !amJobs.isEmpty {
-            try? await appleMusicAgentLauncher.ensureRunning()
+            try? await BackgroundAgentRegistration.ensureAvailable()
             await notificationService.notifyAppleMusicDownloadStarted()
             let s = await amService.download(amJobs)
             totalSuccess += s.successCount; totalFailure += s.failureCount; messages += s.messages

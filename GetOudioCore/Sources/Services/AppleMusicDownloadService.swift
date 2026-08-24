@@ -33,7 +33,7 @@ public final class AppleMusicDownloadService {
     }
 
     public convenience init(
-        container: SharedContainer,
+        container: AgentDataStore,
         runner: ProcessRunner = ProcessRunner(),
         componentManager: BundledComponentManager = BundledComponentManager(),
         useAgent: Bool = true

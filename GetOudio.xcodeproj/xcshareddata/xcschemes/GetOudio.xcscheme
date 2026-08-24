@@ -29,9 +29,9 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "771BA082D2D4EC90E96CE749"
-               BuildableName = "GetOudioAMRuntimeAgent.app"
-               BlueprintName = "GetOudioAMRuntimeAgent"
+               BlueprintIdentifier = "727704C7B80667B86F54968C"
+               BuildableName = "GetOudioAMRuntimeWorker.app"
+               BlueprintName = "GetOudioAMRuntimeWorker"
                ReferencedContainer = "container:GetOudio.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>

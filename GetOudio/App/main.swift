@@ -2,32 +2,21 @@ import AppKit
 import Darwin
 import GetOudioCore
 
-// Headless detection
-//
-//   • Direct launch without marker → NormalLauncher shows the settings window.
-//   • Finder/Share/Open With marker → HeadlessRunner drains JobQueue, notifies, exits.
-//   • Transient Open With UI is menu-style and only enqueues work.
+let arguments = Set(CommandLine.arguments.dropFirst())
 
-let sharedContainer: SharedContainer
-do {
-    sharedContainer = try SharedContainer.forCurrentProcess()
-    DiagnosticLog.configure(container: sharedContainer)
-} catch {
-    NSLog("Get Oudio shared container unavailable: \(error.localizedDescription)")
-    let alert = NSAlert()
-    alert.messageText = "Get Oudio 无法访问共享容器"
-    alert.informativeText = "请检查应用签名和 App Group 配置后重新启动。\n\n\(error.localizedDescription)"
-    alert.alertStyle = .critical
-    alert.runModal()
-    exit(EXIT_FAILURE)
-}
-
-let launchSource = LaunchMarkerStore(container: sharedContainer).activeSource()
-
-if launchSource == .recording {
-    RecordingRunner.main(container: sharedContainer)
-} else if launchSource != nil {
-    HeadlessRunner.main(container: sharedContainer)
+if arguments.contains("--background-agent") {
+    BackgroundAgent.main()
 } else {
-    NormalLauncher.main(container: sharedContainer)
+    do {
+        let store = try AgentDataStore.production()
+        DiagnosticLog.configure(store: store)
+        if arguments.contains("--recording-runner") {
+            RecordingRunner.main(container: store)
+        } else {
+            NormalLauncher.main(container: store)
+        }
+    } catch {
+        NSLog("Get Oudio v2 data root unavailable: \(error.localizedDescription)")
+        exit(EXIT_FAILURE)
+    }
 }

@@ -2,19 +2,17 @@ import Foundation
 import GetOudioCore
 
 final class AppleMusicShareDownloadCoordinator {
-    private let container: SharedContainer
+    private let container: AgentDataStore
     private let settingsStore: SettingsStore
     private let agentClient: AppleMusicRuntimeAgentClient
-    private let agentLauncher: AppleMusicRuntimeAgentLauncher
     private let downloadService: AppleMusicDownloadService
     private let notificationService: NotificationService
     private let pendingStoreFactory: () throws -> PendingAppleMusicDownloadStore
 
     init(
-        container: SharedContainer,
+        container: AgentDataStore,
         settingsStore: SettingsStore? = nil,
         agentClient: AppleMusicRuntimeAgentClient? = nil,
-        agentLauncher: AppleMusicRuntimeAgentLauncher = .shared,
         downloadService: AppleMusicDownloadService? = nil,
         notificationService: NotificationService? = nil,
         pendingStoreFactory: (() throws -> PendingAppleMusicDownloadStore)? = nil
@@ -22,7 +20,6 @@ final class AppleMusicShareDownloadCoordinator {
         self.container = container
         self.settingsStore = settingsStore ?? SettingsStore(container: container)
         self.agentClient = agentClient ?? AppleMusicRuntimeAgentClient(container: container)
-        self.agentLauncher = agentLauncher
         self.downloadService = downloadService ?? AppleMusicDownloadService(container: container)
         self.notificationService = notificationService ?? NotificationService(container: container)
         self.pendingStoreFactory = pendingStoreFactory ?? { try PendingAppleMusicDownloadStore(container: container) }
@@ -83,7 +80,6 @@ final class AppleMusicShareDownloadCoordinator {
         if forcedFormat == nil, settingsStore.appleMusicDownloadFormat == .askEveryTime {
             do {
                 _ = try pendingStoreFactory().save(jobs)
-                markShareExtensionHeadlessLaunch()
                 await notificationService.notifyAppleMusicFormatSelection(jobCount: jobs.count)
             } catch {
                 DiagnosticLog.append("pending Apple Music downloads save failed: \(error.localizedDescription)")
@@ -119,7 +115,7 @@ final class AppleMusicShareDownloadCoordinator {
         }
 
         do {
-            try await agentLauncher.ensureRunning()
+            try await BackgroundAgentRegistration.ensureAvailable()
             let report = try await agentClient.status()
             guard report.isEnabled, report.statuses.allSatisfy(\.isReady) else {
                 return .needsRuntimeInstallation
@@ -168,9 +164,6 @@ final class AppleMusicShareDownloadCoordinator {
         DiagnosticLog.append(lines.joined(separator: "\n"), level: .info)
     }
 
-    private func markShareExtensionHeadlessLaunch() {
-        LaunchMarkerStore(container: container).mark(.shareExtension)
-    }
 }
 
 private extension JobRequest {

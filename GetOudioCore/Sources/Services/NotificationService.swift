@@ -53,11 +53,11 @@ public final class NotificationService {
         public static let copyInfoUserInfoKey = "copyInfo"
     }
 
-    private let container: SharedContainer
+    private let container: AgentDataStore
     private let notificationCenter: any NotificationCenterClient
 
     public init(
-        container: SharedContainer,
+        container: AgentDataStore,
         notificationCenter: any NotificationCenterClient = SystemNotificationCenterClient()
     ) {
         self.container = container

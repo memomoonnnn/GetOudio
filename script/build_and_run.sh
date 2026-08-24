@@ -4,15 +4,14 @@ set -euo pipefail
 MODE="${1:-run}"
 SCHEME="GetOudio"
 APP_NAME="Get Oudio"
-AGENT_NAME="GetOudioAMRuntimeAgent"
 BUNDLE_ID="com.shengjiacheng.GetOudio"
 FINDER_EXTENSION_ID="com.shengjiacheng.GetOudio.FinderExtension"
 FINDER_EXTENSION_POINT_ID="com.apple.FinderSync"
 SHARE_EXTENSION_POINT_ID="com.apple.share-services"
 RECORDING_WIDGET_EXTENSION_ID="com.shengjiacheng.GetOudio.RecordingWidget"
 RECORDING_WIDGET_EXTENSION_POINT_ID="com.apple.widgetkit-extension"
-APP_GROUP_ID="group.com.shengjiacheng.GetOudio"
-DIAGNOSTIC_SHARED_CONTAINER_KEY="GET_OUDIO_DIAGNOSTIC_SHARED_CONTAINER_ROOT"
+AGENT_PLIST_NAME="com.shengjiacheng.GetOudio.agent.plist"
+AGENT_SERVICE_NAME="com.shengjiacheng.GetOudio.agent"
 SHARE_EXTENSION_ID="com.shengjiacheng.GetOudio.ShareExtension"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DERIVED_DATA="$ROOT_DIR/build/DerivedData"
@@ -31,27 +30,6 @@ xcodegen generate
 
 stop_running_processes() {
   pkill -x "$APP_NAME" >/dev/null 2>&1 || true
-  pkill -x "$AGENT_NAME" >/dev/null 2>&1 || true
-}
-
-verify_embedded_agent() {
-  local configuration="$1"
-  local app_bundle="$DERIVED_DATA/Build/Products/$configuration/$APP_NAME.app"
-  local built_agent="$DERIVED_DATA/Build/Products/$configuration/$AGENT_NAME.app/Contents/MacOS/$AGENT_NAME"
-  local embedded_agent="$app_bundle/Contents/Library/LoginItems/$AGENT_NAME.app/Contents/MacOS/$AGENT_NAME"
-
-  if [[ ! -x "$built_agent" ]]; then
-    echo "missing built Apple Music Runtime Agent executable: $built_agent" >&2
-    exit 1
-  fi
-  if [[ ! -x "$embedded_agent" ]]; then
-    echo "missing embedded Apple Music Runtime Agent executable: $embedded_agent" >&2
-    exit 1
-  fi
-  if ! cmp -s "$built_agent" "$embedded_agent"; then
-    echo "embedded Apple Music Runtime Agent is stale: $embedded_agent" >&2
-    exit 1
-  fi
 }
 
 stop_running_processes
@@ -64,7 +42,6 @@ build_unsigned() {
     -derivedDataPath "$DERIVED_DATA" \
     CODE_SIGNING_ALLOWED=NO \
     build
-  verify_embedded_agent "$DEBUG_CONFIGURATION"
 }
 
 build_signed() {
@@ -80,7 +57,6 @@ build_signed() {
       DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" \
       clean \
       build
-    verify_embedded_agent "$INSTALL_CONFIGURATION"
     return
   fi
 
@@ -94,13 +70,10 @@ build_signed() {
     CODE_SIGN_STYLE=Automatic \
     clean \
     build
-  verify_embedded_agent "$INSTALL_CONFIGURATION"
 }
 
 open_app() {
-  /usr/bin/open -n \
-    --env "$DIAGNOSTIC_SHARED_CONTAINER_KEY=$ROOT_DIR/build/DiagnosticSharedContainer" \
-    "$DEBUG_APP_BUNDLE"
+  /usr/bin/open -n "$DEBUG_APP_BUNDLE"
 }
 
 verify_entitlements() {
@@ -128,9 +101,15 @@ verify_entitlements() {
     exit 1
   fi
 
-  if ! /usr/bin/grep -q "com.apple.security.application-groups" "$entitlements_file" ||
-     ! /usr/bin/grep -q "$APP_GROUP_ID" "$entitlements_file"; then
-    echo "missing app group entitlement in $bundle_path" >&2
+  if /usr/bin/grep -q "com.apple.security.application-groups" "$entitlements_file"; then
+    echo "legacy app group entitlement remains in $bundle_path" >&2
+    /bin/cat "$entitlements_file" >&2
+    rm -f "$entitlements_file"
+    exit 1
+  fi
+
+  if ! /usr/bin/grep -q "$AGENT_SERVICE_NAME" "$entitlements_file"; then
+    echo "missing background agent mach lookup entitlement in $bundle_path" >&2
     /bin/cat "$entitlements_file" >&2
     rm -f "$entitlements_file"
     exit 1
@@ -144,6 +123,45 @@ verify_entitlements() {
     exit 1
   fi
 
+  rm -f "$entitlements_file"
+}
+
+verify_background_agent_plist() {
+  local bundle_path="$1"
+  local plist="$bundle_path/Contents/Resources/LaunchAgents/$AGENT_PLIST_NAME"
+  [[ -f "$plist" ]] || { echo "missing background agent plist: $plist" >&2; exit 1; }
+  [[ "$(/usr/libexec/PlistBuddy -c 'Print :Label' "$plist")" == "$AGENT_SERVICE_NAME" ]] || {
+    echo "wrong background agent label" >&2; exit 1;
+  }
+  /usr/libexec/PlistBuddy -c "Print :MachServices:$AGENT_SERVICE_NAME" "$plist" >/dev/null
+  [[ -x "$bundle_path/Contents/Resources/LaunchAgents/InstallBackgroundAgent.command" ]] || {
+    echo "missing executable background agent installer" >&2; exit 1;
+  }
+}
+
+verify_runtime_worker() {
+  local bundle_path="$1"
+  local worker="$bundle_path/Contents/Helpers/GetOudioAMRuntimeWorker.app"
+  local entitlements_file
+  entitlements_file="$(mktemp)"
+
+  [[ -x "$worker/Contents/MacOS/GetOudioAMRuntimeWorker" ]] || {
+    echo "missing Apple Music Runtime Worker: $worker" >&2; rm -f "$entitlements_file"; exit 1;
+  }
+  /usr/bin/codesign --verify --strict --verbose=4 "$worker"
+  /usr/bin/codesign -d --entitlements :- "$worker" >"$entitlements_file" 2>/dev/null
+  if /usr/bin/grep -qE 'com.apple.security.app-sandbox|com.apple.security.application-groups' "$entitlements_file"; then
+    echo "runtime worker must not carry sandbox or App Group entitlements" >&2
+    /bin/cat "$entitlements_file" >&2
+    rm -f "$entitlements_file"
+    exit 1
+  fi
+  if ! /usr/bin/grep -q 'com.apple.security.virtualization' "$entitlements_file"; then
+    echo "runtime worker is missing virtualization entitlement" >&2
+    /bin/cat "$entitlements_file" >&2
+    rm -f "$entitlements_file"
+    exit 1
+  fi
   rm -f "$entitlements_file"
 }
 
@@ -231,13 +249,16 @@ install_app() {
   rm -rf "$INSTALLED_APP"
   /usr/bin/ditto "$INSTALL_APP_BUNDLE" "$INSTALLED_APP"
   verify_url_scheme "$INSTALLED_APP"
+  verify_background_agent_plist "$INSTALLED_APP"
+  verify_runtime_worker "$INSTALLED_APP"
   verify_extension_point "$INSTALLED_APP/Contents/PlugIns/GetOudioFinderExtension.appex" "$FINDER_EXTENSION_POINT_ID"
   verify_extension_point "$INSTALLED_APP/Contents/PlugIns/GetOudioShareExtension.appex" "$SHARE_EXTENSION_POINT_ID"
   verify_extension_point "$INSTALLED_APP/Contents/PlugIns/GetOudioRecordingWidget.appex" "$RECORDING_WIDGET_EXTENSION_POINT_ID"
-  verify_entitlements "$INSTALLED_APP"
+  verify_entitlements "$INSTALLED_APP" true
   verify_entitlements "$INSTALLED_APP/Contents/PlugIns/GetOudioFinderExtension.appex"
   verify_entitlements "$INSTALLED_APP/Contents/PlugIns/GetOudioShareExtension.appex"
   verify_entitlements "$INSTALLED_APP/Contents/PlugIns/GetOudioRecordingWidget.appex" false
+  /usr/bin/env bash "$INSTALLED_APP/Contents/Resources/LaunchAgents/InstallBackgroundAgent.command" --app "$INSTALLED_APP"
   /usr/bin/open -n "$INSTALLED_APP"
   "$LSREGISTER" -f -R -trusted "$INSTALLED_APP"
   pluginkit -a "$INSTALLED_APP"

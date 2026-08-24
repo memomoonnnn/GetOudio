@@ -9,7 +9,7 @@ final class NotificationAuthorizationModel: ObservableObject {
 
     private let notificationService: NotificationService
 
-    init(container: SharedContainer) {
+    init(container: AgentDataStore) {
         notificationService = NotificationService(container: container)
         refresh()
     }

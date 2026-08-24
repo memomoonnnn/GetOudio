@@ -27,7 +27,7 @@ public final class AppleMusicWrapperRuntime {
         self.dockerImageManager = dockerImageManager ?? DockerImageManager(runtime: self.runtime)
     }
 
-    public convenience init(container: SharedContainer) {
+    public convenience init(container: AgentDataStore) {
         let manager = AppleMusicRuntimeManager(container: container)
         self.init(
             runtimeManager: manager,

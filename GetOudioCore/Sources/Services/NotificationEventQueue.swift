@@ -106,7 +106,7 @@ public final class NotificationEventQueue {
         try fileManager.createDirectory(at: suppressedURL, withIntermediateDirectories: true)
     }
 
-    public convenience init(container: SharedContainer, fileManager: FileManager = .default) throws {
+    public convenience init(container: AgentDataStore, fileManager: FileManager = .default) throws {
         try self.init(rootURL: container.url(for: .notificationEvents), fileManager: fileManager)
     }
 

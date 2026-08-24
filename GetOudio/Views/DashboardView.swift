@@ -8,6 +8,7 @@ struct DashboardView: View {
     @ObservedObject var systemExtensionSettings: SystemExtensionSettingsModel
     @ObservedObject var recordingSettings: RecordingSettingsModel
     @ObservedObject var notificationAuthorization: NotificationAuthorizationModel
+    @ObservedObject var backgroundAgentAuthorization: BackgroundAgentAuthorizationModel
     @ObservedObject var diagnosticSettings: DiagnosticSettingsModel
     let attention: SettingsAttentionPresentation
     let checkForUpdates: () -> Void
@@ -98,7 +99,7 @@ struct DashboardView: View {
                         Label("权限", systemImage: "lock.shield")
                             .font(.headline)
 
-                        Text("你需要批准以下系统权限，以使用录音功能并接收任务完成提醒。")
+                        Text("你需要批准以下系统权限，以使用录音、后台任务和完成提醒。")
                             .font(.callout)
                             .foregroundStyle(.secondary)
 
@@ -130,6 +131,36 @@ struct DashboardView: View {
                                 Button("前往系统设置") { notificationAuthorization.openNotificationSettings() }
                             case .authorized:
                                 EmptyView()
+                            }
+                        }
+
+                        Divider()
+
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Label(
+                                    backgroundAgentAuthorization.state == .enabled ? "后台 Agent 已连接" : "后台 Agent 未连接",
+                                    systemImage: backgroundAgentAuthorization.state == .enabled ? "checkmark.circle.fill" : "exclamationmark.circle"
+                                )
+                                .foregroundStyle(backgroundAgentAuthorization.state == .enabled ? .green : .secondary)
+                                Spacer()
+                                switch backgroundAgentAuthorization.state {
+                                case .enabled:
+                                    Button("检查连接") { backgroundAgentAuthorization.refresh() }
+                                case .unavailable:
+                                    Button("安装后台活动") { backgroundAgentAuthorization.installBackgroundActivity() }
+                                    Button("检查连接") { backgroundAgentAuthorization.refresh() }
+                                }
+                            }
+
+                            Text("后台 Agent 会在主窗口关闭后处理转换、录音控制和 Apple Music 任务。安装会在 Terminal 中写入传统 LaunchAgent；系统可能在“登录项与扩展”中将其标为“来自身份不明的开发者”。")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+
+                            if let message = backgroundAgentAuthorization.message {
+                                Text(message)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
                             }
                         }
                     }
@@ -212,7 +243,7 @@ struct DashboardView: View {
     }
 
     private var authorizationAttentionItems: Set<SettingsAttentionItem> {
-        [.microphonePermission, .notificationPermission]
+        [.microphonePermission, .notificationPermission, .backgroundActivity]
     }
 
     private var authorizationHighlightRequest: Int {

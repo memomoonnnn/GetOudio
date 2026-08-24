@@ -1,32 +1,19 @@
 import Foundation
 
 public enum NotificationDispatchWaker {
-    public static func wake(container: SharedContainer) {
-        LaunchMarkerStore(container: container).mark(.notificationDispatch)
-
-        guard let url = URL(string: "\(AppConstants.appURLScheme)://run-queued") else {
-            return
+    /// Completion producers have no notification ownership. They ask the
+    /// persistent Agent to claim and submit the durable Outbox event instead.
+    public static func wake(container _: AgentDataStore) {
+        Task {
+            await dispatchPendingEvents()
         }
+    }
 
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-        var arguments: [String] = []
-#if DEBUG
-        if container.accessMode == .diagnostic {
-            arguments.append(contentsOf: [
-                "--env",
-                "\(SharedContainer.diagnosticRootEnvironmentKey)=\(container.directoryURL.path)"
-            ])
-        }
-#endif
-        arguments.append(url.absoluteString)
-        process.arguments = arguments
-
+    public static func dispatchPendingEvents() async {
         do {
-            try process.run()
-            DiagnosticLog.append("notification dispatch wake requested")
+            try await BackgroundAgentClient().dispatchNotificationEvents()
         } catch {
-            DiagnosticLog.append("notification dispatch wake failed: \(error.localizedDescription)")
+            DiagnosticLog.append("notification dispatch request failed: \(error.localizedDescription)")
         }
     }
 }

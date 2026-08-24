@@ -13,20 +13,20 @@ private struct RecordingWidgetProvider: TimelineProvider {
     }
 
     func getSnapshot(in context: Context, completion: @escaping (RecordingWidgetEntry) -> Void) {
-        completion(entry())
+        loadEntry(completion)
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<RecordingWidgetEntry>) -> Void) {
-        let entry = entry()
-        completion(Timeline(entries: [entry], policy: .after(Date().addingTimeInterval(30))))
+        loadEntry { entry in
+            completion(Timeline(entries: [entry], policy: .after(Date().addingTimeInterval(30))))
+        }
     }
 
-    private func entry() -> RecordingWidgetEntry {
-        guard let container = try? SharedContainer.production(),
-              let store = try? RecordingControlStore(container: container) else {
-            return RecordingWidgetEntry(date: Date(), isRecording: false)
+    private func loadEntry(_ completion: @escaping (RecordingWidgetEntry) -> Void) {
+        Task {
+            let active = (try? await BackgroundAgentClient().recordingSnapshot().phase.isActive) ?? false
+            completion(RecordingWidgetEntry(date: Date(), isRecording: active))
         }
-        return RecordingWidgetEntry(date: Date(), isRecording: store.snapshot().phase.isActive)
     }
 }
 

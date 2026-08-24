@@ -109,8 +109,8 @@ public final class AppleMusicRuntimeManager {
     static let downloadAttemptCount = 9
 
     public static var defaultVMStateRootURL: URL {
-        SettingsStore.realUserHomeDirectory()
-            .appendingPathComponent("Library/Application Support/GetOudio/AM", isDirectory: true)
+        AgentDataStore.defaultRootURL
+            .appendingPathComponent("AM", isDirectory: true)
     }
 
     private let fileManager: FileManager
@@ -159,7 +159,7 @@ public final class AppleMusicRuntimeManager {
     }
 
     public convenience init(
-        container: SharedContainer,
+        container: AgentDataStore,
         runner: ProcessRunner = ProcessRunner(),
         resourceRoot: URL? = Bundle.main.resourceURL,
         gpacPackageURLOverride: String? = nil,
@@ -1209,6 +1209,7 @@ public final class AppleMusicRuntimeManager {
         // set 755, but tar-extracted files may have come through with the
         // permissions stored in the archive).
         try makeExecutable(url)
+        removeQuarantine(from: url)
 
         // Ad-hoc signing — gives the binary a valid (identity-less) signature
         // so Gatekeeper / AMFI allow execution.
@@ -1243,6 +1244,7 @@ public final class AppleMusicRuntimeManager {
             )
         }
         DiagnosticLog.append("[Install] 签名完成：\(url.path)")
+        removeQuarantine(from: url)
     }
 
     private func replaceItem(at destination: URL, with source: URL) throws {
@@ -1253,6 +1255,7 @@ public final class AppleMusicRuntimeManager {
             try fileManager.removeItem(at: destination)
         }
         try fileManager.copyItem(at: source, to: destination)
+        removeQuarantine(from: destination)
         DiagnosticLog.append("[Install] replaceItem copied destination=\(describeFile(at: destination))")
     }
 
@@ -1264,14 +1267,21 @@ public final class AppleMusicRuntimeManager {
         try fileManager.copyItem(at: source, to: destination)
     }
 
-    /// Removes all extended attributes (including `com.apple.quarantine`) from a
-    /// file by reading its raw data and writing it back to a brand-new inode.
-    ///
-    /// The App Sandbox blocks `removexattr` / `/usr/bin/xattr -d` **everywhere**
-    /// (including the app's own container).  However, macOS only tags a file with
-    /// quarantine when it is *created* by a network-accessing process.  Files
-    /// created by a plain `Data.write` are local and get no quarantine.
+    /// Removes Gatekeeper quarantine from an externally managed executable.
+    /// The runtime worker is deliberately outside the App Sandbox, so it can use
+    /// the supported xattr removal path instead of relying on inode replacement.
     private func removeQuarantine(from url: URL) {
+        let attribute = "com.apple.quarantine"
+        if removexattr(url.path, attribute, 0) == 0 {
+            DiagnosticLog.append("[Install] 已移除 quarantine：\(url.path)")
+            return
+        }
+        if errno == ENOATTR {
+            return
+        }
+
+        let xattrError = errno
+        DiagnosticLog.append("[Install] removexattr 失败 errno=\(xattrError)，尝试重建：\(url.path)")
         guard let data = try? Data(contentsOf: url, options: .alwaysMapped) else {
             DiagnosticLog.append("[Install] 无法读取文件以重建：\(url.path)")
             return

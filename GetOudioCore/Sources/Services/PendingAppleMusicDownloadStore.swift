@@ -23,7 +23,7 @@ public final class PendingAppleMusicDownloadStore {
         try FileManager.default.createDirectory(at: self.fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
     }
 
-    public convenience init(container: SharedContainer) throws {
+    public convenience init(container: AgentDataStore) throws {
         try self.init(fileURL: container.url(for: .pendingAppleMusicDownloads))
     }
 
