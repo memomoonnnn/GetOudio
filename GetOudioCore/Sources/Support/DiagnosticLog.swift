@@ -19,7 +19,14 @@ public enum DiagnosticLog {
         lock.unlock()
     }
 
-    @available(*, deprecated, renamed: "configure(store:)")
+    /// The non-sandboxed Runtime Worker must not read the host app's defaults.
+    /// It therefore keeps file diagnostics disabled and relies on system logs.
+    public static func configureRuntimeWorker(store: AgentDataStore) {
+        lock.lock()
+        configuredLogURL = store.url(for: .conversionLog)
+        configuredSettingsStore = nil
+        lock.unlock()
+    }
 
     public static func append(_ message: String, level: Level = .debug) {
         lock.lock()

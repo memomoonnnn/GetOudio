@@ -11,18 +11,21 @@ public final class AppleMusicWrapperRuntime {
     private let runtime: ColimaDockerRuntime
     private let dockerImageManager: DockerImageManager
     private let runtimeManager: AppleMusicRuntimeManager
-    private let settingsStore: SettingsStore
+    private let settingsStore: SettingsStore?
+    private let systemProxyEnabled: Bool?
 
     public init(
         runner: ProcessRunner = ProcessRunner(),
         runtimeManager: AppleMusicRuntimeManager,
-        settingsStore: SettingsStore,
+        settingsStore: SettingsStore? = nil,
+        systemProxyEnabled: Bool? = nil,
         runtime: ColimaDockerRuntime? = nil,
         dockerImageManager: DockerImageManager? = nil
     ) {
         self.runner = runner
         self.runtimeManager = runtimeManager
         self.settingsStore = settingsStore
+        self.systemProxyEnabled = systemProxyEnabled
         self.runtime = runtime ?? ColimaDockerRuntime(runtimeManager: runtimeManager)
         self.dockerImageManager = dockerImageManager ?? DockerImageManager(runtime: self.runtime)
     }
@@ -444,7 +447,7 @@ public final class AppleMusicWrapperRuntime {
                 arguments: self.runtime.dockerArguments(
                     serverDockerArguments(
                         mount: mount,
-                        proxy: settingsStore.appleMusicUseSystemProxy ? systemProxyURL() : nil
+                        proxy: (systemProxyEnabled ?? settingsStore?.appleMusicUseSystemProxy ?? false) ? systemProxyURL() : nil
                     )
                 ),
                 environment: self.runtime.runtimeEnvironment

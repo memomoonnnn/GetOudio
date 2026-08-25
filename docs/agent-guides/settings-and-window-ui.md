@@ -6,7 +6,7 @@
 
 需要用户完成设置时，统一以 Core 的 `SettingsAttentionItem` 标识。完成状态保留在所属设置的真源中，`SettingsAttentionState.outstandingItems` 只派生侧栏红点和当前页待高亮项，不得另存红点状态。新增项同时定义完成判定、`MainSidebarItem` 映射和目标卡片的 `SettingsAttentionPulseOverlay`；说明项还须列入说明集合，并仅在用户首次展开 `MarkdownDocumentView` 时由 `SettingsStore.openedSettingsDocumentationItems` 持久化，不能把显示或滚动到说明视为已查看。
 
-跨进程定向使用 `SettingsAttentionRequestStore` 的 120 秒、消费一次请求。无窗口入口经 `SettingsAttentionLauncher` 启动普通 App，再由 `NormalLauncher`、`MainView` 和目标卡片完成定位；它不保存完成状态。不得由 `HeadlessRunner` 或 Extension 直接创建设置窗口，也不得用无关通知替代配置引导；系统权限请求仍由对应入口直接发起。Apple Music Share 缺少 runtime 时引导至“依赖安装”，runtime 就绪但未完成登录时引导至“初始化”，其他运行故障才发送中性不可用通知。
+跨进程定向使用 `SettingsAttentionRequestStore` 的 120 秒、消费一次请求。无窗口入口经 `SettingsAttentionLauncher` 启动普通 App，再由 `NormalLauncher`、`MainView` 和目标卡片完成定位；它不保存完成状态。不得由 `BackgroundAgent` 或 Extension 直接创建设置窗口，也不得用无关通知替代配置引导；系统权限请求仍由对应入口直接发起。Apple Music Share 缺少 runtime 时引导至“依赖安装”，runtime 就绪但未完成登录时引导至“初始化”，其他运行故障才发送中性不可用通知。
 
 `SettingsAttentionPulseOverlay` 必须执行有限的显式亮起/熄灭阶段；结束、任务取消或视图消失时均无动画清除，不能以重复动画叠加独立结束计时。新增设置 UI 前复用 `SettingsSection`、`SettingsForm`、`MarkdownDocumentView`、`MainSidebarRow` 和既有状态模型；只有多个页面确实共享的样式或行为才抽成公共组件。
 

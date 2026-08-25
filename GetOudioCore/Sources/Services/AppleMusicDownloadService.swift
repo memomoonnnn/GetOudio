@@ -7,18 +7,24 @@ public final class AppleMusicDownloadService {
     private let componentManager: BundledComponentManager
     private let wrapperRuntime: AppleMusicWrapperRuntime
     private let runtimeManager: AppleMusicRuntimeManager
-    private let settingsStore: SettingsStore
+    private let settingsStore: SettingsStore?
+    private let executionSettings: AppleMusicRuntimeExecutionSettings?
     private let agentClient: AppleMusicRuntimeAgentClient?
     private let useAgent: Bool
+    private let cancellationRequested: @Sendable () -> Bool
+    private let progressHandler: @Sendable (AppleMusicRuntimeProgress) -> Void
 
     public init(
         runner: ProcessRunner = ProcessRunner(),
         componentManager: BundledComponentManager = BundledComponentManager(),
         runtimeManager: AppleMusicRuntimeManager,
         wrapperRuntime: AppleMusicWrapperRuntime? = nil,
-        settingsStore: SettingsStore,
+        settingsStore: SettingsStore? = nil,
         agentClient: AppleMusicRuntimeAgentClient? = nil,
-        useAgent: Bool = true
+        useAgent: Bool = true,
+        cancellationRequested: @escaping @Sendable () -> Bool = { false },
+        executionSettings: AppleMusicRuntimeExecutionSettings? = nil,
+        progressHandler: @escaping @Sendable (AppleMusicRuntimeProgress) -> Void = { _ in }
     ) {
         self.runner = runner
         self.componentManager = componentManager
@@ -28,8 +34,11 @@ public final class AppleMusicDownloadService {
             settingsStore: settingsStore
         )
         self.settingsStore = settingsStore
+        self.executionSettings = executionSettings
         self.agentClient = agentClient
         self.useAgent = useAgent
+        self.cancellationRequested = cancellationRequested
+        self.progressHandler = progressHandler
     }
 
     public convenience init(
@@ -129,7 +138,9 @@ public final class AppleMusicDownloadService {
         do {
             try await wrapperRuntime.ensureServerRunning()
             let executableURL = try componentManager.executableURL(for: .appleMusicDownloader)
-            let outputDirectory = settingsStore.appleMusicOutputURL
+            guard let outputDirectory = executionSettings?.outputDirectoryURL ?? settingsStore?.appleMusicOutputURL else {
+                throw ProcessRunnerError.processFailed("Apple Music 下载缺少输出目录设置。")
+            }
             try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
             let workingDirectory = try prepareDownloaderWorkingDirectory(
                 executableURL: executableURL,
@@ -139,9 +150,6 @@ public final class AppleMusicDownloadService {
             var successCount = 0
             var failureCount = 0
             var messages: [String] = []
-            agentClient?.clearDownloadCancellation()
-            defer { agentClient?.clearDownloadCancellation() }
-
             for job in downloadJobs {
                 let format = resolvedFormat(for: job)
                 let arguments = Self.downloaderArguments(for: job, format: format)
@@ -151,7 +159,7 @@ public final class AppleMusicDownloadService {
                 var completion: AppleMusicDownloaderRunCompletion?
 
                 for attempt in 1...Self.maxDownloadAttempts {
-                    if agentClient?.isDownloadCancellationRequested() == true {
+                    if isDownloadCancellationRequested() {
                         lastFailureMessage = "Apple Music 下载已由用户停止。"
                         break
                     }
@@ -176,9 +184,7 @@ public final class AppleMusicDownloadService {
                                 )
                             }
                         },
-                        shouldTerminate: {
-                            self.agentClient?.isDownloadCancellationRequested() == true
-                        }
+                        shouldTerminate: { self.isDownloadCancellationRequested() }
                     )
 
                     let fallbackMessage = result.standardError.isEmpty ? result.standardOutput : result.standardError
@@ -189,7 +195,7 @@ public final class AppleMusicDownloadService {
                         break
                     }
 
-                    if agentClient?.isDownloadCancellationRequested() == true {
+                    if isDownloadCancellationRequested() {
                         lastFailureMessage = AppleMusicDownloadMessageFormatter.coreMessage(from: rawMessage)
                         if lastFailureMessage.isEmpty {
                             lastFailureMessage = "Apple Music 下载已由用户停止。"
@@ -227,7 +233,7 @@ public final class AppleMusicDownloadService {
                         failureCount += 1
                     }
                     messages.append(lastFailureMessage.isEmpty ? "Apple Music 下载失败。" : lastFailureMessage)
-                    let finalMessage = agentClient?.isDownloadCancellationRequested() == true
+                    let finalMessage = isDownloadCancellationRequested()
                         ? "Apple Music 下载已停止"
                         : "Apple Music 下载失败"
                     writeDownloadProgress(finalMessage, completed: 1, active: false)
@@ -293,8 +299,12 @@ public final class AppleMusicDownloadService {
             return format
         }
 
-        let stored = settingsStore.appleMusicDownloadFormat
+        let stored = executionSettings?.defaultFormat ?? settingsStore?.appleMusicDownloadFormat ?? .alac
         return stored == .askEveryTime ? .alac : stored
+    }
+
+    private func isDownloadCancellationRequested() -> Bool {
+        cancellationRequested()
     }
 
     static func downloaderArguments(for job: JobRequest, format: AppleMusicDownloadFormat) -> [String] {
@@ -444,23 +454,12 @@ public final class AppleMusicDownloadService {
         active: Bool,
         notificationVersion: String? = nil
     ) {
-        do {
-            let progress = AppleMusicRuntimeProgress(
-                message: message,
-                completedUnitCount: completed,
-                totalUnitCount: total,
-                isActive: active,
-                notificationVersion: notificationVersion
-            )
-            guard let progressURL = agentClient?.progressURL() else { return }
-            let directory = progressURL.deletingLastPathComponent()
-            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            try JSONEncoder().encode(progress).write(
-                to: progressURL,
-                options: .atomic
-            )
-        } catch {
-            DiagnosticLog.append("Apple Music download progress write failed: \(error.localizedDescription)")
-        }
+        progressHandler(AppleMusicRuntimeProgress(
+            message: message,
+            completedUnitCount: completed,
+            totalUnitCount: total,
+            isActive: active,
+            notificationVersion: notificationVersion
+        ))
     }
 }

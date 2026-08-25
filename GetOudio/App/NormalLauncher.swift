@@ -6,7 +6,7 @@ import SwiftUI
 import UserNotifications
 
 /// Handles direct settings-window launches and transient Open With interactions.
-/// Background conversion is delegated to HeadlessRunner through JobQueue.
+/// Background conversion is delegated to the Background Agent through XPC.
 final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     private enum SettingsWindowMetrics {
         static let contentMaxWidth: CGFloat = LayoutConstants.outerMargin
@@ -86,7 +86,7 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
 
         Task {
             await notificationService.requestAuthorization()
-            await notificationService.dispatchPendingNotificationEvents()
+            await NotificationDispatchWaker.dispatchPendingEvents()
         }
 
         recordingControl.recoverStaleSessionIfNeeded()
@@ -416,8 +416,17 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
 
         beginNotificationResponse()
         Task {
-            let guidance = await AppleMusicShareDownloadCoordinator(container: container)
-                .handlePendingAppleMusicDownload(format: format)
+            let guidance: SettingsAttentionItem?
+            do {
+                guidance = try await BackgroundAgentClient()
+                    .handlePendingAppleMusicDownload(format: format)
+            } catch {
+                guidance = nil
+                DiagnosticLog.append(
+                    "normal Apple Music format action forwarding failed " +
+                    "format=\(format.rawValue) error=\(error.localizedDescription)"
+                )
+            }
             completionHandler()
             await MainActor.run {
                 if let guidance {

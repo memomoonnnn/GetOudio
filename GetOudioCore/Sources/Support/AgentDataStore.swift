@@ -1,10 +1,9 @@
 import Darwin
 import Foundation
 
-/// The only persistent root used by the v2 installation.  It deliberately does
-/// not inspect the legacy App Group container.
+/// Control-plane data shared by the sandboxed App and its launchd Agent.
+/// Extensions use XPC and never receive this filesystem capability.
 public struct AgentDataStore {
-    public static let settingsSuiteName = "com.shengjiacheng.GetOudio"
     public enum Resource {
         case jobQueue
         case shareEvents
@@ -20,15 +19,15 @@ public struct AgentDataStore {
     public let directoryURL: URL
     public let defaults: UserDefaults
 
-    /// The managed root is intentionally outside the sandbox container so
-    /// downloaded, verified runtime tools can execute from it.
+    /// The non-sandbox Runtime Worker's managed root.
     public static var defaultRootURL: URL {
         rootURL(homeDirectory: systemHomeDirectory)
     }
 
-    /// 主 App、launchd Agent 与独立 Runtime Worker 共用同一偏好域。
+    /// 偏好仅由同 bundle identifier 的主 App/普通后台 Agent 使用。
+    /// Runtime Worker receives resolved execution settings over its socket.
     public static var productionDefaults: UserDefaults {
-        UserDefaults(suiteName: settingsSuiteName) ?? .standard
+        .standard
     }
 
     static func rootURL(homeDirectory: URL) -> URL {
@@ -43,8 +42,17 @@ public struct AgentDataStore {
     }
 
     public static func production(fileManager: FileManager = .default) throws -> AgentDataStore {
-        try migrateSandboxRootIfNeeded(fileManager: fileManager)
+        let rootURL = controlRootURL(fileManager: fileManager)
         return try AgentDataStore(
+            directoryURL: rootURL,
+            defaults: productionDefaults,
+            fileManager: fileManager
+        )
+    }
+
+    /// Only the unsandboxed Runtime Worker may use this factory.
+    public static func runtimeWorker(fileManager: FileManager = .default) throws -> AgentDataStore {
+        try AgentDataStore(
             directoryURL: defaultRootURL,
             defaults: productionDefaults,
             fileManager: fileManager
@@ -65,18 +73,13 @@ public struct AgentDataStore {
         try production(fileManager: fileManager)
     }
 
-    static func migrateSandboxRootIfNeeded(fileManager: FileManager) throws {
-        let sandboxRoot = fileManager.urls(
+    static func controlRootURL(fileManager: FileManager = .default) -> URL {
+        let applicationSupport = fileManager.urls(
             for: .applicationSupportDirectory,
             in: .userDomainMask
-        ).first?
-            .appendingPathComponent("GetOudioV2", isDirectory: true)
-        guard let sandboxRoot else { return }
-        try migrateDataIfNeeded(
-            from: sandboxRoot,
-            to: defaultRootURL,
-            fileManager: fileManager
-        )
+        ).first ?? fileManager.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support", isDirectory: true)
+        return applicationSupport.appendingPathComponent("GetOudioV2", isDirectory: true)
     }
 
     private static var systemHomeDirectory: URL {
@@ -86,61 +89,6 @@ public struct AgentDataStore {
             return FileManager.default.homeDirectoryForCurrentUser
         }
         return URL(fileURLWithPath: String(cString: homeDirectory), isDirectory: true)
-    }
-
-    static func migrateDataIfNeeded(
-        from sourceURL: URL,
-        to destinationURL: URL,
-        fileManager: FileManager = .default
-    ) throws {
-        let source = sourceURL.standardizedFileURL
-        let destination = destinationURL.standardizedFileURL
-        guard source != destination else { return }
-
-        // The home-relative sandbox exception deliberately covers GetOudioV2,
-        // not its parent.  Create that root atomically and keep all migration
-        // coordination inside it so the exception remains narrow.
-        if mkdir(destination.path, S_IRWXU) != 0 && errno != EEXIST {
-            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
-        }
-
-        let lockURL = destination.appendingPathComponent(".migration.lock")
-        let descriptor = open(lockURL.path, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR)
-        guard descriptor >= 0 else {
-            throw POSIXError(.EIO)
-        }
-        defer { close(descriptor) }
-        guard flock(descriptor, LOCK_EX) == 0 else {
-            throw POSIXError(.EWOULDBLOCK)
-        }
-        defer { flock(descriptor, LOCK_UN) }
-
-        let completionURL = destination.appendingPathComponent(".migration-complete")
-        guard !fileManager.fileExists(atPath: completionURL.path) else { return }
-        guard fileManager.fileExists(atPath: source.path) else {
-            try Data().write(to: completionURL, options: .atomic)
-            return
-        }
-
-        let retainedItems = try fileManager.contentsOfDirectory(
-            at: destination,
-            includingPropertiesForKeys: nil,
-            options: [.skipsHiddenFiles]
-        )
-        guard retainedItems.isEmpty else { return }
-
-        let staging = destination.appendingPathComponent(".migration-\(UUID().uuidString)", isDirectory: true)
-        do {
-            try fileManager.copyItem(at: source, to: staging)
-            for item in try fileManager.contentsOfDirectory(at: staging, includingPropertiesForKeys: nil) {
-                try fileManager.moveItem(at: item, to: destination.appendingPathComponent(item.lastPathComponent))
-            }
-            try fileManager.removeItem(at: staging)
-            try Data().write(to: completionURL, options: .atomic)
-        } catch {
-            try? fileManager.removeItem(at: staging)
-            throw error
-        }
     }
 
     public func url(for resource: Resource) -> URL {

@@ -115,11 +115,13 @@ public final class AppleMusicRuntimeManager {
 
     private let fileManager: FileManager
     private let runner: ProcessRunner
-    private let settingsStore: SettingsStore
+    private let settingsStore: SettingsStore?
+    private let enabledStateURL: URL?
     private let resourceRoot: URL?
     private let gpacPackageURLOverride: String?
     private let wrapperImageInstaller: WrapperImageInstaller?
     private let progressURL: URL?
+    private let progressHandler: @Sendable (AppleMusicRuntimeProgress) -> Void
     private let receiptStore: ManagedRuntimeComponentReceiptStore
 
     public let rootURL: URL
@@ -131,16 +133,19 @@ public final class AppleMusicRuntimeManager {
         colimaHomeDirectory: URL? = nil,
         limaHomeDirectory: URL? = nil,
         runner: ProcessRunner = ProcessRunner(),
-        settingsStore: SettingsStore,
+        settingsStore: SettingsStore?,
         resourceRoot: URL? = Bundle.main.resourceURL,
         gpacPackageURLOverride: String? = nil,
         wrapperImageInstaller: WrapperImageInstaller? = nil,
         progressURL: URL? = nil,
+        progressHandler: @escaping @Sendable (AppleMusicRuntimeProgress) -> Void = { _ in },
+        enabledStateURL: URL? = nil,
         fileManager: FileManager = .default
     ) {
         self.rootURL = rootURL
-        let usesManagedVMState = progressURL != nil
+        let usesManagedVMState = progressURL != nil || enabledStateURL != nil
         self.progressURL = progressURL
+        self.progressHandler = progressHandler
         self.colimaHomeDirectory = colimaHomeDirectory
             ?? (usesManagedVMState
                 ? Self.defaultVMStateRootURL.appendingPathComponent("Colima", isDirectory: true)
@@ -151,6 +156,7 @@ public final class AppleMusicRuntimeManager {
                 : rootURL.appendingPathComponent("lima-home", isDirectory: true))
         self.runner = runner
         self.settingsStore = settingsStore
+        self.enabledStateURL = enabledStateURL
         self.resourceRoot = resourceRoot
         self.gpacPackageURLOverride = gpacPackageURLOverride
         self.wrapperImageInstaller = wrapperImageInstaller
@@ -164,16 +170,19 @@ public final class AppleMusicRuntimeManager {
         resourceRoot: URL? = Bundle.main.resourceURL,
         gpacPackageURLOverride: String? = nil,
         wrapperImageInstaller: WrapperImageInstaller? = nil,
+        progressHandler: (@Sendable (AppleMusicRuntimeProgress) -> Void)? = nil,
         fileManager: FileManager = .default
     ) {
         self.init(
             rootURL: container.url(for: .appleMusicRuntime),
             runner: runner,
-            settingsStore: SettingsStore(container: container),
+            settingsStore: nil,
             resourceRoot: resourceRoot,
             gpacPackageURLOverride: gpacPackageURLOverride,
             wrapperImageInstaller: wrapperImageInstaller,
-            progressURL: container.url(for: .appleMusicRuntimeIPC).appendingPathComponent("progress.json"),
+            progressURL: nil,
+            progressHandler: progressHandler ?? { _ in },
+            enabledStateURL: container.url(for: .appleMusicRuntimeIPC).appendingPathComponent("runtime-enabled"),
             fileManager: fileManager
         )
     }
@@ -226,8 +235,22 @@ public final class AppleMusicRuntimeManager {
     }
 
     public var isEnabled: Bool {
-        get { settingsStore.isAppleMusicDownloadEnabled }
-        set { settingsStore.isAppleMusicDownloadEnabled = newValue }
+        get {
+            guard let enabledStateURL else { return settingsStore?.isAppleMusicDownloadEnabled ?? false }
+            return fileManager.fileExists(atPath: enabledStateURL.path)
+        }
+        set {
+            guard let enabledStateURL else {
+                settingsStore?.isAppleMusicDownloadEnabled = newValue
+                return
+            }
+            if newValue {
+                try? fileManager.createDirectory(at: enabledStateURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try? Data().write(to: enabledStateURL, options: .atomic)
+            } else {
+                try? fileManager.removeItem(at: enabledStateURL)
+            }
+        }
     }
 
     public func runtimeEnvironment() -> [String: String] {
@@ -1152,10 +1175,6 @@ public final class AppleMusicRuntimeManager {
         isActive: Bool,
         wrapperStatus: ManagedDockerImageStatus? = nil
     ) {
-        guard let url = progressURL else {
-            return
-        }
-
         let progress = AppleMusicRuntimeProgress(
             message: message,
             completedUnitCount: completed,
@@ -1163,6 +1182,8 @@ public final class AppleMusicRuntimeManager {
             isActive: isActive,
             statuses: componentStatuses(wrapperStatus: wrapperStatus)
         )
+        progressHandler(progress)
+        guard let url = progressURL else { return }
         do {
             try fileManager.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             try JSONEncoder().encode(progress).write(to: url, options: .atomic)

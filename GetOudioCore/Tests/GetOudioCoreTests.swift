@@ -49,21 +49,6 @@ final class GetOudioCoreTests: XCTestCase {
         XCTAssertTrue(firstStore.drainCommands().isEmpty)
     }
 
-    func testAgentDataStoreMigratesSandboxDataWithoutDeletingSource() throws {
-        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        defer { try? FileManager.default.removeItem(at: root) }
-        let source = root.appendingPathComponent("sandbox/GetOudioV2", isDirectory: true)
-        let destination = root.appendingPathComponent("Application Support/GetOudioV2", isDirectory: true)
-        let sourceFile = source.appendingPathComponent("RecordingControl/state.json")
-        try FileManager.default.createDirectory(at: sourceFile.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try Data("recording-state".utf8).write(to: sourceFile)
-
-        try AgentDataStore.migrateDataIfNeeded(from: source, to: destination)
-
-        XCTAssertEqual(try Data(contentsOf: destination.appendingPathComponent("RecordingControl/state.json")), Data("recording-state".utf8))
-        XCTAssertTrue(FileManager.default.fileExists(atPath: sourceFile.path))
-    }
 
     func testAgentDataStoreBuildsManagedRootFromSystemHomeDirectory() {
         let home = URL(fileURLWithPath: "/Users/example", isDirectory: true)
@@ -790,6 +775,28 @@ final class GetOudioCoreTests: XCTestCase {
         XCTAssertTrue(try NotificationEventQueue(container: container).claimPending().isEmpty)
     }
 
+    func testAppleMusicFormatSelectionUsesPendingBatchIdentifier() async throws {
+        let rootURL = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+        let suiteName = "GetOudioCoreTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let container = try AgentDataStore.diagnostic(rootURL: rootURL, defaults: defaults)
+        let notificationCenter = TestNotificationCenterClient(status: .authorized)
+        let service = NotificationService(container: container, notificationCenter: notificationCenter)
+        let identifier = UUID().uuidString
+
+        await service.notifyAppleMusicFormatSelection(jobCount: 1, identifier: identifier)
+
+        let request = try XCTUnwrap(notificationCenter.requests.first)
+        XCTAssertEqual(request.identifier, identifier)
+        XCTAssertEqual(
+            request.content.categoryIdentifier,
+            NotificationService.AppleMusicNotification.formatCategoryIdentifier
+        )
+    }
+
     func testSettingsStorePersistsPresetsAndFinderDirectories() {
         let suiteName = "GetOudioCoreTests-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
@@ -1475,6 +1482,23 @@ final class GetOudioCoreTests: XCTestCase {
         XCTAssertTrue(status.isInProgress)
     }
 
+    func testAppleMusicWrapperLoginPollingPublishesVerificationStateAfterStarting() async {
+        let sequence = TestLoginStatusSequence([
+            .init(phase: .starting, message: "正在登录并等待 Apple 响应"),
+            .init(phase: .waitingForVerificationCode, message: "已发送验证码，请输入后提交"),
+            .init(phase: .authenticated, message: "初始化已完成")
+        ])
+
+        await AppleMusicWrapperLoginStatusPolling.observe(
+            intervalNanoseconds: 1,
+            poll: { await sequence.next() },
+            publish: { status in await sequence.publish(status) }
+        )
+
+        let phases = await sequence.publishedPhases()
+        XCTAssertEqual(phases, [.starting, .waitingForVerificationCode, .authenticated])
+    }
+
     func testAppleMusicWrapperLoginStatusDoesNotKeepStoppedContainerWaitingForCode() {
         let status = AppleMusicWrapperRuntime.loginStatus(
             logs: "[.] credentialHandler: {2FA: true}\n[!] Waiting for input...\n[!] Failed to get 2FA Code in 60s. Exiting...",
@@ -1525,26 +1549,6 @@ final class GetOudioCoreTests: XCTestCase {
         XCTAssertFalse(status.canSubmitVerificationCode)
     }
 
-    func testAppleMusicWrapperLoginSnapshotStoreOnlyAdvancesForChangedStatus() throws {
-        let root = try makeTemporaryDirectory()
-        defer { try? FileManager.default.removeItem(at: root) }
-        let store = AppleMusicWrapperLoginSnapshotStore(rootURL: root)
-        let waiting = AppleMusicWrapperLoginStatus(
-            phase: .waitingForVerificationCode,
-            message: "已发送验证码，请输入后提交"
-        )
-        let first = try store.saveIfChanged(waiting)
-        let unchanged = try store.saveIfChanged(waiting)
-        let authenticating = try store.saveIfChanged(AppleMusicWrapperLoginStatus(
-            phase: .authenticating,
-            message: "验证码已提交，正在验证"
-        ))
-
-        XCTAssertEqual(first.revision, 1)
-        XCTAssertEqual(unchanged.revision, first.revision)
-        XCTAssertEqual(authenticating.revision, 2)
-        XCTAssertEqual(store.snapshot(), authenticating)
-    }
 
     func testAppleMusicWrapperLoginStatusPrefersPersistedCompletionMarker() {
         let status = AppleMusicWrapperRuntime.loginStatus(
@@ -1846,25 +1850,25 @@ final class GetOudioCoreTests: XCTestCase {
         XCTAssertEqual(AppleMusicRuntimeManager.downloadAttemptCount, 9)
     }
 
-    func testAppleMusicRuntimeAgentRequestCarriesGPACOverride() throws {
-        let request = AppleMusicRuntimeAgentRequestEnvelope(
+    func testAppleMusicRuntimeWorkerRequestCarriesGPACOverride() throws {
+        let request = AppleMusicRuntimeWorkerRequest(
             id: UUID(),
-            command: "install",
+            command: .install,
             resourceRootPath: "/tmp/resources",
             gpacPackageURLOverride: "https://example.com/gpac-runtime.pkg"
         )
         let decoded = try JSONDecoder().decode(
-            AppleMusicRuntimeAgentRequestEnvelope.self,
+            AppleMusicRuntimeWorkerRequest.self,
             from: JSONEncoder().encode(request)
         )
 
         XCTAssertEqual(decoded.gpacPackageURLOverride, "https://example.com/gpac-runtime.pkg")
     }
 
-    func testAppleMusicRuntimeWorkerRequestRedactsCredentials() throws {
-        let request = AppleMusicRuntimeAgentRequestEnvelope(
+    func testAppleMusicRuntimeWorkerRequestKeepsCredentialsInXPCPayloadOnly() throws {
+        let request = AppleMusicRuntimeWorkerRequest(
             id: UUID(),
-            command: "initialize",
+            command: .initialize,
             resourceRootPath: "/tmp/resources",
             initializeRequest: AppleMusicRuntimeAgentInitializeRequest(
                 username: "account@example.com",
@@ -1874,35 +1878,14 @@ final class GetOudioCoreTests: XCTestCase {
             )
         )
 
-        let encoded = try JSONEncoder().encode(request.workerRequest(credentialPipePath: "/tmp/credential.fifo"))
+        let encoded = try JSONEncoder().encode(request)
         let serialized = try XCTUnwrap(String(data: encoded, encoding: .utf8))
-        let decoded = try JSONDecoder().decode(AppleMusicRuntimeAgentRequestEnvelope.self, from: encoded)
+        let decoded = try JSONDecoder().decode(AppleMusicRuntimeWorkerRequest.self, from: encoded)
 
-        XCTAssertFalse(serialized.contains("account@example.com"))
-        XCTAssertFalse(serialized.contains("secret-password"))
-        XCTAssertNil(decoded.initializeRequest)
-        XCTAssertEqual(decoded.credentialPipePath, "/tmp/credential.fifo")
-    }
-
-    func testAppleMusicRuntimeCredentialProviderServesOnlyMatchingRequest() async throws {
-        let requestID = UUID()
-        let credential = Data("in-memory-only".utf8)
-        let directory = try makeTemporaryDirectory()
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let provider = try AppleMusicRuntimeCredentialProvider(
-            requestID: requestID,
-            credentialData: credential,
-            directoryURL: directory
-        )
-        defer { provider.invalidate() }
-        XCTAssertEqual(URL(fileURLWithPath: provider.pipePath).deletingLastPathComponent(), directory)
-        XCTAssertFalse(provider.pipePath.hasPrefix("/tmp/"))
-
-        let serving = Task.detached { try provider.serveOnce() }
-        let received = try AppleMusicRuntimeCredentialProvider.fetch(pipePath: provider.pipePath)
-        try await serving.value
-
-        XCTAssertEqual(received, credential)
+        XCTAssertTrue(serialized.contains("account@example.com"))
+        XCTAssertTrue(serialized.contains("secret-password"))
+        XCTAssertEqual(decoded.initializeRequest?.username, "account@example.com")
+        XCTAssertNil(decoded.executionSettings)
     }
 
     func testBackgroundAgentCommandPreservesRequestAndSecurityBookmarks() throws {
@@ -2230,13 +2213,19 @@ final class GetOudioCoreTests: XCTestCase {
         XCTAssertFalse(store.isAppleMusicDownloadEnabled)
     }
 
-    func testAppleMusicRuntimeAgentClientRecognizesInjectedWorkerApplication() throws {
+    func testAppleMusicRuntimeAgentClientUsesRuntimeServiceRatherThanWorkerBundleDiscovery() throws {
         let rootURL = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: rootURL) }
         let store = try AgentDataStore.diagnostic(rootURL: rootURL, defaults: .standard)
-        let workerURL = rootURL.appendingPathComponent("GetOudioAMRuntimeWorker.app")
-        XCTAssertTrue(AppleMusicRuntimeAgentClient(container: store, workerApplicationURL: workerURL).isAvailable)
+        XCTAssertTrue(AppleMusicRuntimeAgentClient(container: store).isAvailable)
+        XCTAssertEqual(
+            AppleMusicRuntimeWorkerXPC.machServiceName,
+            "com.shengjiacheng.GetOudio.runtime-worker"
+        )
     }
+
+
+
 
     private func makeTemporaryDirectory() throws -> URL {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -2302,6 +2291,27 @@ final class GetOudioCoreTests: XCTestCase {
         for index in 0..<8 {
             data[offset + index] = UInt8(truncatingIfNeeded: value >> UInt64(index * 8))
         }
+    }
+}
+
+private actor TestLoginStatusSequence {
+    private var statuses: [AppleMusicWrapperLoginStatus]
+    private var published: [AppleMusicWrapperLoginStatus] = []
+
+    init(_ statuses: [AppleMusicWrapperLoginStatus]) {
+        self.statuses = statuses
+    }
+
+    func next() -> AppleMusicWrapperLoginStatus {
+        statuses.removeFirst()
+    }
+
+    func publish(_ status: AppleMusicWrapperLoginStatus) {
+        published.append(status)
+    }
+
+    func publishedPhases() -> [AppleMusicWrapperLoginPhase] {
+        published.map(\.phase)
     }
 }
 

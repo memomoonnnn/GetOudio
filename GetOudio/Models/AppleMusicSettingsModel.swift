@@ -75,17 +75,19 @@ final class AppleMusicSettingsModel: ObservableObject {
     }
 
     func stopAppleMusicDownload() {
-        do {
-            try appleMusicAgentClient.requestDownloadCancellation()
-            appleMusicRuntimeMessage = "正在停止 Apple Music 下载..."
-            appleMusicRuntimeProgress = AppleMusicRuntimeProgress(
-                message: "正在停止 Apple Music 下载...",
-                completedUnitCount: 0,
-                totalUnitCount: 1,
-                isActive: true
-            )
-        } catch {
-            appleMusicRuntimeMessage = "停止请求失败：\(error.localizedDescription)"
+        Task {
+            do {
+                try await appleMusicAgentClient.requestDownloadCancellation()
+                appleMusicRuntimeMessage = "正在停止 Apple Music 下载..."
+                appleMusicRuntimeProgress = AppleMusicRuntimeProgress(
+                    message: "正在停止 Apple Music 下载...",
+                    completedUnitCount: 0,
+                    totalUnitCount: 1,
+                    isActive: true
+                )
+            } catch {
+                appleMusicRuntimeMessage = "停止请求失败：\(error.localizedDescription)"
+            }
         }
     }
 
@@ -100,12 +102,11 @@ final class AppleMusicSettingsModel: ObservableObject {
         }
 
         do {
-            try await BackgroundAgentRegistration.ensureAvailable()
             let report = try await appleMusicAgentClient.status()
             appleMusicRuntimeStatuses = report.statuses
             isAppleMusicDownloadEnabled = report.isEnabled
             appleMusicRuntimeMessage = report.message
-            appleMusicRuntimeProgress = appleMusicAgentClient.progress()
+            appleMusicRuntimeProgress = try await appleMusicAgentClient.progress()
             hasLoadedAppleMusicRuntimeStatus = true
         } catch {
             isAppleMusicDownloadEnabled = store.isAppleMusicDownloadEnabled
@@ -123,12 +124,11 @@ final class AppleMusicSettingsModel: ObservableObject {
             ? "正在通过 Downloader Runtime Agent 检查并更新 Runtime..."
             : "正在通过 Downloader Runtime Agent 安装 Runtime..."
         do {
-            try await BackgroundAgentRegistration.ensureAvailable()
             let report = try await appleMusicAgentClient.install()
             appleMusicRuntimeStatuses = report.statuses
             isAppleMusicDownloadEnabled = report.isEnabled
             appleMusicRuntimeMessage = report.message
-            appleMusicRuntimeProgress = appleMusicAgentClient.progress()
+            appleMusicRuntimeProgress = try await appleMusicAgentClient.progress()
         } catch {
             appleMusicRuntimeMessage = "Downloader Runtime 安装失败：\(error.localizedDescription)"
         }
@@ -143,12 +143,11 @@ final class AppleMusicSettingsModel: ObservableObject {
         isManagingAppleMusicRuntime = true
         appleMusicRuntimeMessage = "正在卸载 Downloader Runtime..."
         do {
-            try await BackgroundAgentRegistration.ensureAvailable()
             let report = try await appleMusicAgentClient.uninstall()
             appleMusicRuntimeStatuses = report.statuses
             isAppleMusicDownloadEnabled = report.isEnabled
             appleMusicRuntimeMessage = "Downloader Runtime 已卸载"
-            appleMusicRuntimeProgress = appleMusicAgentClient.progress()
+            appleMusicRuntimeProgress = try await appleMusicAgentClient.progress()
         } catch {
             appleMusicRuntimeMessage = "Downloader Runtime 卸载失败：\(error.localizedDescription)"
         }
@@ -164,21 +163,16 @@ final class AppleMusicSettingsModel: ObservableObject {
         isSendingAppleMusicInitializationRequest = true
         appleMusicInitializationRequestMessage = "正在提交初始化请求..."
         defer { isSendingAppleMusicInitializationRequest = false }
-        do {
-            try await BackgroundAgentRegistration.ensureAvailable()
-            let summary = await appleMusicDownloadService.initializeWrapper(
-                username: username,
-                password: password,
-                verificationCode: nil,
-                useSystemProxy: appleMusicUseSystemProxy
-            )
-            if summary.failureCount == 0 {
-                appleMusicInitializationRequestMessage = nil
-            } else {
-                appleMusicInitializationRequestMessage = summary.messages.first ?? "初始化失败"
-            }
-        } catch {
-            appleMusicInitializationRequestMessage = "初始化失败：\(error.localizedDescription)"
+        let summary = await appleMusicDownloadService.initializeWrapper(
+            username: username,
+            password: password,
+            verificationCode: nil,
+            useSystemProxy: appleMusicUseSystemProxy
+        )
+        if summary.failureCount == 0 {
+            appleMusicInitializationRequestMessage = nil
+        } else {
+            appleMusicInitializationRequestMessage = summary.messages.first ?? "初始化失败"
         }
     }
 
@@ -190,39 +184,20 @@ final class AppleMusicSettingsModel: ObservableObject {
         isSubmittingAppleMusicVerificationCode = true
         appleMusicInitializationRequestMessage = "正在提交验证码..."
         defer { isSubmittingAppleMusicVerificationCode = false }
-        do {
-            try await BackgroundAgentRegistration.ensureAvailable()
-            let summary = await appleMusicDownloadService.submitWrapperVerificationCode(code)
-            appleMusicInitializationRequestMessage = summary.failureCount == 0
-                ? nil
-                : (summary.messages.first ?? "验证码提交失败")
-        } catch {
-            appleMusicInitializationRequestMessage = "验证码提交失败：\(error.localizedDescription)"
-        }
+        let summary = await appleMusicDownloadService.submitWrapperVerificationCode(code)
+        appleMusicInitializationRequestMessage = summary.failureCount == 0
+            ? nil
+            : (summary.messages.first ?? "验证码提交失败")
     }
 
-    func monitorAppleMusicWrapperLoginStatus() async {
-        var requestedInitialStatus = false
+    func monitorAppleMusicRuntimeEvents() async {
         while !Task.isCancelled {
-            if let snapshot = appleMusicAgentClient.wrapperLoginSnapshot() {
-                applyAppleMusicWrapperLoginSnapshot(snapshot)
-            } else if !requestedInitialStatus {
-                requestedInitialStatus = true
-                await refreshAppleMusicWrapperLoginStatus()
-            }
-            try? await Task.sleep(nanoseconds: 300_000_000)
-        }
-    }
-
-    func monitorAppleMusicRuntimeProgress() async {
-        while !Task.isCancelled {
-            let progress = appleMusicAgentClient.progress()
-            appleMusicRuntimeProgress = progress
-            if progress?.isActive == true, let statuses = progress?.statuses {
-                appleMusicRuntimeStatuses = statuses
-            }
-            if let progress, progress.isActive {
-                appleMusicRuntimeMessage = progress.message
+            for await event in appleMusicAgentClient.events() {
+                guard !Task.isCancelled else { return }
+                if let snapshot = event.loginSnapshot {
+                    applyAppleMusicWrapperLoginSnapshot(snapshot)
+                }
+                applyAppleMusicRuntimeProgress(event.progress)
             }
             try? await Task.sleep(nanoseconds: 1_000_000_000)
         }
@@ -238,7 +213,6 @@ final class AppleMusicSettingsModel: ObservableObject {
         }
 
         do {
-            try await BackgroundAgentRegistration.ensureAvailable()
             let status = try await appleMusicAgentClient.wrapperLoginStatus()
             applyAppleMusicWrapperLoginStatus(status)
         } catch {
@@ -250,6 +224,16 @@ final class AppleMusicSettingsModel: ObservableObject {
         guard snapshot.revision > latestAppleMusicWrapperLoginSnapshotRevision else { return }
         latestAppleMusicWrapperLoginSnapshotRevision = snapshot.revision
         applyAppleMusicWrapperLoginStatus(snapshot.status)
+    }
+
+    private func applyAppleMusicRuntimeProgress(_ progress: AppleMusicRuntimeProgress?) {
+        appleMusicRuntimeProgress = progress
+        if let statuses = progress?.statuses {
+            appleMusicRuntimeStatuses = statuses
+        }
+        if let progress {
+            appleMusicRuntimeMessage = progress.message
+        }
     }
 
     private func applyAppleMusicWrapperLoginStatus(_ status: AppleMusicWrapperLoginStatus) {

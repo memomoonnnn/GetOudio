@@ -3,139 +3,107 @@ import Foundation
 import GetOudioCore
 
 /// An on-demand, non-sandboxed helper for the managed Apple Music toolchain.
-/// It has no daemon mode and never communicates through App Group storage.
+/// launchd starts it only when the Background Agent connects to its Mach service.
 @main
 enum GetOudioAMRuntimeWorker {
-    static func main() async {
+    static func main() {
         do {
-            let arguments = CommandLine.arguments.dropFirst().filter {
-                !$0.hasPrefix("-psn_")
-            }
-            if arguments.isEmpty {
-                try await processRequestsUntilIdle()
-                return
-            }
-            guard arguments.count == 2, arguments[0] == "--request" else {
-                throw ProcessRunnerError.processFailed("缺少 Apple Music Runtime Helper 请求。")
-            }
-            let requestURL = URL(fileURLWithPath: arguments[1])
-            let request = try JSONDecoder().decode(
-                AppleMusicRuntimeAgentRequestEnvelope.self,
-                from: Data(contentsOf: requestURL)
+            let store = try runtimeStore()
+            DiagnosticLog.configureRuntimeWorker(store: store)
+            let state = RuntimeWorkerState()
+            let loginState = WrapperLoginState()
+            let activityTracker = RuntimeWorkerActivityTracker()
+            let server = RuntimeWorkerXPCServer(
+                state: state,
+                hasBackgroundActivity: { activityTracker.isActive },
+                handle: {
+                    request in await handle(
+                        request,
+                        store: store,
+                        state: state,
+                        loginState: loginState,
+                        activityTracker: activityTracker
+                    )
+                }
             )
-            let response = await handle(request)
-            try write(response)
+            server.start()
+            withExtendedLifetime(server) {
+                dispatchMain()
+            }
         } catch {
             FileHandle.standardError.write(Data((error.localizedDescription + "\n").utf8))
             Darwin.exit(EXIT_FAILURE)
         }
     }
 
-    /// Launch Services starts this app outside its caller's sandbox. It serves
-    /// queued requests briefly, then exits instead of remaining a background
-    /// service. A move claim prevents concurrent launches from running one job
-    /// twice.
-    private static func processRequestsUntilIdle() async throws {
-        let store = try runtimeStore()
-        DiagnosticLog.configure(store: store)
-        let directory = store.url(for: .appleMusicRuntimeIPC)
-        let fileManager = FileManager.default
-        try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
-        var idlePolls = 0
-
-        while idlePolls < 120 {
-            let requestURLs = try fileManager.contentsOfDirectory(
-                at: directory,
-                includingPropertiesForKeys: [.contentModificationDateKey],
-                options: [.skipsHiddenFiles]
-            )
-            .filter { $0.lastPathComponent.hasSuffix(".runtime-request.json") }
-            .sorted { $0.lastPathComponent < $1.lastPathComponent }
-
-            guard let requestURL = requestURLs.first else {
-                idlePolls += 1
-                try await Task.sleep(nanoseconds: 250_000_000)
-                continue
-            }
-
-            let claimURL = requestURL.deletingPathExtension().appendingPathExtension("processing")
-            do {
-                try fileManager.moveItem(at: requestURL, to: claimURL)
-            } catch {
-                continue
-            }
-
-            do {
-                let request = try JSONDecoder().decode(
-                    AppleMusicRuntimeAgentRequestEnvelope.self,
-                    from: Data(contentsOf: claimURL)
-                )
-                let response = await handle(request)
-                let responseURL = directory.appendingPathComponent("\(request.id.uuidString).runtime-response.json")
-                try JSONEncoder().encode(response).write(to: responseURL, options: .atomic)
-                idlePolls = 0
-            } catch {
-                DiagnosticLog.append("[RuntimeWorker] queued request failed: \(error.localizedDescription)")
-            }
-            try? fileManager.removeItem(at: claimURL)
-        }
-    }
-
     private static func handle(
-        _ request: AppleMusicRuntimeAgentRequestEnvelope
+        _ request: AppleMusicRuntimeWorkerRequest,
+        store: AgentDataStore,
+        state: RuntimeWorkerState,
+        loginState: WrapperLoginState,
+        activityTracker: RuntimeWorkerActivityTracker
     ) async -> AppleMusicRuntimeAgentResponseEnvelope {
         do {
-            let store = try runtimeStore()
-            DiagnosticLog.configure(store: store)
+            DiagnosticLog.configureRuntimeWorker(store: store)
             let resourceRoot = request.resourceRootPath.map {
                 URL(fileURLWithPath: $0, isDirectory: true)
             }
             let manager = AppleMusicRuntimeManager(
                 container: store,
                 resourceRoot: resourceRoot,
-                gpacPackageURLOverride: request.gpacPackageURLOverride
+                gpacPackageURLOverride: request.gpacPackageURLOverride,
+                progressHandler: { state.publish(progress: $0) }
             )
-            let loginState = WrapperLoginState(container: store)
-
             switch request.command {
-            case "status":
+            case .status:
                 return AppleMusicRuntimeAgentResponseEnvelope(
                     id: request.id,
                     statusReport: await statusReport(manager: manager)
                 )
-            case "install":
+            case .install:
                 _ = try await manager.installManagedRuntime()
-                try await wrapperRuntime(manager: manager, store: store)
+                try await wrapperRuntime(manager: manager)
                     .finalizeManagedImageUpdate(resetAuthentication: true)
                 loginState.publish(.init(phase: .notInitialized, message: "Apple Music 下载功能尚未初始化"))
                 return AppleMusicRuntimeAgentResponseEnvelope(
                     id: request.id,
                     statusReport: await statusReport(manager: manager)
                 )
-            case "uninstall":
+            case .uninstall:
                 try await manager.uninstallManagedRuntime()
                 loginState.publish(.init(phase: .notInitialized, message: "Apple Music 下载功能尚未启用"))
                 return AppleMusicRuntimeAgentResponseEnvelope(
                     id: request.id,
                     statusReport: await statusReport(manager: manager)
                 )
-            case "download":
+            case .download:
                 guard let downloadRequest = request.downloadRequest else {
                     throw ProcessRunnerError.processFailed("download 请求缺少任务。")
                 }
-                let summary = await worker(resourceRoot: resourceRoot, manager: manager, store: store)
-                    .download(downloadRequest.jobs)
-                persistShareDownloadNotificationIfNeeded(summary: summary, jobs: downloadRequest.jobs, store: store)
-                return AppleMusicRuntimeAgentResponseEnvelope(id: request.id, summary: summary)
-            case "initialize":
-                let initializeRequest: AppleMusicRuntimeAgentInitializeRequest = try credential(
-                    for: request,
-                    as: AppleMusicRuntimeAgentInitializeRequest.self,
-                    message: "initialize 请求缺少凭据。"
+                let summary = await worker(
+                    resourceRoot: resourceRoot,
+                    manager: manager,
+                    state: state,
+                    executionSettings: request.executionSettings
                 )
+                    .download(downloadRequest.jobs)
+                return AppleMusicRuntimeAgentResponseEnvelope(id: request.id, summary: summary)
+            case .initialize:
+                guard let initializeRequest = request.initializeRequest else {
+                    throw ProcessRunnerError.processFailed("initialize 请求缺少凭据。")
+                }
                 loginState.publish(.init(phase: .starting, message: "正在启动登录容器"))
-                let wrapper = wrapperRuntime(manager: manager, store: store)
-                let summary = await worker(resourceRoot: resourceRoot, manager: manager, store: store, wrapperRuntime: wrapper)
+                let wrapper = wrapperRuntime(
+                    manager: manager,
+                    useSystemProxy: initializeRequest.useSystemProxy
+                )
+                let summary = await worker(
+                    resourceRoot: resourceRoot,
+                    manager: manager,
+                    wrapperRuntime: wrapper,
+                    state: state,
+                    executionSettings: request.executionSettings
+                )
                     .initializeWrapper(
                         username: initializeRequest.username,
                         password: initializeRequest.password,
@@ -143,31 +111,46 @@ enum GetOudioAMRuntimeWorker {
                         useSystemProxy: initializeRequest.useSystemProxy
                     )
                 if summary.failureCount == 0 {
-                    _ = await loginState.reconcile(runtime: wrapper)
+                    monitorLoginStatus(
+                        runtime: wrapper,
+                        loginState: loginState,
+                        activityTracker: activityTracker
+                    )
                 } else {
                     loginState.publish(.init(phase: .failed, message: "登录容器启动失败，可以重新初始化"))
                 }
                 return AppleMusicRuntimeAgentResponseEnvelope(id: request.id, summary: summary)
-            case "submit-code":
-                let verificationRequest: AppleMusicRuntimeAgentVerificationRequest = try credential(
-                    for: request,
-                    as: AppleMusicRuntimeAgentVerificationRequest.self,
-                    message: "submit-code 请求缺少验证码。"
+            case .submitCode:
+                guard let verificationRequest = request.verificationRequest else {
+                    throw ProcessRunnerError.processFailed("submit-code 请求缺少验证码。")
+                }
+                let summary = await worker(
+                    resourceRoot: resourceRoot,
+                    manager: manager,
+                    state: state,
+                    executionSettings: request.executionSettings
                 )
-                let summary = await worker(resourceRoot: resourceRoot, manager: manager, store: store)
                     .submitWrapperVerificationCode(verificationRequest.code)
                 if summary.failureCount == 0 {
                     loginState.publish(.init(phase: .verificationCodeSubmitted, message: "验证码已写入，等待 wrapper 读取"))
                 }
                 return AppleMusicRuntimeAgentResponseEnvelope(id: request.id, summary: summary)
-            case "wrapper-status":
-                let status = await loginState.reconcile(runtime: wrapperRuntime(manager: manager, store: store))
+            case .wrapperStatus:
+                let status = await loginState.reconcile(runtime: wrapperRuntime(manager: manager))
                 return AppleMusicRuntimeAgentResponseEnvelope(id: request.id, wrapperLoginStatus: status)
-            case "stop-runtime":
+            case .stopRuntime:
                 await ColimaDockerRuntime(runtimeManager: manager).stopIfRunning()
                 return AppleMusicRuntimeAgentResponseEnvelope(id: request.id)
-            default:
-                throw ProcessRunnerError.processFailed("未知 Apple Music Runtime Helper 命令：\(request.command)")
+            case .cancel:
+                state.requestCancellation()
+                return AppleMusicRuntimeAgentResponseEnvelope(id: request.id)
+            case .progress:
+                return AppleMusicRuntimeAgentResponseEnvelope(id: request.id, progress: state.progress)
+            case .snapshot:
+                return AppleMusicRuntimeAgentResponseEnvelope(
+                    id: request.id,
+                    wrapperLoginSnapshot: loginState.snapshot
+                )
             }
         } catch {
             return AppleMusicRuntimeAgentResponseEnvelope(id: request.id, errorMessage: error.localizedDescription)
@@ -175,19 +158,7 @@ enum GetOudioAMRuntimeWorker {
     }
 
     private static func runtimeStore() throws -> AgentDataStore {
-        try AgentDataStore.production()
-    }
-
-    private static func credential<T: Decodable>(
-        for request: AppleMusicRuntimeAgentRequestEnvelope,
-        as type: T.Type,
-        message: String
-    ) throws -> T {
-        guard let pipePath = request.credentialPipePath else {
-            throw ProcessRunnerError.processFailed(message)
-        }
-        let data = try AppleMusicRuntimeCredentialProvider.fetch(pipePath: pipePath)
-        return try JSONDecoder().decode(T.self, from: data)
+        try AgentDataStore.runtimeWorker()
     }
 
     private static func statusReport(manager: AppleMusicRuntimeManager) async -> AppleMusicRuntimeAgentStatusReport {
@@ -210,64 +181,268 @@ enum GetOudioAMRuntimeWorker {
     private static func worker(
         resourceRoot: URL?,
         manager: AppleMusicRuntimeManager,
-        store: AgentDataStore,
-        wrapperRuntime: AppleMusicWrapperRuntime? = nil
+        wrapperRuntime: AppleMusicWrapperRuntime? = nil,
+        state: RuntimeWorkerState,
+        executionSettings: AppleMusicRuntimeExecutionSettings?
     ) -> AppleMusicDownloadService {
         AppleMusicDownloadService(
             componentManager: BundledComponentManager(resourceRoot: resourceRoot),
             runtimeManager: manager,
-            wrapperRuntime: wrapperRuntime,
-            settingsStore: SettingsStore(container: store),
-            agentClient: AppleMusicRuntimeAgentClient(container: store),
-            useAgent: false
+            wrapperRuntime: wrapperRuntime ?? self.wrapperRuntime(manager: manager),
+            settingsStore: nil,
+            agentClient: nil,
+            useAgent: false,
+            cancellationRequested: { state.isCancellationRequested },
+            executionSettings: executionSettings,
+            progressHandler: { state.publish(progress: $0) }
         )
     }
 
-    private static func wrapperRuntime(manager: AppleMusicRuntimeManager, store: AgentDataStore) -> AppleMusicWrapperRuntime {
-        AppleMusicWrapperRuntime(runtimeManager: manager, settingsStore: SettingsStore(container: store))
+    private static func wrapperRuntime(
+        manager: AppleMusicRuntimeManager,
+        useSystemProxy: Bool? = nil
+    ) -> AppleMusicWrapperRuntime {
+        AppleMusicWrapperRuntime(runtimeManager: manager, systemProxyEnabled: useSystemProxy)
     }
 
-    private static func persistShareDownloadNotificationIfNeeded(
-        summary: ConversionSummary,
-        jobs: [JobRequest],
-        store: AgentDataStore
+    private static func monitorLoginStatus(
+        runtime: AppleMusicWrapperRuntime,
+        loginState: WrapperLoginState,
+        activityTracker: RuntimeWorkerActivityTracker
     ) {
-        guard jobs.contains(where: { $0.source == .shareExtension }) else { return }
+        guard activityTracker.begin() else { return }
+        Task.detached {
+            await AppleMusicWrapperLoginStatusPolling.observe(
+                poll: { await loginState.reconcile(runtime: runtime) },
+                publish: { _ in }
+            )
+            activityTracker.end()
+        }
+    }
+}
+
+private final class RuntimeWorkerActivityTracker: @unchecked Sendable {
+    private let lock = NSLock()
+    private var active = false
+
+    var isActive: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return active
+    }
+
+    func begin() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !active else { return false }
+        active = true
+        return true
+    }
+
+    func end() {
+        lock.lock()
+        active = false
+        lock.unlock()
+    }
+}
+
+private final class RuntimeWorkerState: @unchecked Sendable {
+    private let lock = NSLock()
+    private var cancellationRequested = false
+    private var latestProgress: AppleMusicRuntimeProgress?
+
+    var isCancellationRequested: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return cancellationRequested
+    }
+
+    var progress: AppleMusicRuntimeProgress? {
+        lock.lock()
+        defer { lock.unlock() }
+        return latestProgress
+    }
+
+    func requestCancellation() {
+        lock.lock()
+        cancellationRequested = true
+        lock.unlock()
+    }
+
+    func clearCancellation() {
+        lock.lock()
+        cancellationRequested = false
+        lock.unlock()
+    }
+
+    func publish(progress: AppleMusicRuntimeProgress) {
+        lock.lock()
+        latestProgress = progress
+        lock.unlock()
+    }
+}
+
+private final class RuntimeWorkerXPCServer: NSObject, NSXPCListenerDelegate, AppleMusicRuntimeWorkerXPCProtocol {
+    private let listener = NSXPCListener(machServiceName: AppleMusicRuntimeWorkerXPC.machServiceName)
+    private let state: RuntimeWorkerState
+    private let hasBackgroundActivity: @Sendable () -> Bool
+    private let operationHandler: @Sendable (AppleMusicRuntimeWorkerRequest) async -> AppleMusicRuntimeAgentResponseEnvelope
+    private let queue = DispatchQueue(label: "com.shengjiacheng.GetOudio.runtime-worker.xpc")
+    private let lock = NSLock()
+    private var activeTaskID: UUID?
+    private var idleTimer: DispatchSourceTimer?
+
+    init(
+        state: RuntimeWorkerState,
+        hasBackgroundActivity: @escaping @Sendable () -> Bool,
+        handle: @escaping @Sendable (AppleMusicRuntimeWorkerRequest) async -> AppleMusicRuntimeAgentResponseEnvelope
+    ) {
+        self.state = state
+        self.hasBackgroundActivity = hasBackgroundActivity
+        operationHandler = handle
+        super.init()
+        listener.delegate = self
+    }
+
+    func start() {
+        listener.resume()
+        armIdleExit()
+        DiagnosticLog.append("[RuntimeWorker] launchd Mach XPC listener started")
+    }
+
+    func listener(
+        _ listener: NSXPCListener,
+        shouldAcceptNewConnection connection: NSXPCConnection
+    ) -> Bool {
+        guard connection.effectiveUserIdentifier == getuid() else {
+            return false
+        }
+        connection.exportedInterface = NSXPCInterface(with: AppleMusicRuntimeWorkerXPCProtocol.self)
+        connection.exportedObject = self
+        connection.resume()
+        return true
+    }
+
+    func handle(_ requestData: Data, withReply reply: @escaping (Data) -> Void) {
         do {
-            try NotificationEventQueue(container: store).enqueueConversionFinished(summary: summary, jobs: jobs)
-            NotificationDispatchWaker.wake(container: store)
+            let request = try JSONDecoder().decode(
+                AppleMusicRuntimeWorkerRequest.self,
+                from: requestData
+            )
+            switch request.command {
+            case .status, .wrapperStatus, .progress, .snapshot:
+                cancelIdleExit()
+                Task { [weak self] in
+                    guard let self else { return }
+                    let response = await operationHandler(request)
+                    reply(encode(.init(id: request.id, response: response)))
+                    armIdleExit()
+                }
+            case .cancel:
+                state.requestCancellation()
+                reply(encode(.init(id: request.id, response: .init(id: request.id))))
+            case .install, .uninstall, .download, .initialize, .submitCode, .stopRuntime:
+                try submit(request, reply: reply)
+            }
         } catch {
-            DiagnosticLog.append("[RuntimeWorker] notification enqueue failed: \(error.localizedDescription)")
+            reply(encode(.init(id: decodedRequestID(from: requestData), errorMessage: error.localizedDescription)))
         }
     }
 
-    private static func write<T: Encodable>(_ value: T) throws {
-        FileHandle.standardOutput.write(try JSONEncoder().encode(value))
-        FileHandle.standardOutput.write(Data("\n".utf8))
+    private func submit(
+        _ request: AppleMusicRuntimeWorkerRequest,
+        reply: @escaping (Data) -> Void
+    ) throws {
+        lock.lock()
+        guard activeTaskID == nil else {
+            lock.unlock()
+            throw ProcessRunnerError.processFailed("Apple Music Runtime Worker 正在执行其他任务。")
+        }
+        activeTaskID = request.id
+        lock.unlock()
+        cancelIdleExit()
+        state.clearCancellation()
+
+        Task.detached { [weak self] in
+            guard let self else { return }
+            let response = await self.operationHandler(request)
+            reply(self.encode(.init(id: request.id, response: response)))
+            self.state.clearCancellation()
+            self.releaseActiveTask()
+            self.armIdleExit()
+        }
+    }
+
+    private func releaseActiveTask() {
+        lock.lock()
+        activeTaskID = nil
+        lock.unlock()
+    }
+
+    private func armIdleExit() {
+        idleTimer?.cancel()
+        let timer = DispatchSource.makeTimerSource(queue: queue)
+        timer.schedule(deadline: .now() + 20)
+        timer.setEventHandler { [weak self] in
+            guard let self else { return }
+            guard self.isIdle else {
+                self.armIdleExit()
+                return
+            }
+            DiagnosticLog.append("[RuntimeWorker] idle exit")
+            Darwin.exit(EXIT_SUCCESS)
+        }
+        timer.resume()
+        idleTimer = timer
+    }
+
+    private var isIdle: Bool {
+        lock.lock()
+        let hasActiveTask = activeTaskID != nil
+        lock.unlock()
+        return !hasActiveTask && !hasBackgroundActivity()
+    }
+
+    private func cancelIdleExit() {
+        idleTimer?.cancel()
+        idleTimer = nil
+    }
+
+    private func encode(_ response: AppleMusicRuntimeWorkerResponse) -> Data {
+        (try? JSONEncoder().encode(response)) ?? Data()
+    }
+
+    private func decodedRequestID(from data: Data) -> UUID {
+        (try? JSONDecoder().decode(AppleMusicRuntimeWorkerRequest.self, from: data).id) ?? UUID()
     }
 }
 
 private final class WrapperLoginState {
-    private let snapshotStore: AppleMusicWrapperLoginSnapshotStore
+    private let lock = NSLock()
+    private var value = AppleMusicWrapperLoginSnapshot(
+        revision: 0,
+        status: .init(phase: .notInitialized, message: "Apple Music 下载功能尚未初始化")
+    )
 
-    init(container: AgentDataStore) {
-        snapshotStore = AppleMusicWrapperLoginSnapshotStore(container: container)
+    var snapshot: AppleMusicWrapperLoginSnapshot {
+        lock.lock()
+        defer { lock.unlock() }
+        return value
     }
 
     func publish(_ status: AppleMusicWrapperLoginStatus) {
-        do {
-            _ = try snapshotStore.saveIfChanged(status)
-        } catch {
-            DiagnosticLog.append("[RuntimeWorker] login snapshot write failed: \(error.localizedDescription)")
-        }
+        lock.lock()
+        defer { lock.unlock() }
+        guard value.status != status else { return }
+        value = AppleMusicWrapperLoginSnapshot(revision: value.revision + 1, status: status)
     }
 
     func reconcile(runtime: AppleMusicWrapperRuntime) async -> AppleMusicWrapperLoginStatus {
         let observed = await runtime.loginStatus()
-        if let snapshot = snapshotStore.snapshot(),
-           snapshot.status.phase == .verificationCodeSubmitted,
+        let current = snapshot
+        if current.status.phase == .verificationCodeSubmitted,
            observed.phase == .waitingForVerificationCode {
-            return snapshot.status
+            return current.status
         }
         publish(observed)
         return observed

@@ -156,15 +156,12 @@ targets:
         com.apple.security.files.music.read-write: true
         com.apple.security.files.pictures.read-write: true
         com.apple.security.network.client: true
-        com.apple.security.network.server: true
         com.apple.security.temporary-exception.mach-lookup.global-name:
           - $(PRODUCT_BUNDLE_IDENTIFIER)-spks
           - $(PRODUCT_BUNDLE_IDENTIFIER)-spki
           - com.shengjiacheng.GetOudio.agent
-        com.apple.security.temporary-exception.files.home-relative-path.read-write:
-          - /Library/Application Support/GetOudioV2/
+          - com.shengjiacheng.GetOudio.runtime-worker
         com.apple.security.device.audio-input: true
-        com.apple.security.virtualization: true
     settings:
       base:
         ASSETCATALOG_COMPILER_STANDALONE_ICON_BEHAVIOR: default

@@ -6,10 +6,10 @@
 
 | 位置 | 职责 |
 | --- | --- |
-| `GetOudioCore/` | 跨进程模型、服务、共享容器、设置、队列、路径和进程执行的唯一归属。 |
-| `GetOudio/` | 普通 App 的启动路由、设置模型和 SwiftUI 视图；日常转换由 `HeadlessRunner`，录音由 `RecordingRunner`。 |
-| `GetOudioAMRuntimeAgent/` | 受控 Apple Music runtime 及其下载任务。 |
-| `GetOudioFinderExtension/`、`GetOudioShareExtension/`、`GetOudioRecordingWidget/` | 仅接收系统输入、写共享状态并唤醒后台，不执行转换、下载或实时音频。 |
+| `GetOudioCore/` | 跨进程模型、XPC 协议、设置、队列、路径和进程执行的唯一归属。 |
+| `GetOudio/` | 普通 App UI、`BackgroundAgent`、后台任务协调和 `RecordingRunner`。 |
+| `GetOudioAMRuntimeWorker/` | 唯一的非沙盒 Runtime Worker，只执行 Apple Music runtime 指令。 |
+| `GetOudioFinderExtension/`、`GetOudioShareExtension/`、`GetOudioRecordingWidget/` | 仅解析系统输入并调用 Background Agent XPC，不读写共享容器、不执行转换、下载或实时音频。 |
 | `script/` 与 `project.yml` | 构建、安装和 target 定义；`project.yml` 是 XcodeGen 真源。 |
 
 Core 的 `Models` 定义领域值和协议，`Services` 承担流程与副作用，`Support` 放共享基础设施；App 的 `App` 放生命周期和 runner，`Models` 放页面协调，`Views` 放展示与局部交互。跨页面 UI 原语放在既有 `SettingsUI.swift` 等共享视图文件，不能把服务、队列或权限调用塞进 View。
@@ -22,7 +22,7 @@ Core 的 `Models` 定义领域值和协议，`Services` 承担流程与副作用
 
 可修改源码主要位于上述目录及 `project.yml`。修改 target、sources、resources、Info.plist 注入、entitlements、签名或构建设置时，修改 `project.yml` 并运行 `xcodegen generate`；`GetOudio.xcodeproj/project.pbxproj` 和 `build/` 是生成或本地输出，不能反向作为真源。
 
-不得修改 `.git/`、无关未提交改动、用户 App Group 数据、Apple Music 输出、Keychain 凭据或任务范围外的第三方二进制。App Group 固定为 `group.com.shengjiacheng.GetOudio`；文件系统和共享设置只能经 `SharedContainer` 及其 suite defaults 构造的 `SettingsStore` 访问。`SharedContainer.production()` 失败必须作为可观察错误终止当前入口；`diagnostic(rootURL:defaults:)` 仅用于测试或显式 Debug，Release 不得响应其环境变量，容器解析失败时只写系统日志。新增网络、虚拟化、App Group、文件访问或 Hardened Runtime 能力时，必须同步检查对应 target 的 entitlements，不能以关闭沙盒或移除安全作用域绕过权限。
+不得修改 `.git/`、无关未提交改动、历史 App Group 数据、Apple Music 输出、Keychain 凭据或任务范围外的第三方二进制。项目不使用 App Group：App、Agent 和扩展的跨进程通信只经 Mach XPC；控制数据位于 App 沙盒容器，只经 `AgentDataStore.production()` 访问；非沙盒 `Runtime Worker` 才可经 `AgentDataStore.runtimeWorker()` 访问外部 managed runtime。凭据和请求只存在于 XPC 内存载荷，不得落盘。新增网络、虚拟化、文件访问或 Hardened Runtime 能力时，必须同步检查对应 target 的 entitlements，不能以关闭沙盒绕过权限。
 
 凭据不得写入 UserDefaults、日志、配置文件或命令诊断输出。完成或失败类通知必须写入 `NotificationEventQueue`，由 `NotificationService.dispatchPendingNotificationEvents()` 的唯一派发器在系统接受请求后确认删除；被拒绝或耗尽重试的事件进入抑制记录。所有本地通知标题固定为 `Get Oudio`，差异写入正文。
 

@@ -4,7 +4,7 @@
 
 录音源只支持设置页选定的 `Pro Tools Audio Bridge 2-A` 或 `2-B`，持久化设备 UID，运行时重新解析 AudioDeviceID。开始录音只修改 `kAudioHardwarePropertyDefaultOutputDevice`，不得修改系统提醒音使用的 `kAudioHardwarePropertyDefaultSystemOutputDevice`；监听输出固定为切换前的默认媒体输出。源或监听设备断开、系统睡眠、磁盘写入失败和实时缓冲溢出均进入同一个幂等停止流程并恢复原输出。
 
-Widget 只从 App Group 读取 `RecordingSessionSnapshot` 并打开 `getoudio://recording/toggle`，不能持有音频引擎。默认缓存为共享容器的 `Library/Caches/Recordings`；用户选定缓存位置时，以 security-scoped bookmark 直接访问该目录，缓存统计与清理会管理其中 WAV，设置页必须提示用户专门为 Get Oudio 新建缓存文件夹。指定位置不可用时回退默认缓存。剪贴板写文件 URL，不写 PCM 数据。
+Widget 只通过 Background Agent XPC 读取 `RecordingSessionSnapshot` 并打开 `getoudio://recording/toggle`，不能持有音频引擎或读取控制文件。默认缓存为 App 沙盒控制根的 `Library/Caches/Recordings`；用户选定缓存位置时，以 security-scoped bookmark 直接访问该目录，缓存统计与清理会管理其中 WAV，设置页必须提示用户专门为 Get Oudio 新建缓存文件夹。指定位置不可用时回退默认缓存。剪贴板写文件 URL，不写 PCM 数据。
 
 输入和监听回调不得分配内存、写磁盘或日志、调度主线程或等待信号量；实时错误只写预分配原子状态，由 Runner 健康检查停止和记录。监听环形缓冲欠载、丢帧及输入回调/PCM 静音必须保留为诊断；静音是合法信号，不能自动停止。若日志出现 `input health` 的“无回调”或“所有 PCM 块静音”，先在“音频 MIDI 设置”刷新该 Bridge 的输入/输出页，再判断路由或代码问题。
 

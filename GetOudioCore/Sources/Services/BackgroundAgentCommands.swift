@@ -7,6 +7,18 @@ public enum BackgroundAgentCommand: String, Codable, Equatable, Sendable {
     case unsupportedShareURLs
     case recordingSnapshot
     case dispatchNotificationEvents
+    case handlePendingAppleMusicDownload
+    case appleMusicStatus
+    case appleMusicInstall
+    case appleMusicUninstall
+    case appleMusicDownload
+    case appleMusicInitialize
+    case appleMusicSubmitCode
+    case appleMusicWrapperStatus
+    case appleMusicSnapshot
+    case appleMusicProgress
+    case appleMusicCancel
+    case subscribeAppleMusicEvents
 }
 
 public struct BackgroundAgentCommandRequest: Codable, Sendable {
@@ -14,12 +26,26 @@ public struct BackgroundAgentCommandRequest: Codable, Sendable {
     public var command: BackgroundAgentCommand
     public var jobs: [JobRequest]?
     public var urls: [URL]?
+    public var appleMusicInitializeRequest: AppleMusicRuntimeAgentInitializeRequest?
+    public var appleMusicVerificationRequest: AppleMusicRuntimeAgentVerificationRequest?
+    public var appleMusicDownloadFormat: AppleMusicDownloadFormat?
 
-    public init(id: UUID = UUID(), command: BackgroundAgentCommand, jobs: [JobRequest]? = nil, urls: [URL]? = nil) {
+    public init(
+        id: UUID = UUID(),
+        command: BackgroundAgentCommand,
+        jobs: [JobRequest]? = nil,
+        urls: [URL]? = nil,
+        appleMusicInitializeRequest: AppleMusicRuntimeAgentInitializeRequest? = nil,
+        appleMusicVerificationRequest: AppleMusicRuntimeAgentVerificationRequest? = nil,
+        appleMusicDownloadFormat: AppleMusicDownloadFormat? = nil
+    ) {
         self.id = id
         self.command = command
         self.jobs = jobs
         self.urls = urls
+        self.appleMusicInitializeRequest = appleMusicInitializeRequest
+        self.appleMusicVerificationRequest = appleMusicVerificationRequest
+        self.appleMusicDownloadFormat = appleMusicDownloadFormat
     }
 }
 
@@ -33,21 +59,56 @@ public struct BackgroundAgentFinderConfiguration: Codable, Sendable {
     }
 }
 
+public struct AppleMusicRuntimeAgentEvent: Codable, Equatable, Sendable {
+    public var revision: UInt64
+    public var progress: AppleMusicRuntimeProgress?
+    public var loginSnapshot: AppleMusicWrapperLoginSnapshot?
+
+    public init(
+        revision: UInt64,
+        progress: AppleMusicRuntimeProgress?,
+        loginSnapshot: AppleMusicWrapperLoginSnapshot?
+    ) {
+        self.revision = revision
+        self.progress = progress
+        self.loginSnapshot = loginSnapshot
+    }
+}
+
+@objc public protocol BackgroundAgentEventXPCProtocol {
+    func handleEvent(_ eventData: Data)
+}
+
 public struct BackgroundAgentCommandResponse: Codable, Sendable {
     public var id: UUID
     public var finderConfiguration: BackgroundAgentFinderConfiguration?
     public var recordingSnapshot: RecordingSessionSnapshot?
+    public var appleMusicResponse: AppleMusicRuntimeAgentResponseEnvelope?
+    public var appleMusicLoginSnapshot: AppleMusicWrapperLoginSnapshot?
+    public var appleMusicProgress: AppleMusicRuntimeProgress?
+    public var appleMusicEvent: AppleMusicRuntimeAgentEvent?
+    public var settingsAttention: SettingsAttentionItem?
     public var errorMessage: String?
 
     public init(
         id: UUID,
         finderConfiguration: BackgroundAgentFinderConfiguration? = nil,
         recordingSnapshot: RecordingSessionSnapshot? = nil,
+        appleMusicResponse: AppleMusicRuntimeAgentResponseEnvelope? = nil,
+        appleMusicLoginSnapshot: AppleMusicWrapperLoginSnapshot? = nil,
+        appleMusicProgress: AppleMusicRuntimeProgress? = nil,
+        appleMusicEvent: AppleMusicRuntimeAgentEvent? = nil,
+        settingsAttention: SettingsAttentionItem? = nil,
         errorMessage: String? = nil
     ) {
         self.id = id
         self.finderConfiguration = finderConfiguration
         self.recordingSnapshot = recordingSnapshot
+        self.appleMusicResponse = appleMusicResponse
+        self.appleMusicLoginSnapshot = appleMusicLoginSnapshot
+        self.appleMusicProgress = appleMusicProgress
+        self.appleMusicEvent = appleMusicEvent
+        self.settingsAttention = settingsAttention
         self.errorMessage = errorMessage
     }
 }
@@ -91,6 +152,30 @@ public final class BackgroundAgentClient {
 
     public func dispatchNotificationEvents() async throws {
         _ = try await send(.init(command: .dispatchNotificationEvents)) as BackgroundAgentCommandResponse
+    }
+
+    public func handlePendingAppleMusicDownload(
+        format: AppleMusicDownloadFormat
+    ) async throws -> SettingsAttentionItem? {
+        let response: BackgroundAgentCommandResponse = try await send(.init(
+            command: .handlePendingAppleMusicDownload,
+            appleMusicDownloadFormat: format
+        ))
+        return response.settingsAttention
+    }
+
+    public func performAppleMusic(
+        _ command: BackgroundAgentCommand,
+        jobs: [JobRequest]? = nil,
+        initializeRequest: AppleMusicRuntimeAgentInitializeRequest? = nil,
+        verificationRequest: AppleMusicRuntimeAgentVerificationRequest? = nil
+    ) async throws -> BackgroundAgentCommandResponse {
+        try await send(.init(
+            command: command,
+            jobs: jobs,
+            appleMusicInitializeRequest: initializeRequest,
+            appleMusicVerificationRequest: verificationRequest
+        ))
     }
 
     private func send(_ request: BackgroundAgentCommandRequest) async throws -> BackgroundAgentCommandResponse {

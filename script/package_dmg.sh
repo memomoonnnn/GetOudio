@@ -5,6 +5,8 @@ SCHEME="GetOudio"
 APP_NAME="Get Oudio"
 AGENT_PLIST_NAME="com.shengjiacheng.GetOudio.agent.plist"
 AGENT_SERVICE_NAME="com.shengjiacheng.GetOudio.agent"
+RUNTIME_WORKER_PLIST_NAME="com.shengjiacheng.GetOudio.runtime-worker.plist"
+RUNTIME_WORKER_SERVICE_NAME="com.shengjiacheng.GetOudio.runtime-worker"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DERIVED_DATA="${DERIVED_DATA:-$ROOT_DIR/build/DistributionDerivedData}"
 CONFIGURATION="${CONFIGURATION:-Release}"
@@ -130,6 +132,12 @@ verify_background_agent_plist() {
     echo "wrong background agent label" >&2; exit 1;
   }
   /usr/libexec/PlistBuddy -c "Print :MachServices:$AGENT_SERVICE_NAME" "$plist" >/dev/null
+  local runtime_plist="$APP_BUNDLE/Contents/Resources/LaunchAgents/$RUNTIME_WORKER_PLIST_NAME"
+  [[ -f "$runtime_plist" ]] || { echo "missing runtime worker plist: $runtime_plist" >&2; exit 1; }
+  [[ "$(/usr/libexec/PlistBuddy -c 'Print :Label' "$runtime_plist")" == "$RUNTIME_WORKER_SERVICE_NAME" ]] || {
+    echo "wrong runtime worker label" >&2; exit 1;
+  }
+  /usr/libexec/PlistBuddy -c "Print :MachServices:$RUNTIME_WORKER_SERVICE_NAME" "$runtime_plist" >/dev/null
   [[ -x "$APP_BUNDLE/Contents/Resources/LaunchAgents/InstallBackgroundAgent.command" ]] || {
     echo "missing executable background agent installer" >&2; exit 1;
   }

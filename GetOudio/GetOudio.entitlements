@@ -22,13 +22,11 @@
 	<true/>
 	<key>com.apple.security.files.pictures.read-write</key>
 	<true/>
-	<key>com.apple.security.files.user-selected.read-write</key>
-	<true/>
 	<key>com.apple.security.files.user-selected.executable</key>
 	<true/>
-	<key>com.apple.security.network.client</key>
+	<key>com.apple.security.files.user-selected.read-write</key>
 	<true/>
-	<key>com.apple.security.network.server</key>
+	<key>com.apple.security.network.client</key>
 	<true/>
 	<key>com.apple.security.temporary-exception.apple-events</key>
 	<array>
@@ -39,12 +37,7 @@
 		<string>$(PRODUCT_BUNDLE_IDENTIFIER)-spks</string>
 		<string>$(PRODUCT_BUNDLE_IDENTIFIER)-spki</string>
 		<string>com.shengjiacheng.GetOudio.agent</string>
+		<string>com.shengjiacheng.GetOudio.runtime-worker</string>
 	</array>
-	<key>com.apple.security.temporary-exception.files.home-relative-path.read-write</key>
-	<array>
-		<string>/Library/Application Support/GetOudioV2/</string>
-	</array>
-	<key>com.apple.security.virtualization</key>
-	<true/>
 </dict>
 </plist>

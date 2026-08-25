@@ -190,7 +190,10 @@ public final class NotificationService {
         await notify(body: "不支持的下载源...\(suffix)", sound: nil)
     }
 
-    public func notifyAppleMusicFormatSelection(jobCount: Int) async {
+    public func notifyAppleMusicFormatSelection(
+        jobCount: Int,
+        identifier: String = UUID().uuidString
+    ) async {
         let content = UNMutableNotificationContent()
         content.title = "Get Oudio"
         content.body = jobCount > 1
@@ -198,7 +201,7 @@ public final class NotificationService {
             : "选择这次的下载格式..."
         content.sound = .default
         content.categoryIdentifier = AppleMusicNotification.formatCategoryIdentifier
-        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+        let request = UNNotificationRequest(identifier: identifier, content: content, trigger: nil)
         await send(request, context: "Apple Music format selection count=\(jobCount)")
     }
 

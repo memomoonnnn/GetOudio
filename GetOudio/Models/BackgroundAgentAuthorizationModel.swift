@@ -38,9 +38,10 @@ final class BackgroundAgentAuthorizationModel: ObservableObject {
     }
 
     func installOnFirstSettingsPresentationIfNeeded() {
-        let key = "GetOudioV2.didRequestLegacyBackgroundAgentInstallation"
-        guard !UserDefaults.standard.bool(forKey: key) else { return }
-        UserDefaults.standard.set(true, forKey: key)
+        let key = "GetOudioV2.legacyBackgroundServiceInstallerRevision"
+        let requiredRevision = 2
+        guard UserDefaults.standard.integer(forKey: key) < requiredRevision else { return }
+        UserDefaults.standard.set(requiredRevision, forKey: key)
         installBackgroundActivity()
     }
 }

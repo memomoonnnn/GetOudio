@@ -43,7 +43,7 @@ final class RecordingControlCoordinator {
 
     func toggle(onRunnerFinished: @escaping () -> Void) -> ToggleResult {
         guard let controlStore else {
-            return .failed("录音共享状态不可用，请检查 App Group 配置。")
+            return .failed("录音控制状态不可用，请重新启动 Get Oudio。")
         }
         let snapshot = controlStore.snapshot()
         DiagnosticLog.append("[Recording] toggle coordinator phase=\(snapshot.phase.rawValue) runnerPID=\(snapshot.runnerPID.map(String.init) ?? "none")")
