@@ -136,11 +136,17 @@ verify_background_agent_plist() {
   [[ "$(/usr/libexec/PlistBuddy -c 'Print :Label' "$plist")" == "$AGENT_SERVICE_NAME" ]] || {
     echo "wrong background agent label" >&2; exit 1;
   }
+  [[ "$(/usr/libexec/PlistBuddy -c 'Print :ProcessType' "$plist")" == "Interactive" ]] || {
+    echo "background agent must use Interactive process type" >&2; exit 1;
+  }
   /usr/libexec/PlistBuddy -c "Print :MachServices:$AGENT_SERVICE_NAME" "$plist" >/dev/null
   local runtime_plist="$bundle_path/Contents/Resources/LaunchAgents/$RUNTIME_WORKER_PLIST_NAME"
   [[ -f "$runtime_plist" ]] || { echo "missing runtime worker plist: $runtime_plist" >&2; exit 1; }
   [[ "$(/usr/libexec/PlistBuddy -c 'Print :Label' "$runtime_plist")" == "$RUNTIME_WORKER_SERVICE_NAME" ]] || {
     echo "wrong runtime worker label" >&2; exit 1;
+  }
+  [[ "$(/usr/libexec/PlistBuddy -c 'Print :ProcessType' "$runtime_plist")" == "Interactive" ]] || {
+    echo "runtime worker must use Interactive process type" >&2; exit 1;
   }
   /usr/libexec/PlistBuddy -c "Print :MachServices:$RUNTIME_WORKER_SERVICE_NAME" "$runtime_plist" >/dev/null
 }

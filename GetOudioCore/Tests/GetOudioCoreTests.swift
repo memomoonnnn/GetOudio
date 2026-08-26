@@ -2032,7 +2032,7 @@ final class GetOudioCoreTests: XCTestCase {
             withIntermediateDirectories: true
         )
         let receiptStore = ManagedRuntimeComponentReceiptStore(rootURL: root)
-        for component in [.colima, .lima, .docker, .dockerBuildx, .gpac] as [AppleMusicRuntimeComponent] {
+        for component in [.colima, .lima, .docker, .dockerBuildx, .gpac, .wrapperImage] as [AppleMusicRuntimeComponent] {
             let spec = try XCTUnwrap(AppleMusicRuntimeManager.managedComponentSpec(for: component))
             try receiptStore.save(ManagedRuntimeComponentReceipt(component: component, version: spec.targetVersion))
         }
@@ -2061,6 +2061,14 @@ final class GetOudioCoreTests: XCTestCase {
         XCTAssertEqual(
             wrapperStatuses.first { $0.component == .wrapperImage }?.resolvedPath,
             AppleMusicRuntimeManager.defaultVMStateRootURL.path
+        )
+
+        let localStatuses = manager.localComponentStatuses()
+        let localWrapper = try XCTUnwrap(localStatuses.first { $0.component == .wrapperImage })
+        XCTAssertTrue(localWrapper.isReady)
+        XCTAssertEqual(
+            localWrapper.detail,
+            "已根据本地安装记录确认；运行时将在实际使用时复查"
         )
     }
 

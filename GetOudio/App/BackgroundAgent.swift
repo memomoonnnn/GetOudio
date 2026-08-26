@@ -239,7 +239,7 @@ final class BackgroundAgent: NSObject, NSXPCListenerDelegate, BackgroundAgentXPC
                 guard let connection else {
                     throw BackgroundAgentXPCError.unavailable
                 }
-                await refreshAppleMusicWorkerState()
+                await refreshAppleMusicWorkerState(reconcileLoginStatus: true)
                 guard let event = appleMusicState.subscribe(connection: connection) else {
                     throw BackgroundAgentXPCError.invalidResponse
                 }
@@ -281,12 +281,22 @@ final class BackgroundAgent: NSObject, NSXPCListenerDelegate, BackgroundAgentXPC
         }
     }
 
-    private func refreshAppleMusicWorkerState() async {
-        if let progress = try? await appleMusicWorker.progress() {
+    private func refreshAppleMusicWorkerState(reconcileLoginStatus: Bool = false) async {
+        do {
+            let progress = try await appleMusicWorker.progress()
             appleMusicState.publish(progress: progress)
+        } catch {
+            // Preserve the last published progress across transient Worker errors.
         }
-        if let snapshot = try? await appleMusicWorker.wrapperLoginSnapshot() {
+
+        do {
+            if reconcileLoginStatus {
+                _ = try await appleMusicWorker.wrapperLoginStatus()
+            }
+            let snapshot = try await appleMusicWorker.wrapperLoginSnapshot()
             appleMusicState.publish(loginSnapshot: snapshot)
+        } catch {
+            // Preserve the last published login snapshot across transient errors.
         }
     }
 

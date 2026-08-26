@@ -5,7 +5,7 @@
     <key>Label</key>
     <string>com.shengjiacheng.GetOudio.runtime-worker</string>
     <key>ProcessType</key>
-    <string>Background</string>
+    <string>Interactive</string>
     <key>ThrottleInterval</key>
     <integer>2</integer>
     <key>ProgramArguments</key>

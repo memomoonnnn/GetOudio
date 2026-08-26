@@ -313,6 +313,19 @@ public final class AppleMusicRuntimeManager {
         ]
     }
 
+    /// Fast settings-page status derived only from local files and receipts.
+    /// Runtime health is rechecked by operations that actually need Colima.
+    public func localComponentStatuses() -> [AppleMusicRuntimeComponentStatus] {
+        let hasWrapperReceipt = receiptStore.receipt(for: .wrapperImage) != nil
+        return componentStatuses(wrapperStatus: ManagedDockerImageStatus(
+            image: .appleMusicWrapper,
+            isAvailable: hasWrapperReceipt,
+            detail: hasWrapperReceipt
+                ? "已根据本地安装记录确认；运行时将在实际使用时复查"
+                : "缺少本地安装记录，请检查并更新"
+        ))
+    }
+
     public func installManagedRuntime() async throws -> AppleMusicRuntimeInstallResult {
         DiagnosticLog.append("[Install] 开始安装 Downloader Runtime → \(rootURL.path)")
         writeProgress("准备安装 Downloader Runtime...", completed: 0, total: 6, isActive: true)

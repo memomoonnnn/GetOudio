@@ -147,6 +147,7 @@ enum GetOudioAMRuntimeWorker {
             case .progress:
                 return AppleMusicRuntimeAgentResponseEnvelope(id: request.id, progress: state.progress)
             case .snapshot:
+                _ = await loginState.reconcile(runtime: wrapperRuntime(manager: manager))
                 return AppleMusicRuntimeAgentResponseEnvelope(
                     id: request.id,
                     wrapperLoginSnapshot: loginState.snapshot
@@ -162,11 +163,7 @@ enum GetOudioAMRuntimeWorker {
     }
 
     private static func statusReport(manager: AppleMusicRuntimeManager) async -> AppleMusicRuntimeAgentStatusReport {
-        let runtime = ColimaDockerRuntime(runtimeManager: manager)
-        let images = DockerImageManager(runtime: runtime)
-        let target = await images.check(.appleMusicWrapper, assumeAvailableWhenRuntimeStopped: manager.isEnabled)
-        let legacy = target.isAvailable ? nil : await images.checkLegacyImage(for: .appleMusicWrapper)
-        let statuses = manager.componentStatuses(wrapperStatus: legacy ?? target)
+        let statuses = manager.localComponentStatuses()
         let missingCount = statuses.filter { !$0.isReady }.count
         return AppleMusicRuntimeAgentStatusReport(
             isEnabled: manager.isEnabled,
