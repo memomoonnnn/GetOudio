@@ -14,6 +14,7 @@ AGENT_PLIST_NAME="com.shengjiacheng.GetOudio.agent.plist"
 AGENT_SERVICE_NAME="com.shengjiacheng.GetOudio.agent"
 RUNTIME_WORKER_PLIST_NAME="com.shengjiacheng.GetOudio.runtime-worker.plist"
 RUNTIME_WORKER_SERVICE_NAME="com.shengjiacheng.GetOudio.runtime-worker"
+BOOTSTRAP_INSTALLER_NAME="GetOudioBootstrapInstaller"
 SHARE_EXTENSION_ID="com.shengjiacheng.GetOudio.ShareExtension"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DERIVED_DATA="$ROOT_DIR/build/DerivedData"
@@ -142,9 +143,32 @@ verify_background_agent_plist() {
     echo "wrong runtime worker label" >&2; exit 1;
   }
   /usr/libexec/PlistBuddy -c "Print :MachServices:$RUNTIME_WORKER_SERVICE_NAME" "$runtime_plist" >/dev/null
-  [[ -x "$bundle_path/Contents/Resources/LaunchAgents/InstallBackgroundAgent.command" ]] || {
-    echo "missing executable background agent installer" >&2; exit 1;
+}
+
+verify_bootstrap_installer() {
+  local bundle_path="$1"
+  local installer="$bundle_path/Contents/Helpers/$BOOTSTRAP_INSTALLER_NAME.app"
+  local entitlements_file
+  entitlements_file="$(mktemp)"
+
+  [[ -x "$installer/Contents/MacOS/$BOOTSTRAP_INSTALLER_NAME" ]] || {
+    echo "missing Bootstrap Installer: $installer" >&2; rm -f "$entitlements_file"; exit 1;
   }
+  [[ "$(/usr/libexec/PlistBuddy -c 'Print :LSUIElement' "$installer/Contents/Info.plist")" == "true" ]] || {
+    echo "Bootstrap Installer must be an LSUIElement app" >&2; rm -f "$entitlements_file"; exit 1;
+  }
+  [[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleURLTypes:0:CFBundleURLSchemes:0' "$installer/Contents/Info.plist")" == "getoudio-bootstrap" ]] || {
+    echo "Bootstrap Installer URL scheme is missing" >&2; rm -f "$entitlements_file"; exit 1;
+  }
+  /usr/bin/codesign --verify --strict --verbose=4 "$installer"
+  /usr/bin/codesign -d --entitlements :- "$installer" >"$entitlements_file" 2>/dev/null || true
+  if /usr/bin/grep -qE 'com.apple.security.app-sandbox|com.apple.security.application-groups' "$entitlements_file"; then
+    echo "Bootstrap Installer must not carry sandbox or App Group entitlements" >&2
+    /bin/cat "$entitlements_file" >&2
+    rm -f "$entitlements_file"
+    exit 1
+  fi
+  rm -f "$entitlements_file"
 }
 
 verify_runtime_worker() {
@@ -258,6 +282,7 @@ install_app() {
   /usr/bin/ditto "$INSTALL_APP_BUNDLE" "$INSTALLED_APP"
   verify_url_scheme "$INSTALLED_APP"
   verify_background_agent_plist "$INSTALLED_APP"
+  verify_bootstrap_installer "$INSTALLED_APP"
   verify_runtime_worker "$INSTALLED_APP"
   verify_extension_point "$INSTALLED_APP/Contents/PlugIns/GetOudioFinderExtension.appex" "$FINDER_EXTENSION_POINT_ID"
   verify_extension_point "$INSTALLED_APP/Contents/PlugIns/GetOudioShareExtension.appex" "$SHARE_EXTENSION_POINT_ID"
@@ -266,7 +291,8 @@ install_app() {
   verify_entitlements "$INSTALLED_APP/Contents/PlugIns/GetOudioFinderExtension.appex"
   verify_entitlements "$INSTALLED_APP/Contents/PlugIns/GetOudioShareExtension.appex"
   verify_entitlements "$INSTALLED_APP/Contents/PlugIns/GetOudioRecordingWidget.appex" false
-  /usr/bin/env bash "$INSTALLED_APP/Contents/Resources/LaunchAgents/InstallBackgroundAgent.command" --app "$INSTALLED_APP"
+  "$INSTALLED_APP/Contents/Helpers/$BOOTSTRAP_INSTALLER_NAME.app/Contents/MacOS/$BOOTSTRAP_INSTALLER_NAME" \
+    install --app "$INSTALLED_APP"
   /usr/bin/open -n "$INSTALLED_APP"
   "$LSREGISTER" -f -R -trusted "$INSTALLED_APP"
   pluginkit -a "$INSTALLED_APP"

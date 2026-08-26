@@ -78,6 +78,9 @@ targets:
       - target: GetOudioCore
       - package: Sparkle
         product: Sparkle
+      - target: GetOudioBootstrapInstaller
+        embed: false
+        link: false
       - target: GetOudioAMRuntimeWorker
         embed: false
         link: false
@@ -170,22 +173,51 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.shengjiacheng.GetOudio
         PRODUCT_NAME: Get Oudio
     postBuildScripts:
-      - name: Embed Apple Music Runtime Worker
+      - name: Embed Background Helpers
         inputFiles:
+          - "$(BUILT_PRODUCTS_DIR)/GetOudioBootstrapInstaller.app/Contents/MacOS/GetOudioBootstrapInstaller"
           - "$(BUILT_PRODUCTS_DIR)/GetOudioAMRuntimeWorker.app/Contents/MacOS/GetOudioAMRuntimeWorker"
         outputFiles:
+          - "$(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Helpers/GetOudioBootstrapInstaller.app/Contents/MacOS/GetOudioBootstrapInstaller"
           - "$(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Helpers/GetOudioAMRuntimeWorker.app/Contents/MacOS/GetOudioAMRuntimeWorker"
         script: |
           set -euo pipefail
+          BOOTSTRAP_APP="$BUILT_PRODUCTS_DIR/GetOudioBootstrapInstaller.app"
           WORKER_APP="$BUILT_PRODUCTS_DIR/GetOudioAMRuntimeWorker.app"
-          DEST="$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/GetOudioAMRuntimeWorker.app"
+          HELPERS_DIR="$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers"
+          BOOTSTRAP_DEST="$HELPERS_DIR/GetOudioBootstrapInstaller.app"
+          WORKER_DEST="$HELPERS_DIR/GetOudioAMRuntimeWorker.app"
+          if [ ! -d "$BOOTSTRAP_APP" ]; then
+            echo "missing Bootstrap Installer at $BOOTSTRAP_APP" >&2
+            exit 1
+          fi
           if [ ! -d "$WORKER_APP" ]; then
             echo "missing Apple Music Runtime Worker at $WORKER_APP" >&2
             exit 1
           fi
-          rm -rf "$DEST"
-          mkdir -p "$(dirname "$DEST")"
-          ditto "$WORKER_APP" "$DEST"
+          rm -rf "$BOOTSTRAP_DEST" "$WORKER_DEST"
+          mkdir -p "$HELPERS_DIR"
+          ditto "$BOOTSTRAP_APP" "$BOOTSTRAP_DEST"
+          ditto "$WORKER_APP" "$WORKER_DEST"
+
+  GetOudioBootstrapInstaller:
+    type: application
+    platform: macOS
+    sources:
+      - path: GetOudioBootstrapInstaller/Sources
+    info:
+      path: GetOudioBootstrapInstaller/Info.plist
+      properties:
+        LSUIElement: true
+        CFBundleURLTypes:
+          - CFBundleURLName: com.shengjiacheng.GetOudio.BootstrapInstaller
+            CFBundleURLSchemes:
+              - getoudio-bootstrap
+    settings:
+      base:
+        ENABLE_APP_SANDBOX: NO
+        PRODUCT_BUNDLE_IDENTIFIER: com.shengjiacheng.GetOudio.BootstrapInstaller
+        PRODUCT_NAME: GetOudioBootstrapInstaller
 
   GetOudioAMRuntimeWorker:
     type: application

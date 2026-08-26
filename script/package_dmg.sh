@@ -7,6 +7,7 @@ AGENT_PLIST_NAME="com.shengjiacheng.GetOudio.agent.plist"
 AGENT_SERVICE_NAME="com.shengjiacheng.GetOudio.agent"
 RUNTIME_WORKER_PLIST_NAME="com.shengjiacheng.GetOudio.runtime-worker.plist"
 RUNTIME_WORKER_SERVICE_NAME="com.shengjiacheng.GetOudio.runtime-worker"
+BOOTSTRAP_INSTALLER_NAME="GetOudioBootstrapInstaller"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DERIVED_DATA="${DERIVED_DATA:-$ROOT_DIR/build/DistributionDerivedData}"
 CONFIGURATION="${CONFIGURATION:-Release}"
@@ -65,6 +66,7 @@ sign_distribution_bundle() {
   local share_extension="$APP_BUNDLE/Contents/PlugIns/GetOudioShareExtension.appex"
   local recording_widget="$APP_BUNDLE/Contents/PlugIns/GetOudioRecordingWidget.appex"
   local runtime_worker="$APP_BUNDLE/Contents/Helpers/GetOudioAMRuntimeWorker.app"
+  local bootstrap_installer="$APP_BUNDLE/Contents/Helpers/$BOOTSTRAP_INSTALLER_NAME.app"
 
   prepare_app_entitlements
   rm -f "$APP_BUNDLE/Contents/embedded.provisionprofile"
@@ -86,6 +88,7 @@ sign_distribution_bundle() {
   sign_adhoc "$finder_extension" --entitlements "$ROOT_DIR/GetOudioFinderExtension/GetOudioFinderExtension.entitlements"
   sign_adhoc "$share_extension" --entitlements "$ROOT_DIR/GetOudioShareExtension/GetOudioShareExtension.entitlements"
   sign_adhoc "$recording_widget" --entitlements "$ROOT_DIR/GetOudioRecordingWidget/GetOudioRecordingWidget.entitlements"
+  sign_adhoc "$bootstrap_installer"
   sign_adhoc "$runtime_worker/Contents/Frameworks/GetOudioCore.framework"
   sign_adhoc "$runtime_worker" --entitlements "$ROOT_DIR/GetOudioAMRuntimeWorker/GetOudioAMRuntimeWorker.entitlements"
   sign_adhoc "$APP_BUNDLE" --entitlements "$ENTITLEMENTS_DIR/GetOudio.entitlements"
@@ -138,9 +141,25 @@ verify_background_agent_plist() {
     echo "wrong runtime worker label" >&2; exit 1;
   }
   /usr/libexec/PlistBuddy -c "Print :MachServices:$RUNTIME_WORKER_SERVICE_NAME" "$runtime_plist" >/dev/null
-  [[ -x "$APP_BUNDLE/Contents/Resources/LaunchAgents/InstallBackgroundAgent.command" ]] || {
-    echo "missing executable background agent installer" >&2; exit 1;
+}
+
+verify_bootstrap_installer() {
+  local installer="$APP_BUNDLE/Contents/Helpers/$BOOTSTRAP_INSTALLER_NAME.app"
+  local entitlements
+  [[ -x "$installer/Contents/MacOS/$BOOTSTRAP_INSTALLER_NAME" ]] || {
+    echo "missing Bootstrap Installer: $installer" >&2; exit 1;
   }
+  [[ "$(/usr/libexec/PlistBuddy -c 'Print :LSUIElement' "$installer/Contents/Info.plist")" == "true" ]] || {
+    echo "Bootstrap Installer must be an LSUIElement app" >&2; exit 1;
+  }
+  [[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleURLTypes:0:CFBundleURLSchemes:0' "$installer/Contents/Info.plist")" == "getoudio-bootstrap" ]] || {
+    echo "Bootstrap Installer URL scheme is missing" >&2; exit 1;
+  }
+  entitlements="$(/usr/bin/codesign -d --entitlements :- "$installer" 2>/dev/null || true)"
+  if /usr/bin/grep -qE 'com.apple.security.app-sandbox|com.apple.security.application-groups' <<<"$entitlements"; then
+    echo "Bootstrap Installer must not carry sandbox or App Group entitlements" >&2
+    exit 1
+  fi
 }
 
 verify_runtime_worker() {
@@ -167,6 +186,7 @@ verify_distribution_bundle() {
     "$APP_BUNDLE/Contents/PlugIns/GetOudioFinderExtension.appex"
     "$APP_BUNDLE/Contents/PlugIns/GetOudioShareExtension.appex"
     "$APP_BUNDLE/Contents/PlugIns/GetOudioRecordingWidget.appex"
+    "$APP_BUNDLE/Contents/Helpers/$BOOTSTRAP_INSTALLER_NAME.app"
     "$APP_BUNDLE/Contents/Helpers/GetOudioAMRuntimeWorker.app"
     "$APP_BUNDLE/Contents/Frameworks/Sparkle.framework"
     "$APP_BUNDLE/Contents/Frameworks/Sparkle.framework/Versions/B/XPCServices/Installer.xpc"
@@ -197,6 +217,7 @@ verify_distribution_bundle() {
   verify_v2_entitlements "$APP_BUNDLE/Contents/PlugIns/GetOudioShareExtension.appex"
   verify_v2_entitlements "$APP_BUNDLE/Contents/PlugIns/GetOudioRecordingWidget.appex"
   verify_background_agent_plist
+  verify_bootstrap_installer
   verify_runtime_worker
 }
 
@@ -225,4 +246,4 @@ echo "DMG written to: $DMG_OUTPUT"
 echo "This DMG is ad-hoc signed, contains no development provisioning profile, and is not notarized."
 echo "Recipients may need to right-click Open or remove Gatekeeper quarantine:"
 echo "  xattr -dr com.apple.quarantine \"/Applications/$APP_NAME.app\""
-echo "On first settings launch, Get Oudio opens its bundled Terminal installer for the legacy LaunchAgent."
+echo "On first settings launch, Get Oudio installs its LaunchAgents with the bundled Bootstrap Installer."

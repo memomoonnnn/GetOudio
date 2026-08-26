@@ -61,7 +61,7 @@ struct MainView: View {
             if attentionPresentation.highlightRequestID == 0 {
                 select(selection ?? .overview)
             }
-            settingsViewModel.backgroundAgentAuthorization.installOnFirstSettingsPresentationIfNeeded()
+            settingsViewModel.backgroundAgentAuthorization.installOnFirstLaunchIfNeeded()
         }
         .onChange(of: attentionState.outstandingItems) {
             guard let selection else { return }

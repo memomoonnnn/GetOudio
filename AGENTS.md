@@ -8,6 +8,7 @@
 | --- | --- |
 | `GetOudioCore/` | 跨进程模型、XPC 协议、设置、队列、路径和进程执行的唯一归属。 |
 | `GetOudio/` | 普通 App UI、`BackgroundAgent`、后台任务协调和 `RecordingRunner`。 |
+| `GetOudioBootstrapInstaller/` | 唯一的非沙盒短生命周期安装器，只安装或卸载用户 LaunchAgent，不访问业务数据。 |
 | `GetOudioAMRuntimeWorker/` | 唯一的非沙盒 Runtime Worker，只执行 Apple Music runtime 指令。 |
 | `GetOudioFinderExtension/`、`GetOudioShareExtension/`、`GetOudioRecordingWidget/` | 仅解析系统输入并调用 Background Agent XPC，不读写共享容器、不执行转换、下载或实时音频。 |
 | `script/` 与 `project.yml` | 构建、安装和 target 定义；`project.yml` 是 XcodeGen 真源。 |

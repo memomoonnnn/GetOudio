@@ -48,6 +48,7 @@
 		52BD90AFFCB576C038304959 /* JobProgressPhase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 968CA7DFC4B0913F91E093B7 /* JobProgressPhase.swift */; };
 		553A9EBFF18953287DAE4119 /* FinderSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 260A59E1B28DDC4E921E9C39 /* FinderSync.swift */; };
 		5AF71DB85909A76FAC7A896C /* icon.icns in Resources */ = {isa = PBXBuildFile; fileRef = 4FA258C519946194B2323E80 /* icon.icns */; };
+		62D609B830FD62639F819993 /* BootstrapInstallerMain.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1EBF1C4145741976236854B /* BootstrapInstallerMain.swift */; };
 		6785036FFE17401D61B71443 /* RecordingModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = D94A0E0E7F949921430BF7D1 /* RecordingModels.swift */; };
 		6E9FE41DFB6BDAA6FB845C9A /* DefaultOpenWithSettingsModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A7B57EFCFA3995627C9AC08 /* DefaultOpenWithSettingsModel.swift */; };
 		799484003E5B6E70C989617C /* LaunchAgents in Resources */ = {isa = PBXBuildFile; fileRef = 15D5E1EEA66101087B2B76A2 /* LaunchAgents */; };
@@ -143,6 +144,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = FA5B60D0E1543BDB366F8B32;
 			remoteInfo = GetOudioRecordingWidget;
+		};
+		8C42376F2E0D2ADF55513EF2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 765A5E52E8CEDAD270702356 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 0D4E52CFDA8EF938DE5C11ED;
+			remoteInfo = GetOudioBootstrapInstaller;
 		};
 		B71E9CBDE90258119F31A523 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -311,6 +319,7 @@
 		96C485724CAA57FDA4F744D0 /* ConversionPreset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversionPreset.swift; sourceTree = "<group>"; };
 		9CD7BCC50D1DF8E3343DCB10 /* BackgroundAgentAuthorizationModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundAgentAuthorizationModel.swift; sourceTree = "<group>"; };
 		9CEC2CD73CA5DB57DD39B2D2 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
+		A1EBF1C4145741976236854B /* BootstrapInstallerMain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BootstrapInstallerMain.swift; sourceTree = "<group>"; };
 		A30A66B4043A90A2A6DCA3B8 /* BackgroundAgentXPC.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundAgentXPC.swift; sourceTree = "<group>"; };
 		A31E47AC388151B7BA99BFE6 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
 		A7A6DA16595F336C14E58DFD /* RecordingWAVWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingWAVWriter.swift; sourceTree = "<group>"; };
@@ -319,6 +328,7 @@
 		B593C74C28A406CC8D596CF7 /* RecordingControlStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingControlStore.swift; sourceTree = "<group>"; };
 		B9C68E3D12622013AF3CB161 /* AppleMusicRuntimeManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleMusicRuntimeManager.swift; sourceTree = "<group>"; };
 		B9F6F4CA81B28E94AA9E564E /* RecordingDeviceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingDeviceService.swift; sourceTree = "<group>"; };
+		BF544117FCE28014EED0E318 /* GetOudioBootstrapInstaller.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GetOudioBootstrapInstaller.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C43975B92D52741C9A75DC77 /* GetOudioCoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GetOudioCoreTests.swift; sourceTree = "<group>"; };
 		C63E67A469198DCFAAEF52A5 /* MainSettingsPages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainSettingsPages.swift; sourceTree = "<group>"; };
 		C74C0865C3389B8416877170 /* AppleMusicDownloaderProgressParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleMusicDownloaderProgressParser.swift; sourceTree = "<group>"; };
@@ -456,6 +466,7 @@
 			children = (
 				0709132ABB400330E134F753 /* GetOudio.app */,
 				EAA74D76B847E2A9F6621874 /* GetOudioAMRuntimeWorker.app */,
+				BF544117FCE28014EED0E318 /* GetOudioBootstrapInstaller.app */,
 				49BFF2708ED14CF05FA36161 /* GetOudioCore.framework */,
 				4BF24B8150C8DA146AEE6312 /* GetOudioCoreTests.xctest */,
 				E71B1DAE2F34CAAE4261B2F0 /* GetOudioFinderExtension.appex */,
@@ -491,12 +502,29 @@
 			children = (
 				75EDBBE0FB400424F6530F1C /* GetOudio */,
 				ABB48A3C535F16E75C483DFB /* GetOudioAMRuntimeWorker */,
+				4EB77E1F1B47C9BBF8AA7D00 /* GetOudioBootstrapInstaller */,
 				3D8FEB326FADC416A892FA56 /* GetOudioCore */,
 				7F17B539629433A1A728EEE5 /* GetOudioFinderExtension */,
 				7B47EF2B719E376B3335A0FB /* GetOudioRecordingWidget */,
 				BF7D3B8E69C5A4127940CBC2 /* GetOudioShareExtension */,
 				3DF77C990D8B349B2D007F07 /* Products */,
 			);
+			sourceTree = "<group>";
+		};
+		4EB77E1F1B47C9BBF8AA7D00 /* GetOudioBootstrapInstaller */ = {
+			isa = PBXGroup;
+			children = (
+				4F9633DBC7A42EB460499092 /* Sources */,
+			);
+			path = GetOudioBootstrapInstaller;
+			sourceTree = "<group>";
+		};
+		4F9633DBC7A42EB460499092 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				A1EBF1C4145741976236854B /* BootstrapInstallerMain.swift */,
+			);
+			path = Sources;
 			sourceTree = "<group>";
 		};
 		51D73B5FCC755DBDB6E527E8 /* Resources */ = {
@@ -680,6 +708,23 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		0D4E52CFDA8EF938DE5C11ED /* GetOudioBootstrapInstaller */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F8B2358576581251ADE562D2 /* Build configuration list for PBXNativeTarget "GetOudioBootstrapInstaller" */;
+			buildPhases = (
+				FAC9B68C9D00CD8E7CFCB625 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = GetOudioBootstrapInstaller;
+			packageProductDependencies = (
+			);
+			productName = GetOudioBootstrapInstaller;
+			productReference = BF544117FCE28014EED0E318 /* GetOudioBootstrapInstaller.app */;
+			productType = "com.apple.product-type.application";
+		};
 		14A0FE9FE15B05CBFDBA438B /* GetOudioCoreTests */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 3AF6FE8A1DE0B1368B54EC34 /* Build configuration list for PBXNativeTarget "GetOudioCoreTests" */;
@@ -729,12 +774,13 @@
 				CB89E45DB93CB5C19E3BDD2E /* Frameworks */,
 				A7404D723DF252EBC38A8CF4 /* Embed Foundation Extensions */,
 				6F0A90185C0E9CE10A10C48A /* Embed Frameworks */,
-				56CF14655B24BD31AFB01F92 /* Embed Apple Music Runtime Worker */,
+				FBD7C2050ED48D95E335899E /* Embed Background Helpers */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 				95C91FBF2F6B8C08E42B911D /* PBXTargetDependency */,
+				60897E94A13BBD5C09266D0A /* PBXTargetDependency */,
 				AC773259460C9A920B0CFFC2 /* PBXTargetDependency */,
 				638AEA41CE95486B4AAD9156 /* PBXTargetDependency */,
 				F3CE56CD2AEBBC9217225D3E /* PBXTargetDependency */,
@@ -832,6 +878,10 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
+					0D4E52CFDA8EF938DE5C11ED = {
+						DevelopmentTeam = ZWNUJ64F36;
+						ProvisioningStyle = Automatic;
+					};
 					14A0FE9FE15B05CBFDBA438B = {
 						DevelopmentTeam = ZWNUJ64F36;
 						ProvisioningStyle = Automatic;
@@ -881,6 +931,7 @@
 			targets = (
 				A4AAEF6C327EDD968B1A98C5 /* GetOudio */,
 				727704C7B80667B86F54968C /* GetOudioAMRuntimeWorker */,
+				0D4E52CFDA8EF938DE5C11ED /* GetOudioBootstrapInstaller */,
 				F9246AF6FE72CF2A656008F0 /* GetOudioCore */,
 				14A0FE9FE15B05CBFDBA438B /* GetOudioCoreTests */,
 				DCCB63A986CE40B8EBFBE2CF /* GetOudioFinderExtension */,
@@ -917,7 +968,7 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		56CF14655B24BD31AFB01F92 /* Embed Apple Music Runtime Worker */ = {
+		FBD7C2050ED48D95E335899E /* Embed Background Helpers */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -925,17 +976,19 @@
 			inputFileListPaths = (
 			);
 			inputPaths = (
+				"$(BUILT_PRODUCTS_DIR)/GetOudioBootstrapInstaller.app/Contents/MacOS/GetOudioBootstrapInstaller",
 				"$(BUILT_PRODUCTS_DIR)/GetOudioAMRuntimeWorker.app/Contents/MacOS/GetOudioAMRuntimeWorker",
 			);
-			name = "Embed Apple Music Runtime Worker";
+			name = "Embed Background Helpers";
 			outputFileListPaths = (
 			);
 			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Helpers/GetOudioBootstrapInstaller.app/Contents/MacOS/GetOudioBootstrapInstaller",
 				"$(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Helpers/GetOudioAMRuntimeWorker.app/Contents/MacOS/GetOudioAMRuntimeWorker",
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "set -euo pipefail\nWORKER_APP=\"$BUILT_PRODUCTS_DIR/GetOudioAMRuntimeWorker.app\"\nDEST=\"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers/GetOudioAMRuntimeWorker.app\"\nif [ ! -d \"$WORKER_APP\" ]; then\n  echo \"missing Apple Music Runtime Worker at $WORKER_APP\" >&2\n  exit 1\nfi\nrm -rf \"$DEST\"\nmkdir -p \"$(dirname \"$DEST\")\"\nditto \"$WORKER_APP\" \"$DEST\"\n";
+			shellScript = "set -euo pipefail\nBOOTSTRAP_APP=\"$BUILT_PRODUCTS_DIR/GetOudioBootstrapInstaller.app\"\nWORKER_APP=\"$BUILT_PRODUCTS_DIR/GetOudioAMRuntimeWorker.app\"\nHELPERS_DIR=\"$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers\"\nBOOTSTRAP_DEST=\"$HELPERS_DIR/GetOudioBootstrapInstaller.app\"\nWORKER_DEST=\"$HELPERS_DIR/GetOudioAMRuntimeWorker.app\"\nif [ ! -d \"$BOOTSTRAP_APP\" ]; then\n  echo \"missing Bootstrap Installer at $BOOTSTRAP_APP\" >&2\n  exit 1\nfi\nif [ ! -d \"$WORKER_APP\" ]; then\n  echo \"missing Apple Music Runtime Worker at $WORKER_APP\" >&2\n  exit 1\nfi\nrm -rf \"$BOOTSTRAP_DEST\" \"$WORKER_DEST\"\nmkdir -p \"$HELPERS_DIR\"\nditto \"$BOOTSTRAP_APP\" \"$BOOTSTRAP_DEST\"\nditto \"$WORKER_APP\" \"$WORKER_DEST\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -1073,6 +1126,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		FAC9B68C9D00CD8E7CFCB625 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				62D609B830FD62639F819993 /* BootstrapInstallerMain.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -1085,6 +1146,11 @@
 			isa = PBXTargetDependency;
 			target = F9246AF6FE72CF2A656008F0 /* GetOudioCore */;
 			targetProxy = DDDE9BAAFA8395065647D08B /* PBXContainerItemProxy */;
+		};
+		60897E94A13BBD5C09266D0A /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 0D4E52CFDA8EF938DE5C11ED /* GetOudioBootstrapInstaller */;
+			targetProxy = 8C42376F2E0D2ADF55513EF2 /* PBXContainerItemProxy */;
 		};
 		638AEA41CE95486B4AAD9156 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
@@ -1204,6 +1270,23 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.shengjiacheng.GetOudio.ShareExtension;
 				PRODUCT_NAME = GetOudioShareExtension;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		3B66922ABFD82E1C7D98870A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_APP_SANDBOX = NO;
+				INFOPLIST_FILE = GetOudioBootstrapInstaller/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.shengjiacheng.GetOudio.BootstrapInstaller;
+				PRODUCT_NAME = GetOudioBootstrapInstaller;
 				SDKROOT = macosx;
 			};
 			name = Debug;
@@ -1353,6 +1436,23 @@
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		57E59CC3203D35E47A447FD1 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_APP_SANDBOX = NO;
+				INFOPLIST_FILE = GetOudioBootstrapInstaller/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.shengjiacheng.GetOudio.BootstrapInstaller;
+				PRODUCT_NAME = GetOudioBootstrapInstaller;
+				SDKROOT = macosx;
 			};
 			name = Release;
 		};
@@ -1597,6 +1697,15 @@
 			buildConfigurations = (
 				80A93F9D09C9595EA5927F8C /* Debug */,
 				D08A857CFDB47C6186D1886F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		F8B2358576581251ADE562D2 /* Build configuration list for PBXNativeTarget "GetOudioBootstrapInstaller" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3B66922ABFD82E1C7D98870A /* Debug */,
+				57E59CC3203D35E47A447FD1 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

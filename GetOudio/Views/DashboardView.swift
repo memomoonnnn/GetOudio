@@ -144,16 +144,18 @@ struct DashboardView: View {
                                 )
                                 .foregroundStyle(backgroundAgentAuthorization.state == .enabled ? .green : .secondary)
                                 Spacer()
-                                switch backgroundAgentAuthorization.state {
-                                case .enabled:
-                                    Button("检查连接") { backgroundAgentAuthorization.refresh() }
-                                case .unavailable:
-                                    Button("安装后台活动") { backgroundAgentAuthorization.installBackgroundActivity() }
-                                    Button("检查连接") { backgroundAgentAuthorization.refresh() }
-                                }
+                                Button("安装") { backgroundAgentAuthorization.installBackgroundActivity() }
+                                    .disabled(
+                                        backgroundAgentAuthorization.state == .enabled ||
+                                        backgroundAgentAuthorization.isChangingRegistration
+                                    )
+                                Button("卸载") { backgroundAgentAuthorization.uninstallBackgroundActivity() }
+                                    .disabled(backgroundAgentAuthorization.isChangingRegistration)
+                                Button("检查连接") { backgroundAgentAuthorization.refresh() }
+                                    .disabled(backgroundAgentAuthorization.isChangingRegistration)
                             }
 
-                            Text("后台 Agent 会在主窗口关闭后处理转换、录音控制和 Apple Music 任务。安装会在 Terminal 中写入传统 LaunchAgent；系统可能在“登录项与扩展”中将其标为“来自身份不明的开发者”。")
+                            Text("后台 Agent 会在主窗口关闭后处理转换、录音控制和 Apple Music 任务。首次打开时会在后台安装；系统可能在“登录项与扩展”中将其标为“来自身份不明的开发者”。")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
 
