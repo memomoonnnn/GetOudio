@@ -51,7 +51,7 @@ struct DashboardView: View {
                         Label("文件/文件夹访问权限", systemImage: "folder.badge.gearshape")
                             .font(.headline)
 
-                        Text("于此授权「Get Oudio」可以访问的文件夹。访达菜单拓展只会出现在这些目录下，转换程序也只能据此将转换结果写回源文件夹。另外受访达显示机制影响，不建议选择外置硬盘————这会改变你的外置硬盘图标显示。")
+                        Text("于此授权「Get Oudio」可以访问的文件夹。它们决定了访达菜单拓展和转换功能可以生效的范围。另外受Mac的稳定性影响，加入外部磁盘通常是不生效的。"
                             .font(.callout)
                             .foregroundStyle(.secondary)
 
@@ -81,7 +81,7 @@ struct DashboardView: View {
                         .disabled(systemExtensionSettings.isRestartingFinder)
 
                         VStack(alignment: .leading, spacing: 3) {
-                            Text("上述设置均需要重启访达以生效")
+                            Text("重启访达以刷新拓展状态")
                                 .font(.callout.weight(.medium))
                             if !systemExtensionSettings.finderRestartMessage.isEmpty {
                                 Text(systemExtensionSettings.finderRestartMessage)
@@ -99,7 +99,7 @@ struct DashboardView: View {
                         Label("权限", systemImage: "lock.shield")
                             .font(.headline)
 
-                        Text("你需要批准以下系统权限，以使用录音、后台任务和完成提醒。")
+                        Text("你需要批准以下系统权限，以使用录音、后台任务和通知横幅。")
                             .font(.callout)
                             .foregroundStyle(.secondary)
 
@@ -139,23 +139,23 @@ struct DashboardView: View {
                         VStack(alignment: .leading, spacing: 8) {
                             HStack {
                                 Label(
-                                    backgroundAgentAuthorization.state == .enabled ? "后台 Agent 已连接" : "后台 Agent 未连接",
+                                    backgroundAgentAuthorization.state == .enabled ? "后台活动已启用" : "需要启用后台活动",
                                     systemImage: backgroundAgentAuthorization.state == .enabled ? "checkmark.circle.fill" : "exclamationmark.circle"
                                 )
                                 .foregroundStyle(backgroundAgentAuthorization.state == .enabled ? .green : .secondary)
                                 Spacer()
-                                Button("安装") { backgroundAgentAuthorization.installBackgroundActivity() }
+                                Button("启用") { backgroundAgentAuthorization.installBackgroundActivity() }
                                     .disabled(
                                         backgroundAgentAuthorization.state == .enabled ||
                                         backgroundAgentAuthorization.isChangingRegistration
                                     )
-                                Button("卸载") { backgroundAgentAuthorization.uninstallBackgroundActivity() }
+                                Button("注销组件") { backgroundAgentAuthorization.uninstallBackgroundActivity() }
                                     .disabled(backgroundAgentAuthorization.isChangingRegistration)
-                                Button("检查连接") { backgroundAgentAuthorization.refresh() }
+                                Button("刷新") { backgroundAgentAuthorization.refresh() }
                                     .disabled(backgroundAgentAuthorization.isChangingRegistration)
                             }
 
-                            Text("后台 Agent 会在主窗口关闭后处理转换、录音控制和 Apple Music 任务。首次打开时会在后台安装；系统可能在“登录项与扩展”中将其标为“来自身份不明的开发者”。")
+                            Text("为了避免窗口的打扰，「Get Oudio」需要后台进程处理所有任务。由于我没有支付Apple的开发者年费...所以只能在此用传统手段注册和注销它们。")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
 

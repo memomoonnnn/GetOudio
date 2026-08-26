@@ -2,7 +2,7 @@
 
 适用于 Apple Music runtime 组件安装、更新、卸载、下载恢复、Colima/Lima 与 component receipt。修改前检查 `GetOudioAMRuntimeWorker/Sources/`、`AppleMusicRuntimeWorkerProtocol.swift`、Core runtime 服务、LaunchAgent plist、`project.yml` 与安装脚本。
 
-重型工具链必须由非沙盒 `GetOudioAMRuntimeWorker` 管理。App 和扩展只调用 Background Agent，Background Agent 再通过 `com.shengjiacheng.GetOudio.runtime-worker` Mach XPC 调用 Worker；不得恢复 Unix Socket、请求文件、任务快照或凭据落盘。状态刷新只比较本地 receipt/版本，不联网、不安装；安装、更新和卸载必须由用户发起，且在登录或下载运行时拒绝。
+重型工具链必须由非沙盒 `GetOudioAMRuntimeWorker` 管理。App 和扩展只调用 Background Agent，Background Agent 再通过 `com.shengjiacheng.GetOudio.runtime-worker` Mach XPC 调用 Worker；不得恢复 Unix Socket、请求文件、任务快照或凭据落盘。设置页状态刷新只比较本地文件与 receipt/版本，不得调用 `ColimaDockerRuntime.check()`、`colima status` 或 Docker；运行时健康由实际需要 Colima 的操作复查。状态刷新不联网、不安装；安装、更新和卸载必须由用户发起，且在登录或下载运行时拒绝。
 
 App Bundle 只携带 `ffmpeg`、`ncmdump` 和 `apple-music-downloader`。Docker CLI、Colima、Lima、GPAC/MP4Box 与 wrapper 镜像安装到 managed runtime，不得使用用户 Homebrew、Docker Desktop、Colima 或 GPAC。外部 managed runtime 固定位于 `~/Library/Application Support/GetOudioV2`，只能由 `AgentDataStore.runtimeWorker()` 解析；App/Agent 控制数据位于沙盒 Application Support，不得为 Runtime 恢复 home-relative 例外、虚拟化或 network-server entitlement。
 
