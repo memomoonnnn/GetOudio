@@ -4,6 +4,7 @@ public enum BackgroundAgentCommand: String, Codable, Equatable, Sendable {
     case healthCheck
     case finderConfiguration
     case enqueueJobs
+    case resolveJobSubmission
     case unsupportedShareURLs
     case recordingSnapshot
     case dispatchNotificationEvents
@@ -26,7 +27,7 @@ public enum BackgroundAgentCommand: String, Codable, Equatable, Sendable {
              .appleMusicStatus, .appleMusicWrapperStatus, .appleMusicSnapshot,
              .appleMusicProgress, .subscribeAppleMusicEvents:
             return false
-        case .enqueueJobs, .unsupportedShareURLs, .dispatchNotificationEvents,
+        case .enqueueJobs, .resolveJobSubmission, .unsupportedShareURLs, .dispatchNotificationEvents,
              .handlePendingAppleMusicDownload, .appleMusicInstall,
              .appleMusicUninstall, .appleMusicDownload, .appleMusicInitialize,
              .appleMusicSubmitCode, .appleMusicCancel:
@@ -41,8 +42,8 @@ public struct BackgroundServiceIdentity: Codable, Equatable, Sendable {
         case runtimeWorker
     }
 
-    public static let backgroundAgentProtocolVersion = 1
-    public static let runtimeWorkerProtocolVersion = 1
+    public static let backgroundAgentProtocolVersion = 2
+    public static let runtimeWorkerProtocolVersion = 2
 
     public var service: Service
     public var protocolVersion: Int
@@ -99,6 +100,8 @@ public struct BackgroundAgentCommandRequest: Codable, Sendable {
     public var appleMusicInitializeRequest: AppleMusicRuntimeAgentInitializeRequest?
     public var appleMusicVerificationRequest: AppleMusicRuntimeAgentVerificationRequest?
     public var appleMusicDownloadFormat: AppleMusicDownloadFormat?
+    public var submissionID: UUID?
+    public var submissionDecision: JobSubmissionDecision?
 
     public init(
         id: UUID = UUID(),
@@ -107,7 +110,9 @@ public struct BackgroundAgentCommandRequest: Codable, Sendable {
         urls: [URL]? = nil,
         appleMusicInitializeRequest: AppleMusicRuntimeAgentInitializeRequest? = nil,
         appleMusicVerificationRequest: AppleMusicRuntimeAgentVerificationRequest? = nil,
-        appleMusicDownloadFormat: AppleMusicDownloadFormat? = nil
+        appleMusicDownloadFormat: AppleMusicDownloadFormat? = nil,
+        submissionID: UUID? = nil,
+        submissionDecision: JobSubmissionDecision? = nil
     ) {
         self.id = id
         self.command = command
@@ -116,6 +121,8 @@ public struct BackgroundAgentCommandRequest: Codable, Sendable {
         self.appleMusicInitializeRequest = appleMusicInitializeRequest
         self.appleMusicVerificationRequest = appleMusicVerificationRequest
         self.appleMusicDownloadFormat = appleMusicDownloadFormat
+        self.submissionID = submissionID
+        self.submissionDecision = submissionDecision
     }
 }
 
@@ -222,6 +229,12 @@ public final class BackgroundAgentClient {
         _ = try await send(.init(command: .enqueueJobs, jobs: jobs)) as BackgroundAgentCommandResponse
     }
 
+    public func resolveJobSubmission(_ submissionID: UUID, decision: JobSubmissionDecision) async throws {
+        _ = try await send(.init(
+            command: .resolveJobSubmission, submissionID: submissionID, submissionDecision: decision
+        ))
+    }
+
     public func reportUnsupportedShareURLs(_ urls: [URL]) async throws {
         _ = try await send(.init(command: .unsupportedShareURLs, urls: urls)) as BackgroundAgentCommandResponse
     }
@@ -239,11 +252,13 @@ public final class BackgroundAgentClient {
     }
 
     public func handlePendingAppleMusicDownload(
-        format: AppleMusicDownloadFormat
+        format: AppleMusicDownloadFormat,
+        batchID: UUID? = nil
     ) async throws -> SettingsAttentionItem? {
         let response: BackgroundAgentCommandResponse = try await send(.init(
             command: .handlePendingAppleMusicDownload,
-            appleMusicDownloadFormat: format
+            appleMusicDownloadFormat: format,
+            submissionID: batchID
         ))
         return response.settingsAttention
     }

@@ -13,19 +13,30 @@ final class BackgroundAgent: NSObject, NSXPCListenerDelegate, BackgroundAgentXPC
     private let notificationDispatcher: AgentNotificationDispatcher
     private let appleMusicWorker: AppleMusicRuntimeWorkerClient
     private let taskCoordinator: BackgroundTaskCoordinator
+    private let jobScheduler: JobQueueScheduler
     private let requestRegistry = XPCRequestRegistry<BackgroundAgentCommandResponse>()
     private let appleMusicState = AgentAppleMusicState()
     private var appleMusicLoginMonitor: Task<Void, Never>?
 
-    init(store: AgentDataStore) {
+    init(store: AgentDataStore) throws {
         self.store = store
         notificationService = NotificationService(container: store)
         notificationDispatcher = AgentNotificationDispatcher(container: store)
         let appleMusicWorker = AppleMusicRuntimeWorkerClient(container: store)
         self.appleMusicWorker = appleMusicWorker
-        taskCoordinator = BackgroundTaskCoordinator(
+        let taskCoordinator = BackgroundTaskCoordinator(
             container: store,
             appleMusicWorker: appleMusicWorker
+        )
+        self.taskCoordinator = taskCoordinator
+        let notificationDispatcher = self.notificationDispatcher
+        jobScheduler = JobQueueScheduler(
+            queue: try JobQueue(container: store),
+            notifications: notificationService,
+            execute: { jobs in
+                await taskCoordinator.process(jobs)
+                await notificationDispatcher.dispatch()
+            }
         )
         super.init()
         listener.delegate = self
@@ -35,14 +46,21 @@ final class BackgroundAgent: NSObject, NSXPCListenerDelegate, BackgroundAgentXPC
         do {
             let store = try AgentDataStore.production()
             DiagnosticLog.configure(store: store)
-            let agent = BackgroundAgent(store: store)
+            let agent = try BackgroundAgent(store: store)
             let notificationCenter = UNUserNotificationCenter.current()
-            notificationCenter.delegate = agent
             agent.notificationService.registerAppleMusicNotificationCategories()
-            agent.listener.resume()
-            DiagnosticLog.append("[Agent] XPC listener started pid=\(ProcessInfo.processInfo.processIdentifier)")
             Task {
-                await agent.recoverPendingWork()
+                do {
+                    try agent.discardInterruptedWork()
+                    await agent.notificationService.removeInterruptedTaskNotifications()
+                    notificationCenter.delegate = agent
+                    agent.listener.resume()
+                    DiagnosticLog.append("[Agent] XPC listener started pid=\(ProcessInfo.processInfo.processIdentifier)")
+                    await agent.notificationDispatcher.dispatch()
+                } catch {
+                    NSLog("Get Oudio background agent startup cleanup failed: \(error.localizedDescription)")
+                    exit(EXIT_FAILURE)
+                }
             }
             RunLoop.main.run()
         } catch {
@@ -73,6 +91,19 @@ final class BackgroundAgent: NSObject, NSXPCListenerDelegate, BackgroundAgentXPC
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
+        if let action = notificationService.jobSubmissionDecision(
+            actionIdentifier: response.actionIdentifier, content: response.notification.request.content
+        ) {
+            Task {
+                defer { completionHandler() }
+                do {
+                    try await jobScheduler.resolve(action.submissionID, decision: action.decision)
+                } catch {
+                    DiagnosticLog.append("agent job decision failed: \(error.localizedDescription)")
+                }
+            }
+            return
+        }
         if let copyInfo = notificationService.copyInfo(for: response) {
             DiagnosticLog.append("agent notification copy action received")
             DispatchQueue.main.async {
@@ -90,13 +121,15 @@ final class BackgroundAgent: NSObject, NSXPCListenerDelegate, BackgroundAgentXPC
         }
 
         DiagnosticLog.append("agent Apple Music format action received format=\(format.rawValue)")
-        completionHandler()
         Task { [weak self] in
+            defer { completionHandler() }
             guard let self else { return }
-            let guidance = await taskCoordinator.handlePendingAppleMusicDownload(format: format)
-            await notificationDispatcher.dispatch()
-            if let guidance {
-                await SettingsAttentionLauncher.open(guidance, container: store)
+            do {
+                try await enqueuePendingAppleMusicDownload(
+                    format: format, batchID: UUID(uuidString: response.notification.request.identifier)
+                )
+            } catch {
+                DiagnosticLog.append("agent Apple Music format action failed: \(error.localizedDescription)")
             }
             DiagnosticLog.append("agent Apple Music format action finished format=\(format.rawValue)")
         }
@@ -152,13 +185,13 @@ final class BackgroundAgent: NSObject, NSXPCListenerDelegate, BackgroundAgentXPC
                 )
             case .enqueueJobs:
                 let jobs = request.jobs ?? []
-                guard !jobs.isEmpty else { return BackgroundAgentCommandResponse(id: request.id) }
-                let queue = try JobQueue(container: store)
-                try queue.enqueue(jobs)
-                Task {
-                    await taskCoordinator.processPendingWork()
-                    await notificationDispatcher.dispatch()
+                try await jobScheduler.submit(jobs, submissionID: request.id)
+                return BackgroundAgentCommandResponse(id: request.id)
+            case .resolveJobSubmission:
+                guard let submissionID = request.submissionID, let decision = request.submissionDecision else {
+                    throw ProcessRunnerError.processFailed("缺少任务选择信息。")
                 }
+                try await jobScheduler.resolve(submissionID, decision: decision)
                 return BackgroundAgentCommandResponse(id: request.id)
             case .unsupportedShareURLs:
                 await NotificationService(container: store).notifyUnsupportedDownloadSource(urls: request.urls ?? [])
@@ -173,14 +206,8 @@ final class BackgroundAgent: NSObject, NSXPCListenerDelegate, BackgroundAgentXPC
                 guard let format = request.appleMusicDownloadFormat else {
                     throw ProcessRunnerError.processFailed("缺少 Apple Music 下载格式。")
                 }
-                let guidance = await taskCoordinator.handlePendingAppleMusicDownload(
-                    format: format
-                )
-                await notificationDispatcher.dispatch()
-                return BackgroundAgentCommandResponse(
-                    id: request.id,
-                    settingsAttention: guidance
-                )
+                try await enqueuePendingAppleMusicDownload(format: format, batchID: request.submissionID)
+                return BackgroundAgentCommandResponse(id: request.id)
             case .appleMusicStatus:
                 return appleMusicResponse(request.id, statusReport: try await appleMusicWorker.status())
             case .appleMusicInstall:
@@ -345,10 +372,21 @@ final class BackgroundAgent: NSObject, NSXPCListenerDelegate, BackgroundAgentXPC
         )
     }
 
-    private func recoverPendingWork() async {
-        await taskCoordinator.processPendingWork()
-        await taskCoordinator.recoverPendingAppleMusicDownloadIfNeeded()
-        await notificationDispatcher.dispatch()
+    private func enqueuePendingAppleMusicDownload(format: AppleMusicDownloadFormat, batchID: UUID?) async throws {
+        let jobs = try await taskCoordinator.takePendingAppleMusicDownload(format: format, batchID: batchID)
+        try await jobScheduler.submit(jobs, submissionID: UUID())
+    }
+
+    private func discardInterruptedWork() throws {
+        let pendingStore = try PendingAppleMusicDownloadStore(container: store)
+        let pendingJobs = try pendingStore.read()?.jobs ?? []
+        try JobQueue(container: store).discardUnfinished { jobs in
+            let unfinished = jobs + pendingJobs
+            if !unfinished.isEmpty {
+                try NotificationEventQueue(container: store).enqueue(NotificationEvent(interruptedJobs: unfinished))
+            }
+            _ = try pendingStore.drain()
+        }
     }
 }
 

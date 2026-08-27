@@ -37,36 +37,19 @@ final class AppleMusicShareDownloadCoordinator {
             return (remainingJobs, nil)
         }
 
-        return (remainingJobs, await handleAppleMusicJobs(shareJobs))
-    }
-
-    func handlePendingAppleMusicDownload(
-        format: AppleMusicDownloadFormat
-    ) async -> SettingsAttentionItem? {
-        do {
-            guard let batch = try pendingStoreFactory().drain(), !batch.jobs.isEmpty else {
-                await notificationService.notifyUnsupportedDownloadSource(urls: [])
-                return nil
+        var guidance: SettingsAttentionItem?
+        // Confirmed submissions may select different formats before one claim.
+        // Do not apply the first submission's format to the entire batch.
+        for format: AppleMusicDownloadFormat? in [nil, .alac, .aac, .atmos] {
+            let group = shareJobs.filter { job in
+                guard case .appleMusicDownload(let selected) = job.operation else { return false }
+                return (selected == .askEveryTime ? nil : selected) == format
             }
-            return await handleAppleMusicJobs(batch.jobs, forcedFormat: format)
-        } catch {
-            DiagnosticLog.append("pending Apple Music downloads failed: \(error.localizedDescription)")
-            await notificationService.notifyUnsupportedDownloadSource(urls: [])
-            return nil
+            guard !group.isEmpty else { continue }
+            let result = await handleAppleMusicJobs(group, forcedFormat: format)
+            guidance = guidance ?? result
         }
-    }
-
-    func recoverPendingAppleMusicDownloadIfNeeded() async {
-        do {
-            guard let batch = try pendingStoreFactory().read(), !batch.jobs.isEmpty else { return }
-            DiagnosticLog.append("pending Apple Music downloads recovered count=\(batch.jobs.count)")
-            await notificationService.notifyAppleMusicFormatSelection(
-                jobCount: batch.jobs.count,
-                identifier: batch.id.uuidString
-            )
-        } catch {
-            DiagnosticLog.append("pending Apple Music downloads recovery failed: \(error.localizedDescription)")
-        }
+        return (remainingJobs, guidance)
     }
 
     private func handleAppleMusicJobs(

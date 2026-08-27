@@ -30,7 +30,46 @@ public enum ProcessRunnerError: Error, LocalizedError {
     }
 }
 
+/// A PID alone is not sufficient after an Agent restart: the system may reuse it.
+struct ProcessIdentity: Codable, Equatable, Sendable {
+    var pid: Int32
+    var userID: UInt32
+    var startSeconds: UInt64
+    var startMicroseconds: UInt64
+
+    static func running(_ pid: Int32) -> Self? {
+        var info = proc_bsdinfo()
+        let size = Int32(MemoryLayout<proc_bsdinfo>.size)
+        guard proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, size) == size,
+              info.pbi_status != SZOMB else { return nil }
+        return Self(pid: pid, userID: info.pbi_uid, startSeconds: info.pbi_start_tvsec, startMicroseconds: info.pbi_start_tvusec)
+    }
+
+    func terminateIfStillRunning() throws {
+        guard userID == getuid(), Self.running(pid) == self else { return }
+        guard Darwin.kill(pid, SIGTERM) == 0 || errno == ESRCH else {
+            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+        }
+        for _ in 0..<50 {
+            guard Self.running(pid) == self else { return }
+            Thread.sleep(forTimeInterval: 0.1)
+        }
+        // Recheck the full identity before escalating, never just the PID.
+        guard Self.running(pid) == self else { return }
+        guard Darwin.kill(pid, SIGKILL) == 0 || errno == ESRCH else {
+            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+        }
+        for _ in 0..<20 {
+            guard Self.running(pid) == self else { return }
+            Thread.sleep(forTimeInterval: 0.1)
+        }
+        throw ProcessRunnerError.processFailed("上次任务的子进程尚未停止，请稍后重试。")
+    }
+}
+
 public final class ProcessRunner {
+    @TaskLocal static var processStarted: (@Sendable (ProcessIdentity) throws -> Void)?
+
     public init() {}
 
     public func run(
@@ -41,7 +80,8 @@ public final class ProcessRunner {
         outputHandler: (@Sendable (ProcessOutputStream, String) -> Void)? = nil,
         shouldTerminate: (@Sendable () -> Bool)? = nil
     ) async throws -> ProcessResult {
-        try await Task.detached(priority: .utility) {
+        let processStarted = Self.processStarted
+        return try await Task.detached(priority: .utility) {
             let fileManager = FileManager.default
 
             // Resolve symlinks so the kernel sees the canonical path (sandbox
@@ -90,6 +130,22 @@ public final class ProcessRunner {
                 let nsError = error as NSError
                 DiagnosticLog.append("[ProcessRunner] process.run() 失败：domain=\(nsError.domain) code=\(nsError.code) description=\(nsError.localizedDescription) path=\(resolvedPath)")
                 throw error
+            }
+
+            if let processStarted {
+                do {
+                    if let identity = ProcessIdentity.running(process.processIdentifier) {
+                        try processStarted(identity)
+                    } else if process.isRunning {
+                        throw ProcessRunnerError.processFailed("无法记录任务子进程的身份，已停止本次执行。")
+                    }
+                } catch {
+                    if process.isRunning {
+                        Darwin.kill(process.processIdentifier, SIGKILL)
+                        process.waitUntilExit()
+                    }
+                    throw error
+                }
             }
 
             let outputData = LockedData()

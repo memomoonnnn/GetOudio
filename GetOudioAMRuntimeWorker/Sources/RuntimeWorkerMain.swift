@@ -245,15 +245,24 @@ private final class RuntimeWorkerActivityTracker: @unchecked Sendable {
     }
 }
 
+private final class RuntimeWorkerConnectionLifetime: @unchecked Sendable {
+    private let lock = NSLock()
+    private var disconnected = false
+
+    var isDisconnected: Bool { lock.withLock { disconnected } }
+    func disconnect() { lock.withLock { disconnected = true } }
+}
+
 private final class RuntimeWorkerState: @unchecked Sendable {
     private let lock = NSLock()
     private var cancellationRequested = false
     private var latestProgress: AppleMusicRuntimeProgress?
+    private var downloadOwner: RuntimeWorkerConnectionLifetime?
 
     var isCancellationRequested: Bool {
         lock.lock()
         defer { lock.unlock() }
-        return cancellationRequested
+        return cancellationRequested || downloadOwner?.isDisconnected == true
     }
 
     var progress: AppleMusicRuntimeProgress? {
@@ -268,9 +277,10 @@ private final class RuntimeWorkerState: @unchecked Sendable {
         lock.unlock()
     }
 
-    func clearCancellation() {
+    func clearCancellation(downloadOwner: RuntimeWorkerConnectionLifetime? = nil) {
         lock.lock()
         cancellationRequested = false
+        self.downloadOwner = downloadOwner
         lock.unlock()
     }
 
@@ -345,7 +355,14 @@ private final class RuntimeWorkerXPCServer: NSObject, NSXPCListenerDelegate, App
                     response: .init(id: request.id)
                 )))
             case .install, .uninstall, .download, .initialize, .submitCode, .stopRuntime:
-                submit(request, reply: reply)
+                var downloadOwner: RuntimeWorkerConnectionLifetime?
+                if request.command == .download, let connection = NSXPCConnection.current() {
+                    let lifetime = RuntimeWorkerConnectionLifetime()
+                    connection.invalidationHandler = { lifetime.disconnect() }
+                    connection.interruptionHandler = { lifetime.disconnect() }
+                    downloadOwner = lifetime
+                }
+                submit(request, downloadOwner: downloadOwner, reply: reply)
             }
         } catch {
             reply(encode(workerResponse(
@@ -357,20 +374,24 @@ private final class RuntimeWorkerXPCServer: NSObject, NSXPCListenerDelegate, App
 
     private func submit(
         _ request: AppleMusicRuntimeWorkerRequest,
+        downloadOwner: RuntimeWorkerConnectionLifetime?,
         reply: @escaping (Data) -> Void
     ) {
         cancelIdleExit()
         Task.detached { [weak self] in
             guard let self else { return }
             let response = await self.requestRegistry.response(for: request.id) {
-                await self.perform(request)
+                await self.perform(request, downloadOwner: downloadOwner)
             }
             reply(self.encode(response))
             self.armIdleExit()
         }
     }
 
-    private func perform(_ request: AppleMusicRuntimeWorkerRequest) async -> AppleMusicRuntimeWorkerResponse {
+    private func perform(
+        _ request: AppleMusicRuntimeWorkerRequest,
+        downloadOwner: RuntimeWorkerConnectionLifetime?
+    ) async -> AppleMusicRuntimeWorkerResponse {
         let accepted = lock.withLock { () -> Bool in
             guard activeTaskID == nil else { return false }
             activeTaskID = request.id
@@ -382,7 +403,7 @@ private final class RuntimeWorkerXPCServer: NSObject, NSXPCListenerDelegate, App
                 errorMessage: "Apple Music Runtime Worker 正在执行其他任务。"
             )
         }
-        state.clearCancellation()
+        state.clearCancellation(downloadOwner: downloadOwner)
         let response = await operationHandler(request)
         state.clearCancellation()
         releaseActiveTask()

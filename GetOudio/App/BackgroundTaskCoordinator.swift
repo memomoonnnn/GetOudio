@@ -1,7 +1,7 @@
 import Foundation
 import GetOudioCore
 
-/// The Background Agent's serialized owner for queued conversion work.
+/// Executes batches supplied by the Agent's single JobQueueScheduler.
 actor BackgroundTaskCoordinator {
     private let container: AgentDataStore
     private let audioService = AudioConversionService()
@@ -10,7 +10,6 @@ actor BackgroundTaskCoordinator {
     private let appleMusicWorker: AppleMusicRuntimeWorkerClient
     private let notificationService: NotificationService
     private let appleMusicShareCoordinator: AppleMusicShareDownloadCoordinator
-    private var isProcessing = false
 
     init(container: AgentDataStore, appleMusicWorker: AppleMusicRuntimeWorkerClient) {
         self.container = container
@@ -23,57 +22,35 @@ actor BackgroundTaskCoordinator {
         )
     }
 
-    func handlePendingAppleMusicDownload(
-        format: AppleMusicDownloadFormat
-    ) async -> SettingsAttentionItem? {
-        await appleMusicShareCoordinator.handlePendingAppleMusicDownload(format: format)
-    }
-
-    func recoverPendingAppleMusicDownloadIfNeeded() async {
-        await appleMusicShareCoordinator.recoverPendingAppleMusicDownloadIfNeeded()
-    }
-
-    func processPendingWork() async {
-        guard !isProcessing else { return }
-        isProcessing = true
-        defer { isProcessing = false }
-
-        let shareEvents: [ShareEvent]
-        let jobs: [JobRequest]
-        let queue: JobQueue
-        let claimedJobs: ClaimedJobBatch?
-        do {
-            let eventQueue = try ShareEventQueue(container: container)
-            shareEvents = try eventQueue.drain()
-            await appleMusicShareCoordinator.notifyShareEvents(shareEvents)
-
-            queue = try JobQueue(container: container)
-            claimedJobs = try queue.claimPending()
-            jobs = claimedJobs?.jobs ?? []
-        } catch {
-            DiagnosticLog.append("agent queue claim failed: \(error.localizedDescription)")
-            return
+    func takePendingAppleMusicDownload(format: AppleMusicDownloadFormat, batchID: UUID?) throws -> [JobRequest] {
+        let store = try PendingAppleMusicDownloadStore(container: container)
+        guard let batch = try store.read(), batchID == nil || batch.id == batchID else { return [] }
+        _ = try store.drain()
+        return batch.jobs.map { job in
+            var job = job
+            job.operation = .appleMusicDownload(format)
+            return job
         }
+    }
 
+    func process(_ jobs: [JobRequest]) async {
+        do {
+            let events = try ShareEventQueue(container: container).drain()
+            await appleMusicShareCoordinator.notifyShareEvents(events)
+        } catch {
+            DiagnosticLog.append("agent share event drain failed: \(error.localizedDescription)")
+        }
         let shareHandling = await appleMusicShareCoordinator.handleShareAppleMusicJobs(jobs)
         if let target = shareHandling.settingsAttention {
             await SettingsAttentionLauncher.open(target, container: container)
         }
         let remainingJobs = shareHandling.remainingJobs
-        guard !jobs.isEmpty else {
-            DiagnosticLog.append(shareEvents.isEmpty ? "agent no pending jobs" : "agent processed share events")
-            return
-        }
-        guard !remainingJobs.isEmpty else {
-            acknowledge(claimedJobs, queue: queue)
-            return
-        }
+        guard !remainingJobs.isEmpty else { return }
 
         DiagnosticLog.append("agent processing \(remainingJobs.count) jobs")
         let summary = await execute(remainingJobs)
         writeConversionLog(summary: summary, jobs: remainingJobs)
         await notificationService.enqueueAndDispatchConversionFinished(summary: summary, jobs: remainingJobs)
-        acknowledge(claimedJobs, queue: queue)
     }
 
     private func execute(_ jobs: [JobRequest]) async -> ConversionSummary {
@@ -125,15 +102,6 @@ actor BackgroundTaskCoordinator {
             failureCount: failureCount,
             messages: messages
         )
-    }
-
-    private func acknowledge(_ batch: ClaimedJobBatch?, queue: JobQueue) {
-        guard let batch else { return }
-        do {
-            try queue.acknowledge(batch)
-        } catch {
-            DiagnosticLog.append("agent queue acknowledge failed: \(error.localizedDescription)")
-        }
     }
 
     private func writeConversionLog(summary: ConversionSummary, jobs: [JobRequest]) {

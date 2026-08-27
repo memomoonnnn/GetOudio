@@ -639,7 +639,7 @@ final class GetOudioCoreTests: XCTestCase {
         XCTAssertNil(try queue.claimPending())
     }
 
-    func testJobQueueRequeuesStaleClaim() throws {
+    func testJobQueueNeverReplaysAnOldClaim() throws {
         let queueURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
             .appendingPathComponent("queued-jobs.json")
@@ -656,10 +656,254 @@ final class GetOudioCoreTests: XCTestCase {
         try queue.enqueue([job])
         XCTAssertEqual(try XCTUnwrap(try queue.claimPending()).jobs, [job])
 
-        let reclaimed = try XCTUnwrap(try queue.claimPending(staleClaimMaxAge: -1))
-        XCTAssertEqual(reclaimed.jobs, [job])
-        try queue.acknowledge(reclaimed)
+        let processingURL = queueURL.deletingLastPathComponent().appendingPathComponent("queued-jobs.processing.json")
+        try FileManager.default.setAttributes([.modificationDate: Date.distantPast], ofItemAtPath: processingURL.path)
         XCTAssertNil(try queue.claimPending())
+        try queue.discardUnfinished { XCTAssertEqual($0, [job]) }
+        XCTAssertNil(try queue.claimPending())
+    }
+
+    func testJobQueueDiscardsAllUnfinishedStatesWithoutDeletingInputs() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let queue = try JobQueue(fileURL: root.appendingPathComponent("queued-jobs.json"))
+        let input = root.appendingPathComponent("source.wav")
+        try Data("preserve".utf8).write(to: input)
+        let jobs = (0..<3).map { _ in JobRequest(fileURL: input, operation: .extractAudio, source: .finderSync) }
+        try queue.enqueue([jobs[0]])
+        _ = try XCTUnwrap(queue.claimPending())
+        try queue.enqueue([jobs[1]])
+        let submissionID = UUID()
+        try queue.hold([jobs[2]], submissionID: submissionID)
+        let outbox = try NotificationEventQueue(rootURL: root.appendingPathComponent("notifications"))
+
+        try queue.discardUnfinished { unfinished in
+            XCTAssertEqual(unfinished, jobs)
+            try outbox.enqueue(NotificationEvent(interruptedJobs: unfinished))
+        }
+        XCTAssertEqual(try String(contentsOf: input), "preserve")
+        XCTAssertTrue(try queue.read().isEmpty)
+        XCTAssertNil(try queue.claimPending())
+        XCTAssertFalse(try queue.resolve(submissionID, decision: .enqueue))
+        XCTAssertEqual(try outbox.claimPending().map(\.event.kind), [.tasksInterrupted])
+        try queue.discardUnfinished { XCTAssertTrue($0.isEmpty) }
+        try queue.enqueue([jobs[0]])
+        XCTAssertEqual(try queue.claimPending()?.jobs, [jobs[0]])
+    }
+
+    func testJobQueuePreservesTasksWhenInterruptionCannotBeRecorded() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let queue = try JobQueue(fileURL: root.appendingPathComponent("queued-jobs.json"))
+        let job = JobRequest(fileURL: root.appendingPathComponent("source.wav"), operation: .extractAudio, source: .finderSync)
+        try queue.enqueue([job])
+        XCTAssertThrowsError(try queue.discardUnfinished { _ in throw CocoaError(.fileWriteNoPermission) })
+        XCTAssertEqual(try queue.read(), [job])
+    }
+
+    func testJobQueueStartupStopsOnlyItsRecordedProcessIdentity() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let queueURL = root.appendingPathComponent("queued-jobs.json")
+        let queue = try JobQueue(fileURL: queueURL)
+        let job = JobRequest(fileURL: root.appendingPathComponent("source.wav"), operation: .extractAudio, source: .finderSync)
+        try queue.enqueue([job])
+        _ = try XCTUnwrap(queue.claimPending())
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/sleep")
+        process.arguments = ["30"]
+        try process.run()
+        defer { if process.isRunning { process.terminate() }; process.waitUntilExit() }
+        let identity = try XCTUnwrap(ProcessIdentity.running(process.processIdentifier))
+        var reusedPID = identity
+        reusedPID.startMicroseconds += 1
+        try reusedPID.terminateIfStillRunning()
+        XCTAssertTrue(process.isRunning, "A different start time must never be terminated")
+        try queue.recordProcess(identity)
+        let reopened = try JobQueue(fileURL: queueURL)
+        try reopened.discardUnfinished { XCTAssertEqual($0, [job]) }
+        process.waitUntilExit()
+        XCTAssertNotEqual(process.terminationStatus, 0)
+        XCTAssertNil(ProcessIdentity.running(identity.pid))
+    }
+
+    func testProcessRunnerRecordsQueueOwnedChildren() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let queueURL = root.appendingPathComponent("queued-jobs.json")
+        let queue = try JobQueue(fileURL: queueURL)
+        try queue.enqueue([JobRequest(fileURL: root.appendingPathComponent("source.wav"), operation: .extractAudio, source: .finderSync)])
+        _ = try XCTUnwrap(queue.claimPending())
+        let result = try await ProcessRunner.$processStarted.withValue({ try queue.recordProcess($0) }) {
+            try await ProcessRunner().run(executablePath: "/bin/sleep", arguments: ["0.1"])
+        }
+        XCTAssertTrue(result.succeeded)
+        let data = try Data(contentsOf: root.appendingPathComponent("queued-jobs.processing.json"))
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual((json["processes"] as? [[String: Any]])?.count, 1)
+        try queue.discardUnfinished { XCTAssertEqual($0.count, 1) }
+    }
+
+    func testJobQueueReadsLegacyArrayAndKeepsWaitingSubmissionsOutOfClaims() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let queueURL = root.appendingPathComponent("queued-jobs.json")
+        let queue = try JobQueue(fileURL: queueURL)
+        let first = JobRequest(fileURL: root.appendingPathComponent("first.wav"), operation: .extractAudio, source: .finderSync)
+        let second = JobRequest(fileURL: root.appendingPathComponent("second.wav"), operation: .extractAudio, source: .finderSync)
+        try JSONEncoder().encode([first]).write(to: queueURL)
+        let id = UUID()
+        XCTAssertTrue(try queue.hold([first, second, second], submissionID: id))
+        let claim = try XCTUnwrap(queue.claimPending())
+        XCTAssertEqual(claim.jobs, [first])
+        try queue.acknowledge(claim)
+        XCTAssertNil(try queue.claimPending())
+        let reopened = try JobQueue(fileURL: queueURL)
+        XCTAssertTrue(try reopened.resolve(id, decision: .enqueue))
+        XCTAssertFalse(try reopened.resolve(id, decision: .enqueue))
+        XCTAssertEqual(try reopened.claimPending()?.jobs, [second])
+    }
+
+    func testBusyQueueWaitsForExplicitDecisionEvenAfterBecomingIdle() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let container = try AgentDataStore(directoryURL: root)
+        let queue = try JobQueue(container: container)
+        let center = TestNotificationCenterClient(status: .authorized)
+        let service = NotificationService(container: container, notificationCenter: center)
+        let executor = QueuedJobTestExecutor()
+        let scheduler = JobQueueScheduler(queue: queue, notifications: service, execute: { await executor.execute($0) })
+        let jobs = (0..<3).map { index in
+            JobRequest(fileURL: root.appendingPathComponent("\(index).wav"), operation: .extractAudio, source: .finderSync)
+        }
+        try await scheduler.submit([jobs[0]], submissionID: UUID())
+        await executor.waitForFirstBatch()
+        let secondID = UUID()
+        let thirdID = UUID()
+        try await scheduler.submit([jobs[1]], submissionID: secondID)
+        try await scheduler.submit([jobs[1]], submissionID: secondID)
+        try await scheduler.submit([jobs[2]], submissionID: thirdID)
+        XCTAssertEqual(center.requests.count, 2)
+        XCTAssertTrue(try queue.read().isEmpty)
+        await executor.releaseFirstBatch()
+        await scheduler.waitUntilIdle()
+        let beforeDecision = await executor.batches
+        XCTAssertEqual(beforeDecision, [[jobs[0]]])
+
+        try await scheduler.resolve(thirdID, decision: .withdraw)
+        try await scheduler.resolve(secondID, decision: .enqueue)
+        try await scheduler.resolve(secondID, decision: .enqueue)
+        try await scheduler.resolve(thirdID, decision: .enqueue)
+        await scheduler.waitUntilIdle()
+        let afterDecision = await executor.batches
+        XCTAssertEqual(afterDecision, [[jobs[0]], [jobs[1]]])
+        XCTAssertEqual(Set(center.removedIdentifiers), Set([secondID, thirdID].map(NotificationService.JobSubmissionNotification.identifier)))
+    }
+
+    func testBusyQueueDrainsConfirmedWorkWithoutAnotherWake() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let container = try AgentDataStore(directoryURL: root)
+        let queue = try JobQueue(container: container)
+        let service = NotificationService(container: container, notificationCenter: TestNotificationCenterClient(status: .authorized))
+        let executor = QueuedJobTestExecutor()
+        let scheduler = JobQueueScheduler(queue: queue, notifications: service, execute: { await executor.execute($0) })
+        let jobs = (0..<3).map { index in
+            JobRequest(fileURL: root.appendingPathComponent("\(index).wav"), operation: .extractAudio, source: .finderSync)
+        }
+        try await scheduler.submit([jobs[0]], submissionID: UUID())
+        await executor.waitForFirstBatch()
+        for job in jobs.dropFirst() {
+            let id = UUID()
+            try await scheduler.submit([job], submissionID: id)
+            try await scheduler.resolve(id, decision: .enqueue)
+        }
+        await executor.releaseFirstBatch()
+        await scheduler.waitUntilIdle()
+        let processed = await executor.batches.flatMap { $0 }
+        XCTAssertEqual(processed, jobs)
+        XCTAssertNil(try queue.claimPending())
+    }
+
+    func testBusyQueueRejectsSubmissionWhenDecisionNotificationIsUnavailable() async throws {
+        for mode in 0..<4 {
+            let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: root) }
+            let container = try AgentDataStore(directoryURL: root)
+            let queue = try JobQueue(container: container)
+            let center = TestNotificationCenterClient(status: mode == 0 ? .denied : mode == 1 ? .notDetermined : .authorized)
+            center.alertsEnabled = mode != 2
+            center.failAdd = mode == 3
+            let service = NotificationService(container: container, notificationCenter: center)
+            let executor = QueuedJobTestExecutor()
+            let scheduler = JobQueueScheduler(queue: queue, notifications: service, execute: { await executor.execute($0) })
+            let first = JobRequest(fileURL: root.appendingPathComponent("first.wav"), operation: .extractAudio, source: .finderSync)
+            let second = JobRequest(fileURL: root.appendingPathComponent("second.wav"), operation: .extractAudio, source: .finderSync)
+            try await scheduler.submit([first], submissionID: UUID())
+            await executor.waitForFirstBatch()
+            let id = UUID()
+            do {
+                try await scheduler.submit([second], submissionID: id)
+                XCTFail("Unavailable notification must reject the submission")
+            } catch { }
+            XCTAssertFalse(try queue.resolve(id, decision: .enqueue))
+            await executor.releaseFirstBatch()
+            await scheduler.waitUntilIdle()
+            let processed = await executor.batches
+            XCTAssertEqual(processed, [[first]])
+        }
+    }
+
+    func testJobDecisionNotificationContractAndCleanup() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let container = try AgentDataStore(directoryURL: root)
+        let center = TestNotificationCenterClient(status: .authorized)
+        let service = NotificationService(container: container, notificationCenter: center)
+        service.registerAppleMusicNotificationCategories()
+        let category = try XCTUnwrap(center.categories.first { $0.identifier == NotificationService.JobSubmissionNotification.categoryIdentifier })
+        XCTAssertEqual(category.actions.map(\.title), ["撤回新的任务", "排队处理"])
+        let id = UUID()
+        try await service.notifyJobSubmissionDecision(submissionID: id)
+        let request = try XCTUnwrap(center.requests.last)
+        XCTAssertEqual(request.content.title, "Get Oudio")
+        XCTAssertEqual(request.content.body, "有正在处理的任务...")
+        XCTAssertNil(request.content.sound)
+        let action = service.jobSubmissionDecision(actionIdentifier: category.actions[1].identifier, content: request.content)
+        XCTAssertEqual(action?.submissionID, id)
+        XCTAssertEqual(action?.decision, .enqueue)
+        XCTAssertNil(service.jobSubmissionDecision(actionIdentifier: UNNotificationDefaultActionIdentifier, content: request.content))
+        XCTAssertNil(service.jobSubmissionDecision(actionIdentifier: UNNotificationDismissActionIdentifier, content: request.content))
+        await service.notifyAppleMusicFormatSelection(jobCount: 1, identifier: "old-format")
+        await service.notifyAppleMusicDownloadStarted()
+        await service.removeInterruptedTaskNotifications()
+        XCTAssertEqual(Set(center.removedIdentifiers), [request.identifier, "old-format"])
+    }
+
+    func testInterruptedTaskNotificationUsesOutboxAndExistingSuppression() async throws {
+        for status: UNAuthorizationStatus in [.authorized, .denied] {
+            let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: root) }
+            let container = try AgentDataStore(directoryURL: root)
+            let center = TestNotificationCenterClient(status: status)
+            let service = NotificationService(container: container, notificationCenter: center)
+            let queue = try NotificationEventQueue(container: container)
+            let event = NotificationEvent(interruptedJobs: [])
+            XCTAssertEqual(try JSONDecoder().decode(NotificationEvent.self, from: JSONEncoder().encode(event)), event)
+            try queue.enqueue(event)
+            _ = await service.dispatchPendingNotificationEvents()
+            XCTAssertTrue(try queue.claimPending().isEmpty)
+            if status == .authorized {
+                let request = try XCTUnwrap(center.requests.first)
+                XCTAssertEqual(request.content.title, "Get Oudio")
+                XCTAssertEqual(request.content.body, "任务异常中断，请重试。")
+                XCTAssertNil(request.content.sound)
+                _ = await service.dispatchPendingNotificationEvents()
+                XCTAssertEqual(center.requests.count, 1)
+            } else {
+                XCTAssertTrue(center.requests.isEmpty)
+            }
+        }
     }
 
     func testNotificationEventQueueClaimsAndAcknowledgesEvents() throws {
@@ -2396,10 +2640,40 @@ private actor TestInvocationCounter {
     }
 }
 
+private actor QueuedJobTestExecutor {
+    private(set) var batches: [[JobRequest]] = []
+    private var firstBatchStarted: CheckedContinuation<Void, Never>?
+    private var releaseFirst: CheckedContinuation<Void, Never>?
+
+    func execute(_ jobs: [JobRequest]) async {
+        batches.append(jobs)
+        if batches.count == 1 {
+            await withCheckedContinuation { continuation in
+                releaseFirst = continuation
+                firstBatchStarted?.resume()
+                firstBatchStarted = nil
+            }
+        }
+    }
+
+    func waitForFirstBatch() async {
+        guard batches.isEmpty else { return }
+        await withCheckedContinuation { firstBatchStarted = $0 }
+    }
+
+    func releaseFirstBatch() {
+        releaseFirst?.resume()
+        releaseFirst = nil
+    }
+}
+
 private final class TestNotificationCenterClient: NotificationCenterClient {
     let status: UNAuthorizationStatus
     private(set) var requests: [UNNotificationRequest] = []
     private(set) var categories: Set<UNNotificationCategory> = []
+    private(set) var removedIdentifiers: [String] = []
+    var failAdd = false
+    var alertsEnabled = true
 
     init(status: UNAuthorizationStatus) {
         self.status = status
@@ -2414,10 +2688,18 @@ private final class TestNotificationCenterClient: NotificationCenterClient {
     }
 
     func add(_ request: UNNotificationRequest) async throws {
+        if failAdd { throw CocoaError(.fileWriteUnknown) }
         requests.append(request)
     }
 
     func setNotificationCategories(_ categories: Set<UNNotificationCategory>) {
         self.categories = categories
+    }
+
+    func canPresentAlerts() async -> Bool { status == .authorized && alertsEnabled }
+    func pendingRequests() async -> [UNNotificationRequest] { [] }
+    func deliveredRequests() async -> [UNNotificationRequest] { requests }
+    func removeNotifications(withIdentifiers identifiers: [String]) {
+        removedIdentifiers.append(contentsOf: identifiers)
     }
 }

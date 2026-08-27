@@ -3,6 +3,7 @@ import Foundation
 public enum NotificationEventKind: String, Codable, Sendable {
     case conversionFinished
     case recordingFinished
+    case tasksInterrupted
 }
 
 public struct RecordingNotificationEvent: Codable, Equatable, Sendable {
@@ -77,6 +78,17 @@ public struct NotificationEvent: Codable, Identifiable, Equatable, Sendable {
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         attemptCount = try container.decodeIfPresent(Int.self, forKey: .attemptCount) ?? 0
         nextAttemptAt = try container.decodeIfPresent(Date.self, forKey: .nextAttemptAt)
+    }
+
+    public init(interruptedJobs: [JobRequest], id: UUID = UUID()) {
+        self.id = id
+        kind = .tasksInterrupted
+        summary = nil
+        jobs = interruptedJobs
+        recording = nil
+        createdAt = Date()
+        attemptCount = 0
+        nextAttemptAt = nil
     }
 }
 

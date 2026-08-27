@@ -402,6 +402,21 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
+        if let action = notificationService.jobSubmissionDecision(
+            actionIdentifier: response.actionIdentifier, content: response.notification.request.content
+        ) {
+            beginNotificationResponse()
+            Task {
+                do {
+                    try await BackgroundAgentClient().resolveJobSubmission(action.submissionID, decision: action.decision)
+                } catch {
+                    DiagnosticLog.append("normal job decision forwarding failed: \(error.localizedDescription)")
+                }
+                completionHandler()
+                await MainActor.run { self.endNotificationResponse() }
+            }
+            return
+        }
         if let copyInfo = notificationService.copyInfo(for: response) {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(copyInfo, forType: .string)
@@ -419,7 +434,9 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
             let guidance: SettingsAttentionItem?
             do {
                 guidance = try await BackgroundAgentClient()
-                    .handlePendingAppleMusicDownload(format: format)
+                    .handlePendingAppleMusicDownload(
+                        format: format, batchID: UUID(uuidString: response.notification.request.identifier)
+                    )
             } catch {
                 guidance = nil
                 DiagnosticLog.append(

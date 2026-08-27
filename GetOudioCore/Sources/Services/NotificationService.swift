@@ -6,6 +6,10 @@ public protocol NotificationCenterClient: AnyObject {
     func authorizationStatus() async -> UNAuthorizationStatus
     func add(_ request: UNNotificationRequest) async throws
     func setNotificationCategories(_ categories: Set<UNNotificationCategory>)
+    func canPresentAlerts() async -> Bool
+    func pendingRequests() async -> [UNNotificationRequest]
+    func deliveredRequests() async -> [UNNotificationRequest]
+    func removeNotifications(withIdentifiers identifiers: [String])
 }
 
 public final class SystemNotificationCenterClient: NotificationCenterClient {
@@ -30,6 +34,24 @@ public final class SystemNotificationCenterClient: NotificationCenterClient {
     public func setNotificationCategories(_ categories: Set<UNNotificationCategory>) {
         center.setNotificationCategories(categories)
     }
+
+    public func canPresentAlerts() async -> Bool {
+        let settings = await center.notificationSettings()
+        return settings.authorizationStatus == .authorized && settings.alertSetting == .enabled
+    }
+
+    public func pendingRequests() async -> [UNNotificationRequest] {
+        await center.pendingNotificationRequests()
+    }
+
+    public func deliveredRequests() async -> [UNNotificationRequest] {
+        await center.deliveredNotifications().map(\.request)
+    }
+
+    public func removeNotifications(withIdentifiers identifiers: [String]) {
+        center.removePendingNotificationRequests(withIdentifiers: identifiers)
+        center.removeDeliveredNotifications(withIdentifiers: identifiers)
+    }
 }
 
 public final class NotificationService {
@@ -41,6 +63,16 @@ public final class NotificationService {
 
     private static let retryDelays: [TimeInterval] = [2, 10, 60]
     public static let foregroundPresentationOptions: UNNotificationPresentationOptions = [.banner, .sound]
+    public enum JobSubmissionNotification {
+        public static let categoryIdentifier = "GET_OUDIO_JOB_SUBMISSION"
+        public static let withdrawActionIdentifier = "GET_OUDIO_JOB_WITHDRAW"
+        public static let enqueueActionIdentifier = "GET_OUDIO_JOB_ENQUEUE"
+        public static let submissionIDKey = "submissionID"
+
+        public static func identifier(for submissionID: UUID) -> String {
+            "job-submission-\(submissionID.uuidString)"
+        }
+    }
     public enum AppleMusicNotification {
         public static let formatCategoryIdentifier = "APPLE_MUSIC_DOWNLOAD_FORMAT"
         public static let alacActionIdentifier = "APPLE_MUSIC_DOWNLOAD_ALAC"
@@ -139,8 +171,72 @@ public final class NotificationService {
         notificationCenter.setNotificationCategories([
             formatCategory,
             completionCategory,
-            appleMusicFailureCategory
+            appleMusicFailureCategory,
+            UNNotificationCategory(
+                identifier: JobSubmissionNotification.categoryIdentifier,
+                actions: [
+                    UNNotificationAction(
+                        identifier: JobSubmissionNotification.withdrawActionIdentifier,
+                        title: "撤回新的任务",
+                        options: [.destructive]
+                    ),
+                    UNNotificationAction(
+                        identifier: JobSubmissionNotification.enqueueActionIdentifier,
+                        title: "排队处理",
+                        options: []
+                    )
+                ],
+                intentIdentifiers: [],
+                options: []
+            )
         ])
+    }
+
+    public func notifyJobSubmissionDecision(submissionID: UUID) async throws {
+        guard await notificationCenter.canPresentAlerts() else {
+            throw ProcessRunnerError.processFailed("有正在处理的任务，通知提醒不可用，新的任务未提交。请启用通知提醒后重试。")
+        }
+        let content = UNMutableNotificationContent()
+        content.title = "Get Oudio"
+        content.body = "有正在处理的任务..."
+        content.categoryIdentifier = JobSubmissionNotification.categoryIdentifier
+        content.userInfo = [JobSubmissionNotification.submissionIDKey: submissionID.uuidString]
+        let request = UNNotificationRequest(
+            identifier: JobSubmissionNotification.identifier(for: submissionID), content: content, trigger: nil
+        )
+        do {
+            try await notificationCenter.add(request)
+        } catch {
+            throw ProcessRunnerError.processFailed("任务选择通知发送失败，新的任务未提交，请重试。")
+        }
+    }
+
+    public func jobSubmissionDecision(
+        actionIdentifier: String,
+        content: UNNotificationContent
+    ) -> (submissionID: UUID, decision: JobSubmissionDecision)? {
+        guard content.categoryIdentifier == JobSubmissionNotification.categoryIdentifier,
+              let value = content.userInfo[JobSubmissionNotification.submissionIDKey] as? String,
+              let submissionID = UUID(uuidString: value) else { return nil }
+        let decision: JobSubmissionDecision
+        switch actionIdentifier {
+        case JobSubmissionNotification.withdrawActionIdentifier: decision = .withdraw
+        case JobSubmissionNotification.enqueueActionIdentifier: decision = .enqueue
+        default: return nil
+        }
+        return (submissionID, decision)
+    }
+
+    public func removeJobSubmissionNotification(_ submissionID: UUID) {
+        notificationCenter.removeNotifications(withIdentifiers: [JobSubmissionNotification.identifier(for: submissionID)])
+    }
+
+    public func removeInterruptedTaskNotifications() async {
+        let requests = await notificationCenter.pendingRequests() + notificationCenter.deliveredRequests()
+        let categories = [JobSubmissionNotification.categoryIdentifier, AppleMusicNotification.formatCategoryIdentifier]
+        notificationCenter.removeNotifications(withIdentifiers: requests.filter {
+            categories.contains($0.content.categoryIdentifier)
+        }.map(\.identifier))
     }
 
     public func appleMusicFormat(for actionIdentifier: String) -> AppleMusicDownloadFormat? {
@@ -248,6 +344,14 @@ public final class NotificationService {
                             identifier: claimed.event.id.uuidString
                         ),
                         context: "recording finished id=\(claimed.event.id.uuidString)"
+                    )
+                case .tasksInterrupted:
+                    let content = UNMutableNotificationContent()
+                    content.title = "Get Oudio"
+                    content.body = "任务异常中断，请重试。"
+                    accepted = await send(
+                        UNNotificationRequest(identifier: claimed.event.id.uuidString, content: content, trigger: nil),
+                        context: "tasks interrupted"
                     )
                 }
 
