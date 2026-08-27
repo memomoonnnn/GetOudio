@@ -233,6 +233,7 @@ targets:
       - path: GetOudioAMRuntimeWorker/Sources
     dependencies:
       - target: GetOudioCore
+        embed: false
     info:
       path: GetOudioAMRuntimeWorker/Info.plist
       properties:
@@ -251,6 +252,10 @@ targets:
         ENABLE_APP_SANDBOX: NO
         PRODUCT_BUNDLE_IDENTIFIER: com.shengjiacheng.GetOudio.AMRuntimeWorker
         PRODUCT_NAME: GetOudioAMRuntimeWorker
+        # The Worker runs inside the main App bundle and shares its Core framework.
+        LD_RUNPATH_SEARCH_PATHS:
+          - $(inherited)
+          - "@executable_path/../../../../Frameworks"
 
   GetOudioRecordingWidget:
     type: app-extension

@@ -104,7 +104,6 @@
 		DF7AFFED926401D5521EAF82 /* ShareExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07A513B3F5F8C121D7D1145B /* ShareExtension.swift */; };
 		E1B3141EC2CA92A068CAEA90 /* AppleMusicDownloadMessageFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 931EDAB50D5DFF916FE75A07 /* AppleMusicDownloadMessageFormatter.swift */; };
 		E79AF9E57B6BD2E7727720E1 /* NormalLauncher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7085A54F704E59442755202F /* NormalLauncher.swift */; };
-		EBD39A1AD0849DFD1FAD7085 /* GetOudioCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 49BFF2708ED14CF05FA36161 /* GetOudioCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		ED66D6BAC4CE297C63BFC80D /* GetOudioCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 49BFF2708ED14CF05FA36161 /* GetOudioCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		EF31BFBD5ED668E16699BCD0 /* PendingAppleMusicDownloadStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E499867F50B2D0BF3348EE4 /* PendingAppleMusicDownloadStore.swift */; };
 		F87C352EC57D852A187D0EAF /* OpenWithPresetMenuController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A77C371986D7FC6E0D024B5 /* OpenWithPresetMenuController.swift */; };
@@ -213,17 +212,6 @@
 			dstSubfolderSpec = 10;
 			files = (
 				FF1A15EA50B6C0F50D821207 /* GetOudioCore.framework in Embed Frameworks */,
-			);
-			name = "Embed Frameworks";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		90D234E327FA442911EDF46D /* Embed Frameworks */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "";
-			dstSubfolderSpec = 10;
-			files = (
-				EBD39A1AD0849DFD1FAD7085 /* GetOudioCore.framework in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -745,7 +733,6 @@
 			buildPhases = (
 				104A627446739252F02665CF /* Sources */,
 				C76452D9A2F0871A9FB6FF60 /* Frameworks */,
-				90D234E327FA442911EDF46D /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
@@ -1483,7 +1470,7 @@
 				INFOPLIST_FILE = GetOudioAMRuntimeWorker/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
-					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.shengjiacheng.GetOudio.AMRuntimeWorker;
 				PRODUCT_NAME = GetOudioAMRuntimeWorker;
@@ -1635,7 +1622,7 @@
 				INFOPLIST_FILE = GetOudioAMRuntimeWorker/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
-					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.shengjiacheng.GetOudio.AMRuntimeWorker;
 				PRODUCT_NAME = GetOudioAMRuntimeWorker;

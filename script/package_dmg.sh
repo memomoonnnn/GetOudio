@@ -89,7 +89,6 @@ sign_distribution_bundle() {
   sign_adhoc "$share_extension" --entitlements "$ROOT_DIR/GetOudioShareExtension/GetOudioShareExtension.entitlements"
   sign_adhoc "$recording_widget" --entitlements "$ROOT_DIR/GetOudioRecordingWidget/GetOudioRecordingWidget.entitlements"
   sign_adhoc "$bootstrap_installer"
-  sign_adhoc "$runtime_worker/Contents/Frameworks/GetOudioCore.framework"
   sign_adhoc "$runtime_worker" --entitlements "$ROOT_DIR/GetOudioAMRuntimeWorker/GetOudioAMRuntimeWorker.entitlements"
   sign_adhoc "$APP_BUNDLE" --entitlements "$ENTITLEMENTS_DIR/GetOudio.entitlements"
 }

@@ -14,6 +14,22 @@ case "$TARGET_ARCH" in
 esac
 [[ -d "$APP_BUNDLE/Contents/MacOS" ]] || { echo "invalid app bundle: $APP_BUNDLE" >&2; exit 1; }
 
+# The embedded Worker links Core from the outer App, never from a private copy.
+CORE_FRAMEWORK="$APP_BUNDLE/Contents/Frameworks/GetOudioCore.framework"
+WORKER_BINARY="$APP_BUNDLE/Contents/Helpers/GetOudioAMRuntimeWorker.app/Contents/MacOS/GetOudioAMRuntimeWorker"
+[[ -f "$CORE_FRAMEWORK/GetOudioCore" ]] || { echo "missing shared Core framework: $CORE_FRAMEWORK" >&2; exit 1; }
+while IFS= read -r -d '' framework; do
+  if [[ "$framework" != "$CORE_FRAMEWORK" ]]; then
+    echo "unexpected Core framework copy: $framework; perform a clean build" >&2
+    exit 1
+  fi
+done < <(/usr/bin/find "$APP_BUNDLE" -name GetOudioCore.framework -print0)
+worker_rpaths="$(/usr/bin/otool -l "$WORKER_BINARY" | /usr/bin/awk '/cmd LC_RPATH/{getline; getline; print $2}')"
+if ! /usr/bin/grep -Fxq '@executable_path/../../../../Frameworks' <<<"$worker_rpaths"; then
+  echo "Worker must load Core from the outer App Frameworks directory: $WORKER_BINARY" >&2
+  exit 1
+fi
+
 # Preflight every Mach-O before changing anything. Source-built code and
 # bundled tools must already match; only the prebuilt Sparkle framework is thinned.
 sparkle_needs_thinning=false
