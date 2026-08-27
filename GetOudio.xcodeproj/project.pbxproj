@@ -101,7 +101,6 @@
 		D77ABFA086DA60B93B9E7633 /* RecordingSettingsModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 435B034A4E419E3458A83202 /* RecordingSettingsModel.swift */; };
 		DD1D825184E9AD2BDC9822F4 /* AppleMusicSettingsModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4EDD5FB0848FAF0C36888A6 /* AppleMusicSettingsModel.swift */; };
 		DE31BC37B7DA0B57A7594782 /* AppleMusicDownloadService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BB207379790847AB20869D3 /* AppleMusicDownloadService.swift */; };
-		DE40E324B1CCD0A87D29DBD9 /* ShareEventQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6687368FC009B08493D049E3 /* ShareEventQueue.swift */; };
 		DF7AFFED926401D5521EAF82 /* ShareExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07A513B3F5F8C121D7D1145B /* ShareExtension.swift */; };
 		E1B3141EC2CA92A068CAEA90 /* AppleMusicDownloadMessageFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 931EDAB50D5DFF916FE75A07 /* AppleMusicDownloadMessageFormatter.swift */; };
 		E79AF9E57B6BD2E7727720E1 /* NormalLauncher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7085A54F704E59442755202F /* NormalLauncher.swift */; };
@@ -110,7 +109,6 @@
 		EF31BFBD5ED668E16699BCD0 /* PendingAppleMusicDownloadStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E499867F50B2D0BF3348EE4 /* PendingAppleMusicDownloadStore.swift */; };
 		F87C352EC57D852A187D0EAF /* OpenWithPresetMenuController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A77C371986D7FC6E0D024B5 /* OpenWithPresetMenuController.swift */; };
 		F8F3F99FBD0416F1ADB074AC /* BackgroundAgent.swift in Sources */ = {isa = PBXBuildFile; fileRef = C763A203CE9EE9E64F44CC77 /* BackgroundAgent.swift */; };
-		FA893849DFEE336E870C6F8F /* Notifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E1B72668091E326BEC5A293 /* Notifications.swift */; };
 		FBC8780F67175697DF69AB01 /* BackgroundAgentAuthorizationModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CD7BCC50D1DF8E3343DCB10 /* BackgroundAgentAuthorizationModel.swift */; };
 		FD34FCD24271E50D12647574 /* AppleMusicShareURLParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 586B2314A6D6C0E188D4EF15 /* AppleMusicShareURLParser.swift */; };
 		FF1A15EA50B6C0F50D821207 /* GetOudioCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 49BFF2708ED14CF05FA36161 /* GetOudioCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -288,7 +286,6 @@
 		54C8CCAA28BE713D16820038 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; name = AppIcon.icon; path = GetOudio/Resources/AppIcon.icon; sourceTree = SOURCE_ROOT; };
 		5824B80AB71359FF2011C2E0 /* NCMConversionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NCMConversionService.swift; sourceTree = "<group>"; };
 		586B2314A6D6C0E188D4EF15 /* AppleMusicShareURLParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleMusicShareURLParser.swift; sourceTree = "<group>"; };
-		6687368FC009B08493D049E3 /* ShareEventQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareEventQueue.swift; sourceTree = "<group>"; };
 		6BE0DC2B93928C094187FC44 /* .gitkeep */ = {isa = PBXFileReference; path = .gitkeep; sourceTree = "<group>"; };
 		7085A54F704E59442755202F /* NormalLauncher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NormalLauncher.swift; sourceTree = "<group>"; };
 		7277FA0381ED5023AA2D587E /* NCMFileIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = NCMFileIcon.icns; sourceTree = "<group>"; };
@@ -310,7 +307,6 @@
 		8A94521F544FCDABB87C3F99 /* FinderDirectorySettingsModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinderDirectorySettingsModel.swift; sourceTree = "<group>"; };
 		8D142844D21B63D852AD8F4B /* OpenWithJobDispatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenWithJobDispatcher.swift; sourceTree = "<group>"; };
 		8D9341EFFB773C117429DF56 /* ProcessRunner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessRunner.swift; sourceTree = "<group>"; };
-		8E1B72668091E326BEC5A293 /* Notifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Notifications.swift; sourceTree = "<group>"; };
 		8E499867F50B2D0BF3348EE4 /* PendingAppleMusicDownloadStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendingAppleMusicDownloadStore.swift; sourceTree = "<group>"; };
 		92154AF71E5FE1BDC65FF692 /* AppleMusicRuntimeOperationAvailability.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleMusicRuntimeOperationAvailability.swift; sourceTree = "<group>"; };
 		931EDAB50D5DFF916FE75A07 /* AppleMusicDownloadMessageFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleMusicDownloadMessageFormatter.swift; sourceTree = "<group>"; };
@@ -429,7 +425,6 @@
 				AB83BE0B73035F401DA9D0DB /* BackgroundTaskCoordinator.swift */,
 				2D84480E867AAD02E3F55067 /* main.swift */,
 				7085A54F704E59442755202F /* NormalLauncher.swift */,
-				8E1B72668091E326BEC5A293 /* Notifications.swift */,
 				8D142844D21B63D852AD8F4B /* OpenWithJobDispatcher.swift */,
 				1A77C371986D7FC6E0D024B5 /* OpenWithPresetMenuController.swift */,
 				77EEDFE3B80A0F69EECC7FD9 /* RecordingAudioSession.swift */,
@@ -578,7 +573,6 @@
 				A7A6DA16595F336C14E58DFD /* RecordingWAVWriter.swift */,
 				7E5BF7615EAE9DCACEEC9E0E /* SettingsGuidanceStore.swift */,
 				277323E37349CB4F0E1FDA52 /* SettingsStore.swift */,
-				6687368FC009B08493D049E3 /* ShareEventQueue.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -775,6 +769,7 @@
 				A7404D723DF252EBC38A8CF4 /* Embed Foundation Extensions */,
 				6F0A90185C0E9CE10A10C48A /* Embed Frameworks */,
 				FBD7C2050ED48D95E335899E /* Embed Background Helpers */,
+				07925F518DDB2F59FD805EEC /* Prepare Bundle Architecture */,
 			);
 			buildRules = (
 			);
@@ -968,6 +963,25 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		07925F518DDB2F59FD805EEC /* Prepare Bundle Architecture */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Prepare Bundle Architecture";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "bash \"$SRCROOT/script/prepare_bundle_architecture.sh\" \"$TARGET_BUILD_DIR/$WRAPPER_NAME\" \"$ARCHS\"\n";
+		};
 		FBD7C2050ED48D95E335899E /* Embed Background Helpers */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
@@ -1056,7 +1070,6 @@
 				9842A7C37AD50688EED63C16 /* RecordingWAVWriter.swift in Sources */,
 				D48DADFB6C251A450A5B36B7 /* SettingsGuidanceStore.swift in Sources */,
 				1E2BA6165226BFEB0082B779 /* SettingsStore.swift in Sources */,
-				DE40E324B1CCD0A87D29DBD9 /* ShareEventQueue.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1082,7 +1095,6 @@
 				CDB96F8DD0D55AE6E4146A47 /* NCMSettingsModel.swift in Sources */,
 				E79AF9E57B6BD2E7727720E1 /* NormalLauncher.swift in Sources */,
 				A93694F1DFAA01629D1DD194 /* NotificationAuthorizationModel.swift in Sources */,
-				FA893849DFEE336E870C6F8F /* Notifications.swift in Sources */,
 				2B42E847986CC7B87B603885 /* OpenWithJobDispatcher.swift in Sources */,
 				F87C352EC57D852A187D0EAF /* OpenWithPresetMenuController.swift in Sources */,
 				A244B0BDB474A7B4712BD80F /* PresetSettingsModel.swift in Sources */,
@@ -1314,6 +1326,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				ARCHS = "$(GET_OUDIO_ARCH)";
 				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
@@ -1365,11 +1378,12 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
+				GET_OUDIO_ARCH = arm64;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.3.1;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
-				ONLY_ACTIVE_ARCH = YES;
+				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
@@ -1382,6 +1396,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
+				ARCHS = "$(GET_OUDIO_ARCH)";
 				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
@@ -1427,10 +1442,12 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
+				GET_OUDIO_ARCH = arm64;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.3.1;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;

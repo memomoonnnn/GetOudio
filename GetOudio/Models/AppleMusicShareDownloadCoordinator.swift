@@ -22,12 +22,6 @@ final class AppleMusicShareDownloadCoordinator {
         self.pendingStoreFactory = pendingStoreFactory ?? { try PendingAppleMusicDownloadStore(container: container) }
     }
 
-    func notifyShareEvents(_ events: [ShareEvent]) async {
-        for event in events where event.kind == .unsupportedDownloadSource {
-            await notificationService.notifyUnsupportedDownloadSource(urls: event.urls)
-        }
-    }
-
     func handleShareAppleMusicJobs(
         _ jobs: [JobRequest]
     ) async -> (remainingJobs: [JobRequest], settingsAttention: SettingsAttentionItem?) {

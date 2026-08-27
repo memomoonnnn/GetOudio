@@ -34,12 +34,6 @@ actor BackgroundTaskCoordinator {
     }
 
     func process(_ jobs: [JobRequest]) async {
-        do {
-            let events = try ShareEventQueue(container: container).drain()
-            await appleMusicShareCoordinator.notifyShareEvents(events)
-        } catch {
-            DiagnosticLog.append("agent share event drain failed: \(error.localizedDescription)")
-        }
         let shareHandling = await appleMusicShareCoordinator.handleShareAppleMusicJobs(jobs)
         if let target = shareHandling.settingsAttention {
             await SettingsAttentionLauncher.open(target, container: container)

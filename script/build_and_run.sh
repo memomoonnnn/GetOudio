@@ -43,6 +43,7 @@ build_unsigned() {
     -scheme "$SCHEME" \
     -configuration "$DEBUG_CONFIGURATION" \
     -derivedDataPath "$DERIVED_DATA" \
+    "GET_OUDIO_ARCH=${GET_OUDIO_ARCH:-arm64}" \
     CODE_SIGNING_ALLOWED=NO \
     build
 }
@@ -55,6 +56,7 @@ build_signed() {
       -scheme "$SCHEME" \
       -configuration "$INSTALL_CONFIGURATION" \
       -derivedDataPath "$DERIVED_DATA" \
+      "GET_OUDIO_ARCH=${GET_OUDIO_ARCH:-arm64}" \
       CODE_SIGNING_ALLOWED=YES \
       CODE_SIGN_STYLE=Automatic \
       DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" \
@@ -69,6 +71,7 @@ build_signed() {
     -scheme "$SCHEME" \
     -configuration "$INSTALL_CONFIGURATION" \
     -derivedDataPath "$DERIVED_DATA" \
+    "GET_OUDIO_ARCH=${GET_OUDIO_ARCH:-arm64}" \
     CODE_SIGNING_ALLOWED=YES \
     CODE_SIGN_STYLE=Automatic \
     clean \

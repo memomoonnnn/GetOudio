@@ -158,23 +158,11 @@ public final class AppleMusicRuntimeWorkerClient: AppleMusicRuntimeServing {
 
     public init(
         container: AgentDataStore,
-        resourceRoot: URL? = Bundle.main.resourceURL,
-        fileManager: FileManager = .default,
-        timeout: TimeInterval = 3_600,
-        transport _: BackgroundAgentXPCClient = BackgroundAgentXPCClient(),
-        runner _: ProcessRunner = ProcessRunner(),
-        workerApplicationURL: URL? = nil,
-        workerExecutableURL: URL? = nil
+        resourceRoot: URL? = Bundle.main.resourceURL
     ) {
         self.container = container
         self.resourceRoot = resourceRoot
         transport = AppleMusicRuntimeWorkerXPCClient()
-    }
-
-    public var isAvailable: Bool {
-        // Runtime availability is established by an RPC health request, not by
-        // the presence of an embedded app bundle or a Launch Services lookup.
-        true
     }
 
     public func status() async throws -> AppleMusicRuntimeAgentStatusReport {
@@ -283,7 +271,7 @@ public final class AppleMusicRuntimeWorkerClient: AppleMusicRuntimeServing {
     public func wrapperLoginStatus() async throws -> AppleMusicWrapperLoginStatus {
         let response = try await send(command: .wrapperStatus)
         guard let status = response.wrapperLoginStatus else {
-            throw ProcessRunnerError.processFailed("Downloader Runtime Agent 响应中没有登录状态。")
+            throw ProcessRunnerError.processFailed("Runtime Worker 响应中没有登录状态。")
         }
         return status
     }
@@ -353,14 +341,14 @@ public final class AppleMusicRuntimeWorkerClient: AppleMusicRuntimeServing {
 
     private func responseStatus(_ response: AppleMusicRuntimeAgentResponseEnvelope) throws -> AppleMusicRuntimeAgentStatusReport {
         guard let report = response.statusReport else {
-            throw ProcessRunnerError.processFailed("Downloader Runtime Agent 响应中没有状态信息。")
+            throw ProcessRunnerError.processFailed("Runtime Worker 响应中没有状态信息。")
         }
         return report
     }
 
     private func responseSummary(_ response: AppleMusicRuntimeAgentResponseEnvelope) throws -> ConversionSummary {
         guard let summary = response.summary else {
-            throw ProcessRunnerError.processFailed("Downloader Runtime Agent 响应中没有执行摘要。")
+            throw ProcessRunnerError.processFailed("Runtime Worker 响应中没有执行摘要。")
         }
         return summary
     }
@@ -373,34 +361,25 @@ public final class AppleMusicRuntimeAgentClient: AppleMusicRuntimeServing {
     private let agent: BackgroundAgentClient
 
     public init(
-        container _: AgentDataStore,
-        resourceRoot _: URL? = Bundle.main.resourceURL,
-        fileManager _: FileManager = .default,
-        timeout _: TimeInterval = 3_600,
-        transport: BackgroundAgentXPCClient = BackgroundAgentXPCClient(),
-        runner _: ProcessRunner = ProcessRunner(),
-        workerApplicationURL _: URL? = nil,
-        workerExecutableURL _: URL? = nil
+        transport: BackgroundAgentXPCClient = BackgroundAgentXPCClient()
     ) {
         agent = BackgroundAgentClient(transport: transport)
     }
 
-    public var isAvailable: Bool { true }
-
     public func status() async throws -> AppleMusicRuntimeAgentStatusReport {
-        try await response(for: .appleMusicStatus).statusReport.required("Downloader Runtime Agent 响应中没有状态信息。")
+        try await response(for: .appleMusicStatus).statusReport.required("后台 Agent 响应中没有状态信息。")
     }
 
     public func install() async throws -> AppleMusicRuntimeAgentStatusReport {
-        try await response(for: .appleMusicInstall).statusReport.required("Downloader Runtime Agent 响应中没有状态信息。")
+        try await response(for: .appleMusicInstall).statusReport.required("后台 Agent 响应中没有状态信息。")
     }
 
     public func uninstall() async throws -> AppleMusicRuntimeAgentStatusReport {
-        try await response(for: .appleMusicUninstall).statusReport.required("Downloader Runtime Agent 响应中没有状态信息。")
+        try await response(for: .appleMusicUninstall).statusReport.required("后台 Agent 响应中没有状态信息。")
     }
 
     public func download(_ jobs: [JobRequest]) async throws -> ConversionSummary {
-        try await response(for: .appleMusicDownload, jobs: jobs).summary.required("Downloader Runtime Agent 响应中没有执行摘要。")
+        try await response(for: .appleMusicDownload, jobs: jobs).summary.required("后台 Agent 响应中没有执行摘要。")
     }
 
     public func initializeWrapper(
@@ -417,18 +396,18 @@ public final class AppleMusicRuntimeAgentClient: AppleMusicRuntimeServing {
                 verificationCode: verificationCode,
                 useSystemProxy: useSystemProxy
             )
-        ).summary.required("Downloader Runtime Agent 响应中没有执行摘要。")
+        ).summary.required("后台 Agent 响应中没有执行摘要。")
     }
 
     public func submitVerificationCode(_ code: String) async throws -> ConversionSummary {
         try await response(
             for: .appleMusicSubmitCode,
             verificationRequest: .init(code: code)
-        ).summary.required("Downloader Runtime Agent 响应中没有执行摘要。")
+        ).summary.required("后台 Agent 响应中没有执行摘要。")
     }
 
     public func wrapperLoginStatus() async throws -> AppleMusicWrapperLoginStatus {
-        try await response(for: .appleMusicWrapperStatus).wrapperLoginStatus.required("Downloader Runtime Agent 响应中没有登录状态。")
+        try await response(for: .appleMusicWrapperStatus).wrapperLoginStatus.required("后台 Agent 响应中没有登录状态。")
     }
 
     public func progress() async throws -> AppleMusicRuntimeProgress? {

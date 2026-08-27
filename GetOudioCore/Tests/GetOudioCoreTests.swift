@@ -1110,7 +1110,6 @@ final class GetOudioCoreTests: XCTestCase {
         XCTAssertTrue(container.defaults === defaults)
         XCTAssertTrue(FileManager.default.fileExists(atPath: rootURL.path))
         XCTAssertEqual(container.url(for: .jobQueue), rootURL.appendingPathComponent("queued-jobs.json"))
-        XCTAssertEqual(container.url(for: .shareEvents), rootURL.appendingPathComponent("share-events.json"))
         XCTAssertEqual(
             container.url(for: .pendingAppleMusicDownloads),
             rootURL.appendingPathComponent("pending-apple-music-downloads.json")
@@ -1397,24 +1396,6 @@ final class GetOudioCoreTests: XCTestCase {
         XCTAssertTrue(AppleMusicShareURLParser.supportedURLs(from: urls).isEmpty)
     }
 
-    func testShareEventQueuePersistsUnsupportedDownloadSourceEvents() throws {
-        let fileURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString)
-            .appendingPathExtension("json")
-        defer { try? FileManager.default.removeItem(at: fileURL) }
-
-        let queue = try ShareEventQueue(fileURL: fileURL)
-        let url = URL(string: "https://example.com/not-supported")!
-        try queue.enqueue([ShareEvent(kind: .unsupportedDownloadSource, urls: [url])])
-
-        let events = try queue.drain()
-
-        XCTAssertEqual(events.count, 1)
-        XCTAssertEqual(events.first?.kind, .unsupportedDownloadSource)
-        XCTAssertEqual(events.first?.urls, [url])
-        XCTAssertTrue(try queue.read().isEmpty)
-    }
-
     func testPendingAppleMusicDownloadStoreDrainsSavedJobs() throws {
         let fileURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
@@ -1434,25 +1415,6 @@ final class GetOudioCoreTests: XCTestCase {
 
         XCTAssertEqual(batch?.jobs, [job])
         XCTAssertNil(try store.read())
-    }
-
-    func testAppleMusicDownloaderProgressParserExtractsLatestProgressLine() {
-        let text = """
-        Song: Example
-        \rDownloading... 38% (12.0/31.5 MB, 1.2 MB/s)
-        """
-
-        let message = AppleMusicDownloaderProgressParser.progressMessage(from: text)
-
-        XCTAssertEqual(message, "Downloading... 38% (12.0/31.5 MB, 1.2 MB/s)")
-    }
-
-    func testAppleMusicDownloaderProgressTrackerReturnsOnlyChangedMessages() {
-        let tracker = AppleMusicDownloaderProgressTracker()
-
-        XCTAssertEqual(tracker.observe("Song: Example\n"), "Song: Example")
-        XCTAssertNil(tracker.observe("Song: Example\n"))
-        XCTAssertEqual(tracker.observe("\rDownloading... 40%"), "Downloading... 40%")
     }
 
     func testAppleMusicDownloaderEventTrackerBuffersJSONLAndKeepsLatestState() {
@@ -2529,20 +2491,6 @@ final class GetOudioCoreTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: output.path))
         XCTAssertFalse(store.isAppleMusicDownloadEnabled)
     }
-
-    func testAppleMusicRuntimeAgentClientUsesRuntimeServiceRatherThanWorkerBundleDiscovery() throws {
-        let rootURL = try makeTemporaryDirectory()
-        defer { try? FileManager.default.removeItem(at: rootURL) }
-        let store = try AgentDataStore.diagnostic(rootURL: rootURL, defaults: .standard)
-        XCTAssertTrue(AppleMusicRuntimeAgentClient(container: store).isAvailable)
-        XCTAssertEqual(
-            AppleMusicRuntimeWorkerXPC.machServiceName,
-            "com.shengjiacheng.GetOudio.runtime-worker"
-        )
-    }
-
-
-
 
     private func makeTemporaryDirectory() throws -> URL {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)

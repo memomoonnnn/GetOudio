@@ -13,6 +13,9 @@ options:
     fi
 settings:
   base:
+    GET_OUDIO_ARCH: arm64
+    ARCHS: $(GET_OUDIO_ARCH)
+    ONLY_ACTIVE_ARCH: NO
     CLANG_ANALYZER_NONNULL: YES
     CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED: YES
     SWIFT_VERSION: 5.0
@@ -199,6 +202,10 @@ targets:
           mkdir -p "$HELPERS_DIR"
           ditto "$BOOTSTRAP_APP" "$BOOTSTRAP_DEST"
           ditto "$WORKER_APP" "$WORKER_DEST"
+      - name: Prepare Bundle Architecture
+        basedOnDependencyAnalysis: false
+        script: |
+          bash "$SRCROOT/script/prepare_bundle_architecture.sh" "$TARGET_BUILD_DIR/$WRAPPER_NAME" "$ARCHS"
 
   GetOudioBootstrapInstaller:
     type: application

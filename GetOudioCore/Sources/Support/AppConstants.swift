@@ -7,28 +7,12 @@ public enum AppConstants {
     public static let telemetrySubsystem = "com.shengjiacheng.GetOudio"
     public static let recordingWidgetKind = "GetOudioRecordingWidget"
     public static let recordingControlNotification = "com.shengjiacheng.GetOudio.recording-control"
-
-    /// Shared UserDefaults key: set by extensions before launching the main app.
-    /// Indicates the main app was launched by an extension (Finder Sync / Share).
-    public static let extensionLaunchSourceKey = "ExtensionLaunchSource"
-    /// Shared UserDefaults key: timestamp of the extension launch request.
-    public static let extensionLaunchTimestampKey = "ExtensionLaunchTimestamp"
 }
 
-/// How the main app was launched.
+/// The Open With entry that submitted a batch to the Agent.
 public enum LaunchSource: String, Sendable {
-    /// User launched the app directly (e.g., double-clicked in Finder / Dock).
-    case direct
     /// System opened audio files with Get Oudio ("Open With").
     case openWithAudio
     /// System opened .ncm files with Get Oudio ("Open With").
     case openWithNCM
-    /// Launched from Finder Sync extension.
-    case finderSync
-    /// Launched from Share extension (Apple Music, reserved).
-    case shareExtension
-    /// Launched only to dispatch pending notification events.
-    case notificationDispatch
-    /// Launched as the long-lived, windowless Audio Bridge recording runner.
-    case recording
 }

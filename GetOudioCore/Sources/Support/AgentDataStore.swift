@@ -6,7 +6,6 @@ import Foundation
 public struct AgentDataStore {
     public enum Resource {
         case jobQueue
-        case shareEvents
         case pendingAppleMusicDownloads
         case notificationEvents
         case conversionLog
@@ -25,7 +24,7 @@ public struct AgentDataStore {
     }
 
     /// 偏好仅由同 bundle identifier 的主 App/普通后台 Agent 使用。
-    /// Runtime Worker receives resolved execution settings over its socket.
+    /// Runtime Worker receives resolved execution settings over Mach XPC.
     public static var productionDefaults: UserDefaults {
         .standard
     }
@@ -95,8 +94,6 @@ public struct AgentDataStore {
         switch resource {
         case .jobQueue:
             return directoryURL.appendingPathComponent("queued-jobs.json")
-        case .shareEvents:
-            return directoryURL.appendingPathComponent("share-events.json")
         case .pendingAppleMusicDownloads:
             return directoryURL.appendingPathComponent("pending-apple-music-downloads.json")
         case .notificationEvents:

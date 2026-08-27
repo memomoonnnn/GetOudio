@@ -29,7 +29,7 @@ final class AppleMusicSettingsModel: ObservableObject {
 
     init(container: AgentDataStore, store: SettingsStore) {
         self.store = store
-        appleMusicAgentClient = AppleMusicRuntimeAgentClient(container: container)
+        appleMusicAgentClient = AppleMusicRuntimeAgentClient()
         appleMusicDownloadService = AppleMusicDownloadService(container: container)
         appleMusicOutputURL = store.appleMusicOutputURL
         appleMusicDownloadFormat = store.appleMusicDownloadFormat
@@ -110,7 +110,7 @@ final class AppleMusicSettingsModel: ObservableObject {
             hasLoadedAppleMusicRuntimeStatus = true
         } catch {
             isAppleMusicDownloadEnabled = store.isAppleMusicDownloadEnabled
-            appleMusicRuntimeMessage = "Downloader Runtime Agent 不可用：\(error.localizedDescription)"
+            appleMusicRuntimeMessage = "后台 Agent 不可用：\(error.localizedDescription)"
         }
     }
 
@@ -121,8 +121,8 @@ final class AppleMusicSettingsModel: ObservableObject {
         }
         isManagingAppleMusicRuntime = true
         appleMusicRuntimeMessage = isAppleMusicDownloadEnabled
-            ? "正在通过 Downloader Runtime Agent 检查并更新 Runtime..."
-            : "正在通过 Downloader Runtime Agent 安装 Runtime..."
+            ? "正在通过后台 Agent 检查并更新 Runtime..."
+            : "正在通过后台 Agent 安装 Runtime..."
         do {
             let report = try await appleMusicAgentClient.install()
             appleMusicRuntimeStatuses = report.statuses

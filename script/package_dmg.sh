@@ -29,6 +29,7 @@ build_app() {
     -scheme "$SCHEME" \
     -configuration "$CONFIGURATION" \
     -derivedDataPath "$DERIVED_DATA" \
+    "GET_OUDIO_ARCH=${GET_OUDIO_ARCH:-arm64}" \
     CODE_SIGNING_ALLOWED=NO \
     CODE_SIGNING_REQUIRED=NO \
     clean \
@@ -71,7 +72,6 @@ sign_distribution_bundle() {
   prepare_app_entitlements
   rm -f "$APP_BUNDLE/Contents/embedded.provisionprofile"
 
-  sign_if_present "$APP_BUNDLE/Contents/Resources/ffmpeg/libmp3lame.0.dylib"
   sign_if_present "$APP_BUNDLE/Contents/Resources/ffmpeg/ffmpeg"
   sign_if_present "$APP_BUNDLE/Contents/Resources/ncmdump/bin/libtag.2.dylib"
   sign_if_present "$APP_BUNDLE/Contents/Resources/ncmdump/bin/ncmdump"
