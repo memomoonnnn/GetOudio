@@ -9,6 +9,7 @@ public enum AppleMusicRuntimeWorkerXPC {
 }
 
 public enum AppleMusicRuntimeWorkerCommand: String, Codable, Sendable {
+    case healthCheck
     case status
     case wrapperStatus = "wrapper-status"
     case install
@@ -20,6 +21,17 @@ public enum AppleMusicRuntimeWorkerCommand: String, Codable, Sendable {
     case cancel
     case progress
     case snapshot
+
+    public var requiresRequestDeduplication: Bool {
+        switch self {
+        case .healthCheck, .status, .wrapperStatus, .progress, .snapshot:
+            return false
+        case .install, .uninstall, .download, .initialize, .submitCode,
+             .stopRuntime, .cancel:
+            return true
+        }
+    }
+
 }
 
 public struct AppleMusicRuntimeExecutionSettings: Codable, Equatable, Sendable {
@@ -70,15 +82,18 @@ public struct AppleMusicRuntimeWorkerRequest: Codable, Sendable {
 public struct AppleMusicRuntimeWorkerResponse: Codable, Sendable {
     public var id: UUID
     public var response: AppleMusicRuntimeAgentResponseEnvelope?
+    public var serviceIdentity: BackgroundServiceIdentity?
     public var errorMessage: String?
 
     public init(
         id: UUID,
         response: AppleMusicRuntimeAgentResponseEnvelope? = nil,
+        serviceIdentity: BackgroundServiceIdentity? = nil,
         errorMessage: String? = nil
     ) {
         self.id = id
         self.response = response
+        self.serviceIdentity = serviceIdentity
         self.errorMessage = errorMessage
     }
 }
@@ -148,7 +163,10 @@ public final class AppleMusicRuntimeWorkerXPCClient {
         _ request: AppleMusicRuntimeWorkerRequest
     ) async throws -> AppleMusicRuntimeWorkerResponse {
         let requestData = try JSONEncoder().encode(request)
-        let responseData = try await send(requestData)
+        let responseData = try await send(
+            requestData,
+            retryOnUnavailable: !request.command.requiresRequestDeduplication
+        )
         guard let response = try? JSONDecoder().decode(
             AppleMusicRuntimeWorkerResponse.self,
             from: responseData
@@ -161,10 +179,11 @@ public final class AppleMusicRuntimeWorkerXPCClient {
         return response
     }
 
-    private func send(_ data: Data) async throws -> Data {
+    private func send(_ data: Data, retryOnUnavailable: Bool) async throws -> Data {
         do {
             return try await sendOnce(data)
         } catch AppleMusicRuntimeWorkerXPCError.unavailable {
+            guard retryOnUnavailable else { throw AppleMusicRuntimeWorkerXPCError.unavailable }
             try await Task.sleep(nanoseconds: 250_000_000)
             return try await sendOnce(data)
         }

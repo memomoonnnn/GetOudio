@@ -56,8 +56,8 @@ enum BackgroundAgentRegistration {
         }
     }
 
-    static func ensureAvailable() async throws {
-        try await BackgroundAgentClient().checkAvailability()
+    static func servicesStatus() async throws -> BackgroundServicesStatus {
+        try await BackgroundAgentClient().servicesStatus()
     }
 }
 

@@ -13,6 +13,7 @@ final class BackgroundAgent: NSObject, NSXPCListenerDelegate, BackgroundAgentXPC
     private let notificationDispatcher: AgentNotificationDispatcher
     private let appleMusicWorker: AppleMusicRuntimeWorkerClient
     private let taskCoordinator: BackgroundTaskCoordinator
+    private let requestRegistry = XPCRequestRegistry<BackgroundAgentCommandResponse>()
     private let appleMusicState = AgentAppleMusicState()
     private var appleMusicLoginMonitor: Task<Void, Never>?
 
@@ -106,7 +107,20 @@ final class BackgroundAgent: NSObject, NSXPCListenerDelegate, BackgroundAgentXPC
         Task {
             do {
                 let request = try JSONDecoder().decode(BackgroundAgentCommandRequest.self, from: requestData)
-                let response = await handle(request, connection: connection)
+                let response: BackgroundAgentCommandResponse
+                if request.command.requiresRequestDeduplication {
+                    response = await requestRegistry.response(for: request.id) { [weak self] in
+                        guard let self else {
+                            return BackgroundAgentCommandResponse(
+                                id: request.id,
+                                errorMessage: BackgroundAgentXPCError.unavailable.localizedDescription
+                            )
+                        }
+                        return await self.handle(request, connection: nil)
+                    }
+                } else {
+                    response = await handle(request, connection: connection)
+                }
                 reply((try? JSONEncoder().encode(response)) ?? Data())
             } catch {
                 let response = BackgroundAgentCommandResponse(id: UUID(), errorMessage: error.localizedDescription)
@@ -122,7 +136,11 @@ final class BackgroundAgent: NSObject, NSXPCListenerDelegate, BackgroundAgentXPC
         do {
             switch request.command {
             case .healthCheck:
-                return BackgroundAgentCommandResponse(id: request.id)
+                return BackgroundAgentCommandResponse(
+                    id: request.id,
+                    backgroundAgentIdentity: .current(.backgroundAgent),
+                    runtimeWorkerIdentity: try? await appleMusicWorker.serviceIdentity()
+                )
             case .finderConfiguration:
                 let settings = SettingsStore(container: store)
                 return BackgroundAgentCommandResponse(
@@ -168,16 +186,22 @@ final class BackgroundAgent: NSObject, NSXPCListenerDelegate, BackgroundAgentXPC
             case .appleMusicInstall:
                 return appleMusicResponse(
                     request.id,
-                    statusReport: try await performMonitored { try await self.appleMusicWorker.install() }
+                    statusReport: try await performMonitored {
+                        try await self.appleMusicWorker.install(requestID: request.id)
+                    }
                 )
             case .appleMusicUninstall:
                 return appleMusicResponse(
                     request.id,
-                    statusReport: try await performMonitored { try await self.appleMusicWorker.uninstall() }
+                    statusReport: try await performMonitored {
+                        try await self.appleMusicWorker.uninstall(requestID: request.id)
+                    }
                 )
             case .appleMusicDownload:
                 let jobs = request.jobs ?? []
-                let summary = try await performMonitored { try await self.appleMusicWorker.download(jobs) }
+                let summary = try await performMonitored {
+                    try await self.appleMusicWorker.download(jobs, requestID: request.id)
+                }
                 if jobs.contains(where: { $0.source == .shareExtension }) {
                     try NotificationEventQueue(container: store).enqueueConversionFinished(
                         summary: summary,
@@ -195,7 +219,8 @@ final class BackgroundAgent: NSObject, NSXPCListenerDelegate, BackgroundAgentXPC
                         username: value.username,
                         password: value.password,
                         verificationCode: value.verificationCode,
-                        useSystemProxy: value.useSystemProxy
+                        useSystemProxy: value.useSystemProxy,
+                        requestID: request.id
                     )
                 }
                 if summary.failureCount == 0 {
@@ -211,7 +236,10 @@ final class BackgroundAgent: NSObject, NSXPCListenerDelegate, BackgroundAgentXPC
                 }
                 return appleMusicResponse(
                     request.id,
-                    summary: try await appleMusicWorker.submitVerificationCode(value.code)
+                    summary: try await appleMusicWorker.submitVerificationCode(
+                        value.code,
+                        requestID: request.id
+                    )
                 )
             case .appleMusicWrapperStatus:
                 return appleMusicResponse(
@@ -233,7 +261,7 @@ final class BackgroundAgent: NSObject, NSXPCListenerDelegate, BackgroundAgentXPC
                     appleMusicProgress: progress
                 )
             case .appleMusicCancel:
-                try await appleMusicWorker.requestDownloadCancellation()
+                try await appleMusicWorker.requestDownloadCancellation(requestID: request.id)
                 return BackgroundAgentCommandResponse(id: request.id)
             case .subscribeAppleMusicEvents:
                 guard let connection else {

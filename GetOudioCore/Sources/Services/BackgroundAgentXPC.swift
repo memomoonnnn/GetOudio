@@ -4,6 +4,52 @@ public enum BackgroundAgentXPC {
     public static let machServiceName = "com.shengjiacheng.GetOudio.agent"
 }
 
+public actor XPCRequestRegistry<Response: Sendable> {
+    private enum Entry {
+        case inFlight(Task<Response, Never>)
+        case completed(Response)
+    }
+
+    private let maximumCompletedResponseCount: Int
+    private var entries: [UUID: Entry] = [:]
+    private var completedRequestIDs: [UUID] = []
+
+    public init(maximumCompletedResponseCount: Int = 128) {
+        self.maximumCompletedResponseCount = max(1, maximumCompletedResponseCount)
+    }
+
+    public func response(
+        for requestID: UUID,
+        operation: @escaping @Sendable () async -> Response
+    ) async -> Response {
+        if let entry = entries[requestID] {
+            switch entry {
+            case .inFlight(let task):
+                return await task.value
+            case .completed(let response):
+                return response
+            }
+        }
+
+        let task = Task { await operation() }
+        entries[requestID] = .inFlight(task)
+        let response = await task.value
+        entries[requestID] = .completed(response)
+        completedRequestIDs.append(requestID)
+        trimCompletedResponses()
+        return response
+    }
+
+    private func trimCompletedResponses() {
+        while completedRequestIDs.count > maximumCompletedResponseCount {
+            let requestID = completedRequestIDs.removeFirst()
+            if case .completed = entries[requestID] {
+                entries.removeValue(forKey: requestID)
+            }
+        }
+    }
+}
+
 @objc public protocol BackgroundAgentXPCProtocol {
     func handle(_ requestData: Data, withReply reply: @escaping (Data) -> Void)
 }
@@ -56,10 +102,11 @@ public final class BackgroundAgentXPCClient {
 
     public func send<Request: Encodable, Response: Decodable>(
         _ request: Request,
-        response: Response.Type
+        response: Response.Type,
+        retryOnUnavailable: Bool = true
     ) async throws -> Response {
         let data = try JSONEncoder().encode(request)
-        let reply = try await send(data)
+        let reply = try await send(data, retryOnUnavailable: retryOnUnavailable)
         do {
             return try JSONDecoder().decode(Response.self, from: reply)
         } catch {
@@ -67,10 +114,11 @@ public final class BackgroundAgentXPCClient {
         }
     }
 
-    public func send(_ data: Data) async throws -> Data {
+    public func send(_ data: Data, retryOnUnavailable: Bool = true) async throws -> Data {
         do {
             return try await sendOnce(data)
         } catch BackgroundAgentXPCError.unavailable {
+            guard retryOnUnavailable else { throw BackgroundAgentXPCError.unavailable }
             // launchd may still be creating the service after registration.
             try await Task.sleep(nanoseconds: 250_000_000)
             return try await sendOnce(data)

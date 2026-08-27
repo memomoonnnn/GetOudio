@@ -51,7 +51,7 @@ struct DashboardView: View {
                         Label("文件/文件夹访问权限", systemImage: "folder.badge.gearshape")
                             .font(.headline)
 
-                        Text("于此授权「Get Oudio」可以访问的文件夹。它们决定了访达菜单拓展和转换功能可以生效的范围。另外受Mac的稳定性影响，加入外部磁盘通常是不生效的。"
+                        Text("于此授权「Get Oudio」可以访问的文件夹。它们决定了访达菜单拓展和转换功能可以生效的范围。另外受Mac的稳定性影响，加入外部磁盘通常是不生效的。")
                             .font(.callout)
                             .foregroundStyle(.secondary)
 

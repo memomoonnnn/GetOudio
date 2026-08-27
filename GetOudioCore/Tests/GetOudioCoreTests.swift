@@ -1909,6 +1909,71 @@ final class GetOudioCoreTests: XCTestCase {
         XCTAssertEqual(decoded.jobs, [job])
     }
 
+    func testBackgroundServiceStatusRequiresCurrentAgentAndWorkerIdentities() {
+        let agent = BackgroundServiceIdentity.current(.backgroundAgent)
+        let worker = BackgroundServiceIdentity.current(.runtimeWorker)
+
+        XCTAssertTrue(BackgroundServicesStatus(
+            backgroundAgent: agent,
+            runtimeWorker: worker
+        ).isCurrent)
+        XCTAssertFalse(BackgroundServicesStatus(
+            backgroundAgent: agent,
+            runtimeWorker: nil
+        ).isCurrent)
+
+        var outdatedWorker = worker
+        outdatedWorker.buildVersion += "-old"
+        XCTAssertFalse(BackgroundServicesStatus(
+            backgroundAgent: agent,
+            runtimeWorker: outdatedWorker
+        ).isCurrent)
+    }
+
+    func testBackgroundAgentSideEffectCommandsRequireRequestDeduplication() {
+        XCTAssertTrue(BackgroundAgentCommand.enqueueJobs.requiresRequestDeduplication)
+        XCTAssertTrue(BackgroundAgentCommand.appleMusicDownload.requiresRequestDeduplication)
+        XCTAssertFalse(BackgroundAgentCommand.healthCheck.requiresRequestDeduplication)
+        XCTAssertFalse(BackgroundAgentCommand.subscribeAppleMusicEvents.requiresRequestDeduplication)
+        XCTAssertTrue(AppleMusicRuntimeWorkerCommand.install.requiresRequestDeduplication)
+        XCTAssertFalse(AppleMusicRuntimeWorkerCommand.healthCheck.requiresRequestDeduplication)
+    }
+
+    func testXPCRequestRegistryCoalescesConcurrentAndCompletedRequests() async {
+        let registry = XPCRequestRegistry<String>()
+        let counter = TestInvocationCounter()
+        let requestID = UUID()
+        let operation: @Sendable () async -> String = {
+            await counter.increment()
+            try? await Task.sleep(nanoseconds: 20_000_000)
+            return "accepted"
+        }
+
+        async let first = registry.response(for: requestID, operation: operation)
+        async let second = registry.response(for: requestID, operation: operation)
+        let concurrentResponses = await [first, second]
+        let cachedResponse = await registry.response(for: requestID, operation: operation)
+
+        XCTAssertEqual(concurrentResponses, ["accepted", "accepted"])
+        XCTAssertEqual(cachedResponse, "accepted")
+        let invocationCount = await counter.value
+        XCTAssertEqual(invocationCount, 1)
+    }
+
+    func testRuntimeWorkerResponsePreservesServiceIdentity() throws {
+        let identity = BackgroundServiceIdentity.current(.runtimeWorker)
+        let response = AppleMusicRuntimeWorkerResponse(
+            id: UUID(),
+            serviceIdentity: identity
+        )
+        let decoded = try JSONDecoder().decode(
+            AppleMusicRuntimeWorkerResponse.self,
+            from: JSONEncoder().encode(response)
+        )
+
+        XCTAssertEqual(decoded.serviceIdentity, identity)
+    }
+
     func testAppleMusicRuntimePrefersOfficialGPACModulesDirectory() throws {
         let suiteName = "GetOudioCoreTests-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
@@ -2320,6 +2385,14 @@ private actor TestLoginStatusSequence {
 
     func publishedPhases() -> [AppleMusicWrapperLoginPhase] {
         published.map(\.phase)
+    }
+}
+
+private actor TestInvocationCounter {
+    private(set) var value = 0
+
+    func increment() {
+        value += 1
     }
 }
 

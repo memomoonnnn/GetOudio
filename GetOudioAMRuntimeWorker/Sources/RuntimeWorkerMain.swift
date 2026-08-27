@@ -55,6 +55,8 @@ enum GetOudioAMRuntimeWorker {
                 progressHandler: { state.publish(progress: $0) }
             )
             switch request.command {
+            case .healthCheck:
+                return AppleMusicRuntimeAgentResponseEnvelope(id: request.id)
             case .status:
                 return AppleMusicRuntimeAgentResponseEnvelope(
                     id: request.id,
@@ -288,6 +290,7 @@ private final class RuntimeWorkerXPCServer: NSObject, NSXPCListenerDelegate, App
     private let lock = NSLock()
     private var activeTaskID: UUID?
     private var idleTimer: DispatchSourceTimer?
+    private let requestRegistry = XPCRequestRegistry<AppleMusicRuntimeWorkerResponse>()
 
     init(
         state: RuntimeWorkerState,
@@ -327,47 +330,63 @@ private final class RuntimeWorkerXPCServer: NSObject, NSXPCListenerDelegate, App
                 from: requestData
             )
             switch request.command {
-            case .status, .wrapperStatus, .progress, .snapshot:
+            case .healthCheck, .status, .wrapperStatus, .progress, .snapshot:
                 cancelIdleExit()
                 Task { [weak self] in
                     guard let self else { return }
                     let response = await operationHandler(request)
-                    reply(encode(.init(id: request.id, response: response)))
+                    reply(encode(workerResponse(id: request.id, response: response)))
                     armIdleExit()
                 }
             case .cancel:
                 state.requestCancellation()
-                reply(encode(.init(id: request.id, response: .init(id: request.id))))
+                reply(encode(workerResponse(
+                    id: request.id,
+                    response: .init(id: request.id)
+                )))
             case .install, .uninstall, .download, .initialize, .submitCode, .stopRuntime:
-                try submit(request, reply: reply)
+                submit(request, reply: reply)
             }
         } catch {
-            reply(encode(.init(id: decodedRequestID(from: requestData), errorMessage: error.localizedDescription)))
+            reply(encode(workerResponse(
+                id: decodedRequestID(from: requestData),
+                errorMessage: error.localizedDescription
+            )))
         }
     }
 
     private func submit(
         _ request: AppleMusicRuntimeWorkerRequest,
         reply: @escaping (Data) -> Void
-    ) throws {
-        lock.lock()
-        guard activeTaskID == nil else {
-            lock.unlock()
-            throw ProcessRunnerError.processFailed("Apple Music Runtime Worker 正在执行其他任务。")
-        }
-        activeTaskID = request.id
-        lock.unlock()
+    ) {
         cancelIdleExit()
-        state.clearCancellation()
-
         Task.detached { [weak self] in
             guard let self else { return }
-            let response = await self.operationHandler(request)
-            reply(self.encode(.init(id: request.id, response: response)))
-            self.state.clearCancellation()
-            self.releaseActiveTask()
+            let response = await self.requestRegistry.response(for: request.id) {
+                await self.perform(request)
+            }
+            reply(self.encode(response))
             self.armIdleExit()
         }
+    }
+
+    private func perform(_ request: AppleMusicRuntimeWorkerRequest) async -> AppleMusicRuntimeWorkerResponse {
+        let accepted = lock.withLock { () -> Bool in
+            guard activeTaskID == nil else { return false }
+            activeTaskID = request.id
+            return true
+        }
+        guard accepted else {
+            return workerResponse(
+                id: request.id,
+                errorMessage: "Apple Music Runtime Worker 正在执行其他任务。"
+            )
+        }
+        state.clearCancellation()
+        let response = await operationHandler(request)
+        state.clearCancellation()
+        releaseActiveTask()
+        return workerResponse(id: request.id, response: response)
     }
 
     private func releaseActiveTask() {
@@ -407,6 +426,19 @@ private final class RuntimeWorkerXPCServer: NSObject, NSXPCListenerDelegate, App
 
     private func encode(_ response: AppleMusicRuntimeWorkerResponse) -> Data {
         (try? JSONEncoder().encode(response)) ?? Data()
+    }
+
+    private func workerResponse(
+        id: UUID,
+        response: AppleMusicRuntimeAgentResponseEnvelope? = nil,
+        errorMessage: String? = nil
+    ) -> AppleMusicRuntimeWorkerResponse {
+        AppleMusicRuntimeWorkerResponse(
+            id: id,
+            response: response,
+            serviceIdentity: .current(.runtimeWorker),
+            errorMessage: errorMessage
+        )
     }
 
     private func decodedRequestID(from data: Data) -> UUID {

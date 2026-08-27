@@ -184,23 +184,49 @@ public final class AppleMusicRuntimeWorkerClient: AppleMusicRuntimeServing {
         return report
     }
 
+    public func serviceIdentity() async throws -> BackgroundServiceIdentity {
+        let request = AppleMusicRuntimeWorkerRequest(
+            id: UUID(),
+            command: .healthCheck,
+            resourceRootPath: resourceRoot?.path
+        )
+        let response = try await transport.send(request)
+        guard let identity = response.serviceIdentity else {
+            throw AppleMusicRuntimeWorkerXPCError.invalidFrame
+        }
+        return identity
+    }
+
     public func install() async throws -> AppleMusicRuntimeAgentStatusReport {
-        let response = try await send(command: .install)
+        try await install(requestID: UUID())
+    }
+
+    public func install(requestID: UUID) async throws -> AppleMusicRuntimeAgentStatusReport {
+        let response = try await send(command: .install, requestID: requestID)
         let report = try responseStatus(response)
         SettingsStore(container: container).isAppleMusicDownloadEnabled = report.isEnabled
         return report
     }
 
     public func uninstall() async throws -> AppleMusicRuntimeAgentStatusReport {
-        let response = try await send(command: .uninstall)
+        try await uninstall(requestID: UUID())
+    }
+
+    public func uninstall(requestID: UUID) async throws -> AppleMusicRuntimeAgentStatusReport {
+        let response = try await send(command: .uninstall, requestID: requestID)
         let report = try responseStatus(response)
         SettingsStore(container: container).isAppleMusicDownloadEnabled = report.isEnabled
         return report
     }
 
     public func download(_ jobs: [JobRequest]) async throws -> ConversionSummary {
+        try await download(jobs, requestID: UUID())
+    }
+
+    public func download(_ jobs: [JobRequest], requestID: UUID) async throws -> ConversionSummary {
         let response = try await send(
             command: .download,
+            requestID: requestID,
             downloadRequest: AppleMusicRuntimeAgentDownloadRequest(jobs: jobs)
         )
         return try responseSummary(response)
@@ -212,8 +238,25 @@ public final class AppleMusicRuntimeWorkerClient: AppleMusicRuntimeServing {
         verificationCode: String?,
         useSystemProxy: Bool
     ) async throws -> ConversionSummary {
+        try await initializeWrapper(
+            username: username,
+            password: password,
+            verificationCode: verificationCode,
+            useSystemProxy: useSystemProxy,
+            requestID: UUID()
+        )
+    }
+
+    public func initializeWrapper(
+        username: String,
+        password: String,
+        verificationCode: String?,
+        useSystemProxy: Bool,
+        requestID: UUID
+    ) async throws -> ConversionSummary {
         let response = try await send(
             command: .initialize,
+            requestID: requestID,
             initializeRequest: AppleMusicRuntimeAgentInitializeRequest(
                 username: username,
                 password: password,
@@ -225,8 +268,13 @@ public final class AppleMusicRuntimeWorkerClient: AppleMusicRuntimeServing {
     }
 
     public func submitVerificationCode(_ code: String) async throws -> ConversionSummary {
+        try await submitVerificationCode(code, requestID: UUID())
+    }
+
+    public func submitVerificationCode(_ code: String, requestID: UUID) async throws -> ConversionSummary {
         let response = try await send(
             command: .submitCode,
+            requestID: requestID,
             verificationRequest: AppleMusicRuntimeAgentVerificationRequest(code: code)
         )
         return try responseSummary(response)
@@ -249,8 +297,12 @@ public final class AppleMusicRuntimeWorkerClient: AppleMusicRuntimeServing {
     }
 
     public func requestDownloadCancellation() async throws {
+        try await requestDownloadCancellation(requestID: UUID())
+    }
+
+    public func requestDownloadCancellation(requestID: UUID) async throws {
         let request = AppleMusicRuntimeWorkerRequest(
-            id: UUID(),
+            id: requestID,
             command: .cancel,
             resourceRootPath: resourceRoot?.path
         )
@@ -259,12 +311,13 @@ public final class AppleMusicRuntimeWorkerClient: AppleMusicRuntimeServing {
 
     private func send(
         command: AppleMusicRuntimeWorkerCommand,
+        requestID: UUID = UUID(),
         downloadRequest: AppleMusicRuntimeAgentDownloadRequest? = nil,
         initializeRequest: AppleMusicRuntimeAgentInitializeRequest? = nil,
         verificationRequest: AppleMusicRuntimeAgentVerificationRequest? = nil
     ) async throws -> AppleMusicRuntimeAgentResponseEnvelope {
         let request = AppleMusicRuntimeWorkerRequest(
-            id: UUID(),
+            id: requestID,
             command: command,
             resourceRootPath: resourceRoot?.path,
             gpacPackageURLOverride: ProcessInfo.processInfo.environment[AppleMusicRuntimeManager.gpacPackageEnvironmentKey],

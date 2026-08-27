@@ -19,6 +19,76 @@ public enum BackgroundAgentCommand: String, Codable, Equatable, Sendable {
     case appleMusicProgress
     case appleMusicCancel
     case subscribeAppleMusicEvents
+
+    public var requiresRequestDeduplication: Bool {
+        switch self {
+        case .healthCheck, .finderConfiguration, .recordingSnapshot,
+             .appleMusicStatus, .appleMusicWrapperStatus, .appleMusicSnapshot,
+             .appleMusicProgress, .subscribeAppleMusicEvents:
+            return false
+        case .enqueueJobs, .unsupportedShareURLs, .dispatchNotificationEvents,
+             .handlePendingAppleMusicDownload, .appleMusicInstall,
+             .appleMusicUninstall, .appleMusicDownload, .appleMusicInitialize,
+             .appleMusicSubmitCode, .appleMusicCancel:
+            return true
+        }
+    }
+}
+
+public struct BackgroundServiceIdentity: Codable, Equatable, Sendable {
+    public enum Service: String, Codable, Sendable {
+        case backgroundAgent
+        case runtimeWorker
+    }
+
+    public static let backgroundAgentProtocolVersion = 1
+    public static let runtimeWorkerProtocolVersion = 1
+
+    public var service: Service
+    public var protocolVersion: Int
+    public var marketingVersion: String
+    public var buildVersion: String
+
+    public init(
+        service: Service,
+        protocolVersion: Int,
+        marketingVersion: String,
+        buildVersion: String
+    ) {
+        self.service = service
+        self.protocolVersion = protocolVersion
+        self.marketingVersion = marketingVersion
+        self.buildVersion = buildVersion
+    }
+
+    public static func current(_ service: Service, bundle: Bundle = .main) -> Self {
+        Self(
+            service: service,
+            protocolVersion: service == .backgroundAgent
+                ? backgroundAgentProtocolVersion
+                : runtimeWorkerProtocolVersion,
+            marketingVersion: bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "",
+            buildVersion: bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""
+        )
+    }
+}
+
+public struct BackgroundServicesStatus: Equatable, Sendable {
+    public var backgroundAgent: BackgroundServiceIdentity?
+    public var runtimeWorker: BackgroundServiceIdentity?
+
+    public init(
+        backgroundAgent: BackgroundServiceIdentity?,
+        runtimeWorker: BackgroundServiceIdentity?
+    ) {
+        self.backgroundAgent = backgroundAgent
+        self.runtimeWorker = runtimeWorker
+    }
+
+    public var isCurrent: Bool {
+        backgroundAgent == .current(.backgroundAgent)
+            && runtimeWorker == .current(.runtimeWorker)
+    }
 }
 
 public struct BackgroundAgentCommandRequest: Codable, Sendable {
@@ -88,6 +158,8 @@ public struct BackgroundAgentCommandResponse: Codable, Sendable {
     public var appleMusicProgress: AppleMusicRuntimeProgress?
     public var appleMusicEvent: AppleMusicRuntimeAgentEvent?
     public var settingsAttention: SettingsAttentionItem?
+    public var backgroundAgentIdentity: BackgroundServiceIdentity?
+    public var runtimeWorkerIdentity: BackgroundServiceIdentity?
     public var errorMessage: String?
 
     public init(
@@ -99,6 +171,8 @@ public struct BackgroundAgentCommandResponse: Codable, Sendable {
         appleMusicProgress: AppleMusicRuntimeProgress? = nil,
         appleMusicEvent: AppleMusicRuntimeAgentEvent? = nil,
         settingsAttention: SettingsAttentionItem? = nil,
+        backgroundAgentIdentity: BackgroundServiceIdentity? = nil,
+        runtimeWorkerIdentity: BackgroundServiceIdentity? = nil,
         errorMessage: String? = nil
     ) {
         self.id = id
@@ -109,6 +183,8 @@ public struct BackgroundAgentCommandResponse: Codable, Sendable {
         self.appleMusicProgress = appleMusicProgress
         self.appleMusicEvent = appleMusicEvent
         self.settingsAttention = settingsAttention
+        self.backgroundAgentIdentity = backgroundAgentIdentity
+        self.runtimeWorkerIdentity = runtimeWorkerIdentity
         self.errorMessage = errorMessage
     }
 }
@@ -132,6 +208,14 @@ public final class BackgroundAgentClient {
     /// accepting requests. This is the only availability signal shown to UI.
     public func checkAvailability() async throws {
         _ = try await send(.init(command: .healthCheck)) as BackgroundAgentCommandResponse
+    }
+
+    public func servicesStatus() async throws -> BackgroundServicesStatus {
+        let response: BackgroundAgentCommandResponse = try await send(.init(command: .healthCheck))
+        return BackgroundServicesStatus(
+            backgroundAgent: response.backgroundAgentIdentity,
+            runtimeWorker: response.runtimeWorkerIdentity
+        )
     }
 
     public func enqueue(_ jobs: [JobRequest]) async throws {
@@ -179,7 +263,11 @@ public final class BackgroundAgentClient {
     }
 
     private func send(_ request: BackgroundAgentCommandRequest) async throws -> BackgroundAgentCommandResponse {
-        let response: BackgroundAgentCommandResponse = try await transport.send(request, response: BackgroundAgentCommandResponse.self)
+        let response: BackgroundAgentCommandResponse = try await transport.send(
+            request,
+            response: BackgroundAgentCommandResponse.self,
+            retryOnUnavailable: !request.command.requiresRequestDeduplication
+        )
         if let message = response.errorMessage {
             throw BackgroundAgentXPCError.remote(message)
         }

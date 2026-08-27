@@ -12,6 +12,12 @@ final class BackgroundAgentAuthorizationModel: ObservableObject {
     @Published private(set) var message: String?
     @Published private(set) var isChangingRegistration = false
 
+    private enum Availability: Equatable {
+        case current
+        case outdated
+        case unavailable
+    }
+
     init() {
         refresh()
     }
@@ -20,10 +26,11 @@ final class BackgroundAgentAuthorizationModel: ObservableObject {
         guard !isChangingRegistration else { return }
         Task { [weak self] in
             guard let self else { return }
-            let refreshedState: State = await Self.isAgentAvailable() ? .enabled : .unavailable
+            let availability = await Self.availability()
+            let refreshedState: State = availability == .current ? .enabled : .unavailable
             guard !isChangingRegistration else { return }
             state = refreshedState
-            message = nil
+            message = availability == .outdated ? "后台活动需要更新。" : nil
         }
     }
 
@@ -38,10 +45,26 @@ final class BackgroundAgentAuthorizationModel: ObservableObject {
     func installOnFirstLaunchIfNeeded() {
         let key = "GetOudioV2.bootstrapInstallerRevision"
         let requiredRevision = 1
-        guard UserDefaults.standard.integer(forKey: key) < requiredRevision else { return }
-        changeRegistration(.install, automatic: true) { succeeded in
-            if succeeded {
-                UserDefaults.standard.set(requiredRevision, forKey: key)
+        guard !isChangingRegistration else { return }
+        Task { [weak self] in
+            guard let self else { return }
+            switch await Self.availability() {
+            case .current:
+                state = .enabled
+                message = nil
+            case .outdated:
+                changeRegistration(.install, automatic: true) { succeeded in
+                    if succeeded {
+                        UserDefaults.standard.set(requiredRevision, forKey: key)
+                    }
+                }
+            case .unavailable:
+                guard UserDefaults.standard.integer(forKey: key) < requiredRevision else { return }
+                changeRegistration(.install, automatic: true) { succeeded in
+                    if succeeded {
+                        UserDefaults.standard.set(requiredRevision, forKey: key)
+                    }
+                }
             }
         }
     }
@@ -57,7 +80,7 @@ final class BackgroundAgentAuthorizationModel: ObservableObject {
 
         Task { [weak self] in
             guard let self else { return }
-            if action == .install, await Self.isAgentAvailable() {
+            if action == .install, await Self.availability() == .current {
                 state = .enabled
                 message = automatic ? nil : "后台活动已安装。"
                 isChangingRegistration = false
@@ -78,7 +101,7 @@ final class BackgroundAgentAuthorizationModel: ObservableObject {
                 isChangingRegistration = false
                 completion?(true)
             } catch {
-                state = await Self.isAgentAvailable() ? .enabled : .unavailable
+                state = await Self.availability() == .current ? .enabled : .unavailable
                 message = error.localizedDescription
                 isChangingRegistration = false
                 completion?(false)
@@ -88,8 +111,11 @@ final class BackgroundAgentAuthorizationModel: ObservableObject {
 
     private func waitForState(_ expectedState: State) async -> Bool {
         for _ in 0..<30 {
-            let isAvailable = await Self.isAgentAvailable()
-            if (expectedState == .enabled) == isAvailable {
+            let availability = await Self.availability()
+            if expectedState == .enabled, availability == .current {
+                return true
+            }
+            if expectedState == .unavailable, availability == .unavailable {
                 return true
             }
             try? await Task.sleep(nanoseconds: 200_000_000)
@@ -97,12 +123,12 @@ final class BackgroundAgentAuthorizationModel: ObservableObject {
         return false
     }
 
-    private static func isAgentAvailable() async -> Bool {
+    private static func availability() async -> Availability {
         do {
-            try await BackgroundAgentRegistration.ensureAvailable()
-            return true
+            let status = try await BackgroundAgentRegistration.servicesStatus()
+            return status.isCurrent ? .current : .outdated
         } catch {
-            return false
+            return .unavailable
         }
     }
 }
