@@ -49,6 +49,16 @@ final class GetOudioCoreTests: XCTestCase {
         XCTAssertTrue(firstStore.drainCommands().isEmpty)
     }
 
+
+    func testAgentDataStoreBuildsManagedRootFromSystemHomeDirectory() {
+        let home = URL(fileURLWithPath: "/Users/example", isDirectory: true)
+
+        XCTAssertEqual(
+            AgentDataStore.rootURL(homeDirectory: home).path,
+            "/Users/example/Library/Application Support/GetOudioV2"
+        )
+    }
+
     func testSettingsAttentionRequestStoreConsumesOnlyFreshRequest() {
         let suiteName = "GetOudioCoreTests-\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
@@ -587,6 +597,23 @@ final class GetOudioCoreTests: XCTestCase {
         XCTAssertEqual(try queue.read(), [])
     }
 
+    func testJobQueueDeduplicatesRetriedSubmissionByJobID() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let queue = try JobQueue(fileURL: root.appendingPathComponent("queued-jobs.json"))
+        let job = JobRequest(
+            fileURL: URL(fileURLWithPath: "/tmp/song.wav"),
+            category: .audio,
+            operation: .transcode(.mp3320),
+            source: .finderSync
+        )
+
+        try queue.enqueue([job])
+        try queue.enqueue([job])
+
+        XCTAssertEqual(try queue.read(), [job])
+    }
+
     func testJobQueueClaimsAndAcknowledgesJobs() throws {
         let queueURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
@@ -612,7 +639,7 @@ final class GetOudioCoreTests: XCTestCase {
         XCTAssertNil(try queue.claimPending())
     }
 
-    func testJobQueueRequeuesStaleClaim() throws {
+    func testJobQueueNeverReplaysAnOldClaim() throws {
         let queueURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
             .appendingPathComponent("queued-jobs.json")
@@ -629,36 +656,254 @@ final class GetOudioCoreTests: XCTestCase {
         try queue.enqueue([job])
         XCTAssertEqual(try XCTUnwrap(try queue.claimPending()).jobs, [job])
 
-        let reclaimed = try XCTUnwrap(try queue.claimPending(staleClaimMaxAge: -1))
-        XCTAssertEqual(reclaimed.jobs, [job])
-        try queue.acknowledge(reclaimed)
+        let processingURL = queueURL.deletingLastPathComponent().appendingPathComponent("queued-jobs.processing.json")
+        try FileManager.default.setAttributes([.modificationDate: Date.distantPast], ofItemAtPath: processingURL.path)
+        XCTAssertNil(try queue.claimPending())
+        try queue.discardUnfinished { XCTAssertEqual($0, [job]) }
         XCTAssertNil(try queue.claimPending())
     }
 
-    func testJobIntakeEnqueuesJobsAndMarksLaunchSource() throws {
-        let rootURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString, isDirectory: true)
-        let suiteName = "GetOudioCoreTests-\(UUID().uuidString)"
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-        defaults.removePersistentDomain(forName: suiteName)
-        defer {
-            try? FileManager.default.removeItem(at: rootURL)
-            defaults.removePersistentDomain(forName: suiteName)
+    func testJobQueueDiscardsAllUnfinishedStatesWithoutDeletingInputs() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let queue = try JobQueue(fileURL: root.appendingPathComponent("queued-jobs.json"))
+        let input = root.appendingPathComponent("source.wav")
+        try Data("preserve".utf8).write(to: input)
+        let jobs = (0..<3).map { _ in JobRequest(fileURL: input, operation: .extractAudio, source: .finderSync) }
+        try queue.enqueue([jobs[0]])
+        _ = try XCTUnwrap(queue.claimPending())
+        try queue.enqueue([jobs[1]])
+        let submissionID = UUID()
+        try queue.hold([jobs[2]], submissionID: submissionID)
+        let outbox = try NotificationEventQueue(rootURL: root.appendingPathComponent("notifications"))
+
+        try queue.discardUnfinished { unfinished in
+            XCTAssertEqual(unfinished, jobs)
+            try outbox.enqueue(NotificationEvent(interruptedJobs: unfinished))
         }
+        XCTAssertEqual(try String(contentsOf: input), "preserve")
+        XCTAssertTrue(try queue.read().isEmpty)
+        XCTAssertNil(try queue.claimPending())
+        XCTAssertFalse(try queue.resolve(submissionID, decision: .enqueue))
+        XCTAssertEqual(try outbox.claimPending().map(\.event.kind), [.tasksInterrupted])
+        try queue.discardUnfinished { XCTAssertTrue($0.isEmpty) }
+        try queue.enqueue([jobs[0]])
+        XCTAssertEqual(try queue.claimPending()?.jobs, [jobs[0]])
+    }
 
-        let container = try SharedContainer.diagnostic(rootURL: rootURL, defaults: defaults)
-        let intake = try JobIntake(container: container)
-        let job = JobRequest(
-            fileURL: URL(fileURLWithPath: "/tmp/song.wav"),
-            category: .audio,
-            operation: .transcode(.mp3320),
-            source: .openWith
-        )
+    func testJobQueuePreservesTasksWhenInterruptionCannotBeRecorded() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let queue = try JobQueue(fileURL: root.appendingPathComponent("queued-jobs.json"))
+        let job = JobRequest(fileURL: root.appendingPathComponent("source.wav"), operation: .extractAudio, source: .finderSync)
+        try queue.enqueue([job])
+        XCTAssertThrowsError(try queue.discardUnfinished { _ in throw CocoaError(.fileWriteNoPermission) })
+        XCTAssertEqual(try queue.read(), [job])
+    }
 
-        try intake.enqueue([job], launchSource: .openWithAudio)
+    func testJobQueueStartupStopsOnlyItsRecordedProcessIdentity() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let queueURL = root.appendingPathComponent("queued-jobs.json")
+        let queue = try JobQueue(fileURL: queueURL)
+        let job = JobRequest(fileURL: root.appendingPathComponent("source.wav"), operation: .extractAudio, source: .finderSync)
+        try queue.enqueue([job])
+        _ = try XCTUnwrap(queue.claimPending())
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/sleep")
+        process.arguments = ["30"]
+        try process.run()
+        defer { if process.isRunning { process.terminate() }; process.waitUntilExit() }
+        let identity = try XCTUnwrap(ProcessIdentity.running(process.processIdentifier))
+        var reusedPID = identity
+        reusedPID.startMicroseconds += 1
+        try reusedPID.terminateIfStillRunning()
+        XCTAssertTrue(process.isRunning, "A different start time must never be terminated")
+        try queue.recordProcess(identity)
+        let reopened = try JobQueue(fileURL: queueURL)
+        try reopened.discardUnfinished { XCTAssertEqual($0, [job]) }
+        process.waitUntilExit()
+        XCTAssertNotEqual(process.terminationStatus, 0)
+        XCTAssertNil(ProcessIdentity.running(identity.pid))
+    }
 
-        XCTAssertEqual(try JobQueue(container: container).read(), [job])
-        XCTAssertEqual(LaunchMarkerStore(container: container).activeSource(), .openWithAudio)
+    func testProcessRunnerRecordsQueueOwnedChildren() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let queueURL = root.appendingPathComponent("queued-jobs.json")
+        let queue = try JobQueue(fileURL: queueURL)
+        try queue.enqueue([JobRequest(fileURL: root.appendingPathComponent("source.wav"), operation: .extractAudio, source: .finderSync)])
+        _ = try XCTUnwrap(queue.claimPending())
+        let result = try await ProcessRunner.$processStarted.withValue({ try queue.recordProcess($0) }) {
+            try await ProcessRunner().run(executablePath: "/bin/sleep", arguments: ["0.1"])
+        }
+        XCTAssertTrue(result.succeeded)
+        let data = try Data(contentsOf: root.appendingPathComponent("queued-jobs.processing.json"))
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual((json["processes"] as? [[String: Any]])?.count, 1)
+        try queue.discardUnfinished { XCTAssertEqual($0.count, 1) }
+    }
+
+    func testJobQueueReadsLegacyArrayAndKeepsWaitingSubmissionsOutOfClaims() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let queueURL = root.appendingPathComponent("queued-jobs.json")
+        let queue = try JobQueue(fileURL: queueURL)
+        let first = JobRequest(fileURL: root.appendingPathComponent("first.wav"), operation: .extractAudio, source: .finderSync)
+        let second = JobRequest(fileURL: root.appendingPathComponent("second.wav"), operation: .extractAudio, source: .finderSync)
+        try JSONEncoder().encode([first]).write(to: queueURL)
+        let id = UUID()
+        XCTAssertTrue(try queue.hold([first, second, second], submissionID: id))
+        let claim = try XCTUnwrap(queue.claimPending())
+        XCTAssertEqual(claim.jobs, [first])
+        try queue.acknowledge(claim)
+        XCTAssertNil(try queue.claimPending())
+        let reopened = try JobQueue(fileURL: queueURL)
+        XCTAssertTrue(try reopened.resolve(id, decision: .enqueue))
+        XCTAssertFalse(try reopened.resolve(id, decision: .enqueue))
+        XCTAssertEqual(try reopened.claimPending()?.jobs, [second])
+    }
+
+    func testBusyQueueWaitsForExplicitDecisionEvenAfterBecomingIdle() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let container = try AgentDataStore(directoryURL: root)
+        let queue = try JobQueue(container: container)
+        let center = TestNotificationCenterClient(status: .authorized)
+        let service = NotificationService(container: container, notificationCenter: center)
+        let executor = QueuedJobTestExecutor()
+        let scheduler = JobQueueScheduler(queue: queue, notifications: service, execute: { await executor.execute($0) })
+        let jobs = (0..<3).map { index in
+            JobRequest(fileURL: root.appendingPathComponent("\(index).wav"), operation: .extractAudio, source: .finderSync)
+        }
+        try await scheduler.submit([jobs[0]], submissionID: UUID())
+        await executor.waitForFirstBatch()
+        let secondID = UUID()
+        let thirdID = UUID()
+        try await scheduler.submit([jobs[1]], submissionID: secondID)
+        try await scheduler.submit([jobs[1]], submissionID: secondID)
+        try await scheduler.submit([jobs[2]], submissionID: thirdID)
+        XCTAssertEqual(center.requests.count, 2)
+        XCTAssertTrue(try queue.read().isEmpty)
+        await executor.releaseFirstBatch()
+        await scheduler.waitUntilIdle()
+        let beforeDecision = await executor.batches
+        XCTAssertEqual(beforeDecision, [[jobs[0]]])
+
+        try await scheduler.resolve(thirdID, decision: .withdraw)
+        try await scheduler.resolve(secondID, decision: .enqueue)
+        try await scheduler.resolve(secondID, decision: .enqueue)
+        try await scheduler.resolve(thirdID, decision: .enqueue)
+        await scheduler.waitUntilIdle()
+        let afterDecision = await executor.batches
+        XCTAssertEqual(afterDecision, [[jobs[0]], [jobs[1]]])
+        XCTAssertEqual(Set(center.removedIdentifiers), Set([secondID, thirdID].map(NotificationService.JobSubmissionNotification.identifier)))
+    }
+
+    func testBusyQueueDrainsConfirmedWorkWithoutAnotherWake() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let container = try AgentDataStore(directoryURL: root)
+        let queue = try JobQueue(container: container)
+        let service = NotificationService(container: container, notificationCenter: TestNotificationCenterClient(status: .authorized))
+        let executor = QueuedJobTestExecutor()
+        let scheduler = JobQueueScheduler(queue: queue, notifications: service, execute: { await executor.execute($0) })
+        let jobs = (0..<3).map { index in
+            JobRequest(fileURL: root.appendingPathComponent("\(index).wav"), operation: .extractAudio, source: .finderSync)
+        }
+        try await scheduler.submit([jobs[0]], submissionID: UUID())
+        await executor.waitForFirstBatch()
+        for job in jobs.dropFirst() {
+            let id = UUID()
+            try await scheduler.submit([job], submissionID: id)
+            try await scheduler.resolve(id, decision: .enqueue)
+        }
+        await executor.releaseFirstBatch()
+        await scheduler.waitUntilIdle()
+        let processed = await executor.batches.flatMap { $0 }
+        XCTAssertEqual(processed, jobs)
+        XCTAssertNil(try queue.claimPending())
+    }
+
+    func testBusyQueueRejectsSubmissionWhenDecisionNotificationIsUnavailable() async throws {
+        for mode in 0..<4 {
+            let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: root) }
+            let container = try AgentDataStore(directoryURL: root)
+            let queue = try JobQueue(container: container)
+            let center = TestNotificationCenterClient(status: mode == 0 ? .denied : mode == 1 ? .notDetermined : .authorized)
+            center.alertsEnabled = mode != 2
+            center.failAdd = mode == 3
+            let service = NotificationService(container: container, notificationCenter: center)
+            let executor = QueuedJobTestExecutor()
+            let scheduler = JobQueueScheduler(queue: queue, notifications: service, execute: { await executor.execute($0) })
+            let first = JobRequest(fileURL: root.appendingPathComponent("first.wav"), operation: .extractAudio, source: .finderSync)
+            let second = JobRequest(fileURL: root.appendingPathComponent("second.wav"), operation: .extractAudio, source: .finderSync)
+            try await scheduler.submit([first], submissionID: UUID())
+            await executor.waitForFirstBatch()
+            let id = UUID()
+            do {
+                try await scheduler.submit([second], submissionID: id)
+                XCTFail("Unavailable notification must reject the submission")
+            } catch { }
+            XCTAssertFalse(try queue.resolve(id, decision: .enqueue))
+            await executor.releaseFirstBatch()
+            await scheduler.waitUntilIdle()
+            let processed = await executor.batches
+            XCTAssertEqual(processed, [[first]])
+        }
+    }
+
+    func testJobDecisionNotificationContractAndCleanup() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let container = try AgentDataStore(directoryURL: root)
+        let center = TestNotificationCenterClient(status: .authorized)
+        let service = NotificationService(container: container, notificationCenter: center)
+        service.registerAppleMusicNotificationCategories()
+        let category = try XCTUnwrap(center.categories.first { $0.identifier == NotificationService.JobSubmissionNotification.categoryIdentifier })
+        XCTAssertEqual(category.actions.map(\.title), ["撤回新的任务", "排队处理"])
+        let id = UUID()
+        try await service.notifyJobSubmissionDecision(submissionID: id)
+        let request = try XCTUnwrap(center.requests.last)
+        XCTAssertEqual(request.content.title, "Get Oudio")
+        XCTAssertEqual(request.content.body, "有正在处理的任务...")
+        XCTAssertNil(request.content.sound)
+        let action = service.jobSubmissionDecision(actionIdentifier: category.actions[1].identifier, content: request.content)
+        XCTAssertEqual(action?.submissionID, id)
+        XCTAssertEqual(action?.decision, .enqueue)
+        XCTAssertNil(service.jobSubmissionDecision(actionIdentifier: UNNotificationDefaultActionIdentifier, content: request.content))
+        XCTAssertNil(service.jobSubmissionDecision(actionIdentifier: UNNotificationDismissActionIdentifier, content: request.content))
+        await service.notifyAppleMusicFormatSelection(jobCount: 1, identifier: "old-format")
+        await service.notifyAppleMusicDownloadStarted()
+        await service.removeInterruptedTaskNotifications()
+        XCTAssertEqual(Set(center.removedIdentifiers), [request.identifier, "old-format"])
+    }
+
+    func testInterruptedTaskNotificationUsesOutboxAndExistingSuppression() async throws {
+        for status: UNAuthorizationStatus in [.authorized, .denied] {
+            let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: root) }
+            let container = try AgentDataStore(directoryURL: root)
+            let center = TestNotificationCenterClient(status: status)
+            let service = NotificationService(container: container, notificationCenter: center)
+            let queue = try NotificationEventQueue(container: container)
+            let event = NotificationEvent(interruptedJobs: [])
+            XCTAssertEqual(try JSONDecoder().decode(NotificationEvent.self, from: JSONEncoder().encode(event)), event)
+            try queue.enqueue(event)
+            _ = await service.dispatchPendingNotificationEvents()
+            XCTAssertTrue(try queue.claimPending().isEmpty)
+            if status == .authorized {
+                let request = try XCTUnwrap(center.requests.first)
+                XCTAssertEqual(request.content.title, "Get Oudio")
+                XCTAssertEqual(request.content.body, "任务异常中断，请重试。")
+                XCTAssertNil(request.content.sound)
+                _ = await service.dispatchPendingNotificationEvents()
+                XCTAssertEqual(center.requests.count, 1)
+            } else {
+                XCTAssertTrue(center.requests.isEmpty)
+            }
+        }
     }
 
     func testNotificationEventQueueClaimsAndAcknowledgesEvents() throws {
@@ -742,7 +987,7 @@ final class GetOudioCoreTests: XCTestCase {
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
-        let container = try SharedContainer.diagnostic(rootURL: rootURL, defaults: defaults)
+        let container = try AgentDataStore.diagnostic(rootURL: rootURL, defaults: defaults)
         let notificationCenter = TestNotificationCenterClient(status: .authorized)
         let service = NotificationService(container: container, notificationCenter: notificationCenter)
         try service.enqueueRecordingFinished(fileURL: URL(fileURLWithPath: "/tmp/recording.wav"))
@@ -763,7 +1008,7 @@ final class GetOudioCoreTests: XCTestCase {
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
-        let container = try SharedContainer.diagnostic(rootURL: rootURL, defaults: defaults)
+        let container = try AgentDataStore.diagnostic(rootURL: rootURL, defaults: defaults)
         let notificationCenter = TestNotificationCenterClient(status: .denied)
         let service = NotificationService(container: container, notificationCenter: notificationCenter)
         try service.enqueueRecordingFinished(fileURL: nil, message: "录音异常结束")
@@ -772,6 +1017,28 @@ final class GetOudioCoreTests: XCTestCase {
         XCTAssertEqual(dispatched, 1)
         XCTAssertTrue(notificationCenter.requests.isEmpty)
         XCTAssertTrue(try NotificationEventQueue(container: container).claimPending().isEmpty)
+    }
+
+    func testAppleMusicFormatSelectionUsesPendingBatchIdentifier() async throws {
+        let rootURL = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+        let suiteName = "GetOudioCoreTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let container = try AgentDataStore.diagnostic(rootURL: rootURL, defaults: defaults)
+        let notificationCenter = TestNotificationCenterClient(status: .authorized)
+        let service = NotificationService(container: container, notificationCenter: notificationCenter)
+        let identifier = UUID().uuidString
+
+        await service.notifyAppleMusicFormatSelection(jobCount: 1, identifier: identifier)
+
+        let request = try XCTUnwrap(notificationCenter.requests.first)
+        XCTAssertEqual(request.identifier, identifier)
+        XCTAssertEqual(
+            request.content.categoryIdentifier,
+            NotificationService.AppleMusicNotification.formatCategoryIdentifier
+        )
     }
 
     func testSettingsStorePersistsPresetsAndFinderDirectories() {
@@ -812,10 +1079,10 @@ final class GetOudioCoreTests: XCTestCase {
             defaults.removePersistentDomain(forName: suiteName)
         }
 
-        let container = try SharedContainer.diagnostic(rootURL: rootURL, defaults: defaults)
+        let container = try AgentDataStore.diagnostic(rootURL: rootURL, defaults: defaults)
         let store = SettingsStore(defaults: defaults)
         let logURL = container.url(for: .conversionLog)
-        DiagnosticLog.configure(container: container)
+        DiagnosticLog.configure(store: container)
 
         DiagnosticLog.append("disabled diagnostic")
         XCTAssertFalse(FileManager.default.fileExists(atPath: logURL.path))
@@ -827,16 +1094,7 @@ final class GetOudioCoreTests: XCTestCase {
         XCTAssertTrue(log.contains("[DEBUG] enabled diagnostic"))
     }
 
-    func testSharedContainerProductionFailsWhenAppGroupDirectoryIsUnavailable() {
-        XCTAssertThrowsError(try SharedContainer.production(groupIdentifier: "")) { error in
-            guard case SharedContainer.AccessError.appGroupDirectoryUnavailable(let groupIdentifier) = error else {
-                return XCTFail("Unexpected error: \(error)")
-            }
-            XCTAssertEqual(groupIdentifier, "")
-        }
-    }
-
-    func testSharedContainerDiagnosticUsesInjectedStorage() throws {
+    func testAgentDataStoreDiagnosticUsesInjectedStorage() throws {
         let rootURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         let suiteName = "GetOudioCoreTests-\(UUID().uuidString)"
@@ -846,14 +1104,12 @@ final class GetOudioCoreTests: XCTestCase {
             defaults.removePersistentDomain(forName: suiteName)
         }
 
-        let container = try SharedContainer.diagnostic(rootURL: rootURL, defaults: defaults)
+        let container = try AgentDataStore.diagnostic(rootURL: rootURL, defaults: defaults)
 
         XCTAssertEqual(container.directoryURL, rootURL)
-        XCTAssertEqual(container.accessMode, .diagnostic)
         XCTAssertTrue(container.defaults === defaults)
         XCTAssertTrue(FileManager.default.fileExists(atPath: rootURL.path))
         XCTAssertEqual(container.url(for: .jobQueue), rootURL.appendingPathComponent("queued-jobs.json"))
-        XCTAssertEqual(container.url(for: .shareEvents), rootURL.appendingPathComponent("share-events.json"))
         XCTAssertEqual(
             container.url(for: .pendingAppleMusicDownloads),
             rootURL.appendingPathComponent("pending-apple-music-downloads.json")
@@ -869,21 +1125,21 @@ final class GetOudioCoreTests: XCTestCase {
         )
         XCTAssertEqual(
             container.url(for: .appleMusicRuntimeIPC),
-            rootURL.appendingPathComponent("AppleMusicRuntimeIPC", isDirectory: true)
+            rootURL.appendingPathComponent("IPC", isDirectory: true)
         )
     }
 
-    func testSharedContainerForCurrentProcessUsesExplicitDiagnosticRoot() throws {
+    func testAgentDataStoreKeepsV2RootSeparateFromLegacyNames() throws {
         let rootURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         defer { try? FileManager.default.removeItem(at: rootURL) }
 
-        let container = try SharedContainer.forCurrentProcess(environment: [
-            SharedContainer.diagnosticRootEnvironmentKey: rootURL.path
-        ])
+        let container = try AgentDataStore.diagnostic(
+            rootURL: rootURL.appendingPathComponent("GetOudioV2", isDirectory: true),
+            defaults: .standard
+        )
 
-        XCTAssertEqual(container.accessMode, .diagnostic)
-        XCTAssertEqual(container.directoryURL, rootURL)
+        XCTAssertEqual(container.directoryURL.lastPathComponent, "GetOudioV2")
     }
 
     func testSettingsStoreResolvesFinderDirectoryAliases() throws {
@@ -1140,24 +1396,6 @@ final class GetOudioCoreTests: XCTestCase {
         XCTAssertTrue(AppleMusicShareURLParser.supportedURLs(from: urls).isEmpty)
     }
 
-    func testShareEventQueuePersistsUnsupportedDownloadSourceEvents() throws {
-        let fileURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString)
-            .appendingPathExtension("json")
-        defer { try? FileManager.default.removeItem(at: fileURL) }
-
-        let queue = try ShareEventQueue(fileURL: fileURL)
-        let url = URL(string: "https://example.com/not-supported")!
-        try queue.enqueue([ShareEvent(kind: .unsupportedDownloadSource, urls: [url])])
-
-        let events = try queue.drain()
-
-        XCTAssertEqual(events.count, 1)
-        XCTAssertEqual(events.first?.kind, .unsupportedDownloadSource)
-        XCTAssertEqual(events.first?.urls, [url])
-        XCTAssertTrue(try queue.read().isEmpty)
-    }
-
     func testPendingAppleMusicDownloadStoreDrainsSavedJobs() throws {
         let fileURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
@@ -1177,25 +1415,6 @@ final class GetOudioCoreTests: XCTestCase {
 
         XCTAssertEqual(batch?.jobs, [job])
         XCTAssertNil(try store.read())
-    }
-
-    func testAppleMusicDownloaderProgressParserExtractsLatestProgressLine() {
-        let text = """
-        Song: Example
-        \rDownloading... 38% (12.0/31.5 MB, 1.2 MB/s)
-        """
-
-        let message = AppleMusicDownloaderProgressParser.progressMessage(from: text)
-
-        XCTAssertEqual(message, "Downloading... 38% (12.0/31.5 MB, 1.2 MB/s)")
-    }
-
-    func testAppleMusicDownloaderProgressTrackerReturnsOnlyChangedMessages() {
-        let tracker = AppleMusicDownloaderProgressTracker()
-
-        XCTAssertEqual(tracker.observe("Song: Example\n"), "Song: Example")
-        XCTAssertNil(tracker.observe("Song: Example\n"))
-        XCTAssertEqual(tracker.observe("\rDownloading... 40%"), "Downloading... 40%")
     }
 
     func testAppleMusicDownloaderEventTrackerBuffersJSONLAndKeepsLatestState() {
@@ -1469,6 +1688,23 @@ final class GetOudioCoreTests: XCTestCase {
         XCTAssertTrue(status.isInProgress)
     }
 
+    func testAppleMusicWrapperLoginPollingPublishesVerificationStateAfterStarting() async {
+        let sequence = TestLoginStatusSequence([
+            .init(phase: .starting, message: "正在登录并等待 Apple 响应"),
+            .init(phase: .waitingForVerificationCode, message: "已发送验证码，请输入后提交"),
+            .init(phase: .authenticated, message: "初始化已完成")
+        ])
+
+        await AppleMusicWrapperLoginStatusPolling.observe(
+            intervalNanoseconds: 1,
+            poll: { await sequence.next() },
+            publish: { status in await sequence.publish(status) }
+        )
+
+        let phases = await sequence.publishedPhases()
+        XCTAssertEqual(phases, [.starting, .waitingForVerificationCode, .authenticated])
+    }
+
     func testAppleMusicWrapperLoginStatusDoesNotKeepStoppedContainerWaitingForCode() {
         let status = AppleMusicWrapperRuntime.loginStatus(
             logs: "[.] credentialHandler: {2FA: true}\n[!] Waiting for input...\n[!] Failed to get 2FA Code in 60s. Exiting...",
@@ -1519,26 +1755,6 @@ final class GetOudioCoreTests: XCTestCase {
         XCTAssertFalse(status.canSubmitVerificationCode)
     }
 
-    func testAppleMusicWrapperLoginSnapshotStoreOnlyAdvancesForChangedStatus() throws {
-        let root = try makeTemporaryDirectory()
-        defer { try? FileManager.default.removeItem(at: root) }
-        let store = AppleMusicWrapperLoginSnapshotStore(rootURL: root)
-        let waiting = AppleMusicWrapperLoginStatus(
-            phase: .waitingForVerificationCode,
-            message: "已发送验证码，请输入后提交"
-        )
-        let first = try store.saveIfChanged(waiting)
-        let unchanged = try store.saveIfChanged(waiting)
-        let authenticating = try store.saveIfChanged(AppleMusicWrapperLoginStatus(
-            phase: .authenticating,
-            message: "验证码已提交，正在验证"
-        ))
-
-        XCTAssertEqual(first.revision, 1)
-        XCTAssertEqual(unchanged.revision, first.revision)
-        XCTAssertEqual(authenticating.revision, 2)
-        XCTAssertEqual(store.snapshot(), authenticating)
-    }
 
     func testAppleMusicWrapperLoginStatusPrefersPersistedCompletionMarker() {
         let status = AppleMusicWrapperRuntime.loginStatus(
@@ -1808,9 +2024,9 @@ final class GetOudioCoreTests: XCTestCase {
         XCTAssertEqual(manager.runtimeEnvironment()["LIMA_HOME"], limaHome.path)
     }
 
-    func testAppleMusicRuntimeUsesPersistentShortApplicationSupportDirectoryForVMState() {
-        let expected = SettingsStore.realUserHomeDirectory()
-            .appendingPathComponent("Library/Application Support/GetOudio/AM", isDirectory: true)
+    func testAppleMusicRuntimeUsesSandboxApplicationSupportDirectoryForVMState() {
+        let expected = AgentDataStore.defaultRootURL
+            .appendingPathComponent("AM", isDirectory: true)
 
         XCTAssertEqual(AppleMusicRuntimeManager.defaultVMStateRootURL, expected)
     }
@@ -1840,19 +2056,128 @@ final class GetOudioCoreTests: XCTestCase {
         XCTAssertEqual(AppleMusicRuntimeManager.downloadAttemptCount, 9)
     }
 
-    func testAppleMusicRuntimeAgentRequestCarriesGPACOverride() throws {
-        let request = AppleMusicRuntimeAgentRequestEnvelope(
+    func testAppleMusicRuntimeWorkerRequestCarriesGPACOverride() throws {
+        let request = AppleMusicRuntimeWorkerRequest(
             id: UUID(),
-            command: "install",
+            command: .install,
             resourceRootPath: "/tmp/resources",
             gpacPackageURLOverride: "https://example.com/gpac-runtime.pkg"
         )
         let decoded = try JSONDecoder().decode(
-            AppleMusicRuntimeAgentRequestEnvelope.self,
+            AppleMusicRuntimeWorkerRequest.self,
             from: JSONEncoder().encode(request)
         )
 
         XCTAssertEqual(decoded.gpacPackageURLOverride, "https://example.com/gpac-runtime.pkg")
+    }
+
+    func testAppleMusicRuntimeWorkerRequestKeepsCredentialsInXPCPayloadOnly() throws {
+        let request = AppleMusicRuntimeWorkerRequest(
+            id: UUID(),
+            command: .initialize,
+            resourceRootPath: "/tmp/resources",
+            initializeRequest: AppleMusicRuntimeAgentInitializeRequest(
+                username: "account@example.com",
+                password: "secret-password",
+                verificationCode: nil,
+                useSystemProxy: false
+            )
+        )
+
+        let encoded = try JSONEncoder().encode(request)
+        let serialized = try XCTUnwrap(String(data: encoded, encoding: .utf8))
+        let decoded = try JSONDecoder().decode(AppleMusicRuntimeWorkerRequest.self, from: encoded)
+
+        XCTAssertTrue(serialized.contains("account@example.com"))
+        XCTAssertTrue(serialized.contains("secret-password"))
+        XCTAssertEqual(decoded.initializeRequest?.username, "account@example.com")
+        XCTAssertNil(decoded.executionSettings)
+    }
+
+    func testBackgroundAgentCommandPreservesRequestAndSecurityBookmarks() throws {
+        let bookmark = Data([0x01, 0x02])
+        let job = JobRequest(
+            fileURL: URL(fileURLWithPath: "/tmp/song.wav"),
+            fileBookmarkData: bookmark,
+            directoryBookmarkData: bookmark,
+            category: .audio,
+            operation: .transcode(.mp3320),
+            source: .finderSync
+        )
+        let request = BackgroundAgentCommandRequest(command: .enqueueJobs, jobs: [job])
+        let decoded = try JSONDecoder().decode(
+            BackgroundAgentCommandRequest.self,
+            from: JSONEncoder().encode(request)
+        )
+
+        XCTAssertEqual(decoded.id, request.id)
+        XCTAssertEqual(decoded.command, .enqueueJobs)
+        XCTAssertEqual(decoded.jobs, [job])
+    }
+
+    func testBackgroundServiceStatusRequiresCurrentAgentAndWorkerIdentities() {
+        let agent = BackgroundServiceIdentity.current(.backgroundAgent)
+        let worker = BackgroundServiceIdentity.current(.runtimeWorker)
+
+        XCTAssertTrue(BackgroundServicesStatus(
+            backgroundAgent: agent,
+            runtimeWorker: worker
+        ).isCurrent)
+        XCTAssertFalse(BackgroundServicesStatus(
+            backgroundAgent: agent,
+            runtimeWorker: nil
+        ).isCurrent)
+
+        var outdatedWorker = worker
+        outdatedWorker.buildVersion += "-old"
+        XCTAssertFalse(BackgroundServicesStatus(
+            backgroundAgent: agent,
+            runtimeWorker: outdatedWorker
+        ).isCurrent)
+    }
+
+    func testBackgroundAgentSideEffectCommandsRequireRequestDeduplication() {
+        XCTAssertTrue(BackgroundAgentCommand.enqueueJobs.requiresRequestDeduplication)
+        XCTAssertTrue(BackgroundAgentCommand.appleMusicDownload.requiresRequestDeduplication)
+        XCTAssertFalse(BackgroundAgentCommand.healthCheck.requiresRequestDeduplication)
+        XCTAssertFalse(BackgroundAgentCommand.subscribeAppleMusicEvents.requiresRequestDeduplication)
+        XCTAssertTrue(AppleMusicRuntimeWorkerCommand.install.requiresRequestDeduplication)
+        XCTAssertFalse(AppleMusicRuntimeWorkerCommand.healthCheck.requiresRequestDeduplication)
+    }
+
+    func testXPCRequestRegistryCoalescesConcurrentAndCompletedRequests() async {
+        let registry = XPCRequestRegistry<String>()
+        let counter = TestInvocationCounter()
+        let requestID = UUID()
+        let operation: @Sendable () async -> String = {
+            await counter.increment()
+            try? await Task.sleep(nanoseconds: 20_000_000)
+            return "accepted"
+        }
+
+        async let first = registry.response(for: requestID, operation: operation)
+        async let second = registry.response(for: requestID, operation: operation)
+        let concurrentResponses = await [first, second]
+        let cachedResponse = await registry.response(for: requestID, operation: operation)
+
+        XCTAssertEqual(concurrentResponses, ["accepted", "accepted"])
+        XCTAssertEqual(cachedResponse, "accepted")
+        let invocationCount = await counter.value
+        XCTAssertEqual(invocationCount, 1)
+    }
+
+    func testRuntimeWorkerResponsePreservesServiceIdentity() throws {
+        let identity = BackgroundServiceIdentity.current(.runtimeWorker)
+        let response = AppleMusicRuntimeWorkerResponse(
+            id: UUID(),
+            serviceIdentity: identity
+        )
+        let decoded = try JSONDecoder().decode(
+            AppleMusicRuntimeWorkerResponse.self,
+            from: JSONEncoder().encode(response)
+        )
+
+        XCTAssertEqual(decoded.serviceIdentity, identity)
     }
 
     func testAppleMusicRuntimePrefersOfficialGPACModulesDirectory() throws {
@@ -1978,7 +2303,7 @@ final class GetOudioCoreTests: XCTestCase {
             withIntermediateDirectories: true
         )
         let receiptStore = ManagedRuntimeComponentReceiptStore(rootURL: root)
-        for component in [.colima, .lima, .docker, .dockerBuildx, .gpac] as [AppleMusicRuntimeComponent] {
+        for component in [.colima, .lima, .docker, .dockerBuildx, .gpac, .wrapperImage] as [AppleMusicRuntimeComponent] {
             let spec = try XCTUnwrap(AppleMusicRuntimeManager.managedComponentSpec(for: component))
             try receiptStore.save(ManagedRuntimeComponentReceipt(component: component, version: spec.targetVersion))
         }
@@ -2007,6 +2332,14 @@ final class GetOudioCoreTests: XCTestCase {
         XCTAssertEqual(
             wrapperStatuses.first { $0.component == .wrapperImage }?.resolvedPath,
             AppleMusicRuntimeManager.defaultVMStateRootURL.path
+        )
+
+        let localStatuses = manager.localComponentStatuses()
+        let localWrapper = try XCTUnwrap(localStatuses.first { $0.component == .wrapperImage })
+        XCTAssertTrue(localWrapper.isReady)
+        XCTAssertEqual(
+            localWrapper.detail,
+            "已根据本地安装记录确认；运行时将在实际使用时复查"
         )
     }
 
@@ -2159,15 +2492,6 @@ final class GetOudioCoreTests: XCTestCase {
         XCTAssertFalse(store.isAppleMusicDownloadEnabled)
     }
 
-    func testAppleMusicRuntimeAgentClientUsesBundledHelperCandidate() {
-        let applicationURL = AppleMusicRuntimeAgentClient.defaultApplicationURL(
-            bundle: Bundle(for: GetOudioCoreTests.self)
-        )
-
-        XCTAssertNotNil(applicationURL)
-        XCTAssertEqual(applicationURL?.lastPathComponent, AppleMusicRuntimeAgentClient.applicationBundleName)
-    }
-
     private func makeTemporaryDirectory() throws -> URL {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
@@ -2235,10 +2559,69 @@ final class GetOudioCoreTests: XCTestCase {
     }
 }
 
+private actor TestLoginStatusSequence {
+    private var statuses: [AppleMusicWrapperLoginStatus]
+    private var published: [AppleMusicWrapperLoginStatus] = []
+
+    init(_ statuses: [AppleMusicWrapperLoginStatus]) {
+        self.statuses = statuses
+    }
+
+    func next() -> AppleMusicWrapperLoginStatus {
+        statuses.removeFirst()
+    }
+
+    func publish(_ status: AppleMusicWrapperLoginStatus) {
+        published.append(status)
+    }
+
+    func publishedPhases() -> [AppleMusicWrapperLoginPhase] {
+        published.map(\.phase)
+    }
+}
+
+private actor TestInvocationCounter {
+    private(set) var value = 0
+
+    func increment() {
+        value += 1
+    }
+}
+
+private actor QueuedJobTestExecutor {
+    private(set) var batches: [[JobRequest]] = []
+    private var firstBatchStarted: CheckedContinuation<Void, Never>?
+    private var releaseFirst: CheckedContinuation<Void, Never>?
+
+    func execute(_ jobs: [JobRequest]) async {
+        batches.append(jobs)
+        if batches.count == 1 {
+            await withCheckedContinuation { continuation in
+                releaseFirst = continuation
+                firstBatchStarted?.resume()
+                firstBatchStarted = nil
+            }
+        }
+    }
+
+    func waitForFirstBatch() async {
+        guard batches.isEmpty else { return }
+        await withCheckedContinuation { firstBatchStarted = $0 }
+    }
+
+    func releaseFirstBatch() {
+        releaseFirst?.resume()
+        releaseFirst = nil
+    }
+}
+
 private final class TestNotificationCenterClient: NotificationCenterClient {
     let status: UNAuthorizationStatus
     private(set) var requests: [UNNotificationRequest] = []
     private(set) var categories: Set<UNNotificationCategory> = []
+    private(set) var removedIdentifiers: [String] = []
+    var failAdd = false
+    var alertsEnabled = true
 
     init(status: UNAuthorizationStatus) {
         self.status = status
@@ -2253,10 +2636,18 @@ private final class TestNotificationCenterClient: NotificationCenterClient {
     }
 
     func add(_ request: UNNotificationRequest) async throws {
+        if failAdd { throw CocoaError(.fileWriteUnknown) }
         requests.append(request)
     }
 
     func setNotificationCategories(_ categories: Set<UNNotificationCategory>) {
         self.categories = categories
+    }
+
+    func canPresentAlerts() async -> Bool { status == .authorized && alertsEnabled }
+    func pendingRequests() async -> [UNNotificationRequest] { [] }
+    func deliveredRequests() async -> [UNNotificationRequest] { requests }
+    func removeNotifications(withIdentifiers identifiers: [String]) {
+        removedIdentifiers.append(contentsOf: identifiers)
     }
 }

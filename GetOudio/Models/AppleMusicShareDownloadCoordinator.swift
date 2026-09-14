@@ -2,36 +2,24 @@ import Foundation
 import GetOudioCore
 
 final class AppleMusicShareDownloadCoordinator {
-    private let container: SharedContainer
+    private let container: AgentDataStore
     private let settingsStore: SettingsStore
-    private let agentClient: AppleMusicRuntimeAgentClient
-    private let agentLauncher: AppleMusicRuntimeAgentLauncher
-    private let downloadService: AppleMusicDownloadService
+    private let runtimeClient: AppleMusicRuntimeServing
     private let notificationService: NotificationService
     private let pendingStoreFactory: () throws -> PendingAppleMusicDownloadStore
 
     init(
-        container: SharedContainer,
+        container: AgentDataStore,
         settingsStore: SettingsStore? = nil,
-        agentClient: AppleMusicRuntimeAgentClient? = nil,
-        agentLauncher: AppleMusicRuntimeAgentLauncher = .shared,
-        downloadService: AppleMusicDownloadService? = nil,
+        runtimeClient: AppleMusicRuntimeServing,
         notificationService: NotificationService? = nil,
         pendingStoreFactory: (() throws -> PendingAppleMusicDownloadStore)? = nil
     ) {
         self.container = container
         self.settingsStore = settingsStore ?? SettingsStore(container: container)
-        self.agentClient = agentClient ?? AppleMusicRuntimeAgentClient(container: container)
-        self.agentLauncher = agentLauncher
-        self.downloadService = downloadService ?? AppleMusicDownloadService(container: container)
+        self.runtimeClient = runtimeClient
         self.notificationService = notificationService ?? NotificationService(container: container)
         self.pendingStoreFactory = pendingStoreFactory ?? { try PendingAppleMusicDownloadStore(container: container) }
-    }
-
-    func notifyShareEvents(_ events: [ShareEvent]) async {
-        for event in events where event.kind == .unsupportedDownloadSource {
-            await notificationService.notifyUnsupportedDownloadSource(urls: event.urls)
-        }
     }
 
     func handleShareAppleMusicJobs(
@@ -43,23 +31,19 @@ final class AppleMusicShareDownloadCoordinator {
             return (remainingJobs, nil)
         }
 
-        return (remainingJobs, await handleAppleMusicJobs(shareJobs))
-    }
-
-    func handlePendingAppleMusicDownload(
-        format: AppleMusicDownloadFormat
-    ) async -> SettingsAttentionItem? {
-        do {
-            guard let batch = try pendingStoreFactory().drain(), !batch.jobs.isEmpty else {
-                await notificationService.notifyUnsupportedDownloadSource(urls: [])
-                return nil
+        var guidance: SettingsAttentionItem?
+        // Confirmed submissions may select different formats before one claim.
+        // Do not apply the first submission's format to the entire batch.
+        for format: AppleMusicDownloadFormat? in [nil, .alac, .aac, .atmos] {
+            let group = shareJobs.filter { job in
+                guard case .appleMusicDownload(let selected) = job.operation else { return false }
+                return (selected == .askEveryTime ? nil : selected) == format
             }
-            return await handleAppleMusicJobs(batch.jobs, forcedFormat: format)
-        } catch {
-            DiagnosticLog.append("pending Apple Music downloads failed: \(error.localizedDescription)")
-            await notificationService.notifyUnsupportedDownloadSource(urls: [])
-            return nil
+            guard !group.isEmpty else { continue }
+            let result = await handleAppleMusicJobs(group, forcedFormat: format)
+            guidance = guidance ?? result
         }
+        return (remainingJobs, guidance)
     }
 
     private func handleAppleMusicJobs(
@@ -82,9 +66,11 @@ final class AppleMusicShareDownloadCoordinator {
 
         if forcedFormat == nil, settingsStore.appleMusicDownloadFormat == .askEveryTime {
             do {
-                _ = try pendingStoreFactory().save(jobs)
-                markShareExtensionHeadlessLaunch()
-                await notificationService.notifyAppleMusicFormatSelection(jobCount: jobs.count)
+                let batch = try pendingStoreFactory().save(jobs)
+                await notificationService.notifyAppleMusicFormatSelection(
+                    jobCount: jobs.count,
+                    identifier: batch.id.uuidString
+                )
             } catch {
                 DiagnosticLog.append("pending Apple Music downloads save failed: \(error.localizedDescription)")
                 await notificationService.notifyUnsupportedDownloadSource(urls: jobs.map(\.fileURL))
@@ -97,12 +83,23 @@ final class AppleMusicShareDownloadCoordinator {
         DiagnosticLog.append("share Apple Music download started count=\(resolvedJobs.count) format=\(format.rawValue)")
         await notificationService.notifyAppleMusicDownloadStarted()
         let progressTask = startProgressNotifications()
-        let summary = await downloadService.download(resolvedJobs)
+        let summary: ConversionSummary
+        do {
+            summary = try await runtimeClient.download(resolvedJobs)
+        } catch {
+            summary = ConversionSummary(
+                successCount: 0,
+                failureCount: resolvedJobs.count,
+                messages: [error.localizedDescription]
+            )
+        }
         progressTask.cancel()
         DiagnosticLog.append("share Apple Music download finished success=\(summary.successCount) failure=\(summary.failureCount)")
         writeConversionLog(summary: summary, jobs: resolvedJobs)
-        let dispatched = await notificationService.dispatchPendingNotificationEvents()
-        DiagnosticLog.append("share Apple Music completion notification dispatched count=\(dispatched)")
+        await notificationService.enqueueAndDispatchConversionFinished(
+            summary: summary,
+            jobs: resolvedJobs
+        )
         return nil
     }
 
@@ -119,33 +116,28 @@ final class AppleMusicShareDownloadCoordinator {
         }
 
         do {
-            try await agentLauncher.ensureRunning()
-            let report = try await agentClient.status()
+            let report = try await runtimeClient.status()
             guard report.isEnabled, report.statuses.allSatisfy(\.isReady) else {
                 return .needsRuntimeInstallation
             }
-            return hasCompletedAppleMusicAuthentication() ? .ready : .needsInitialization
+            let loginStatus = try await runtimeClient.wrapperLoginStatus()
+            return loginStatus.isAuthenticated ? .ready : .needsInitialization
         } catch {
             DiagnosticLog.append("Apple Music share activation check failed: \(error.localizedDescription)")
             return .unavailable
         }
     }
 
-    private func hasCompletedAppleMusicAuthentication() -> Bool {
-        let manager = AppleMusicRuntimeManager(container: container, resourceRoot: Bundle.main.resourceURL)
-        let markerURL = manager.wrapperDataDirectory.appendingPathComponent(".login-completed")
-        return FileManager.default.fileExists(atPath: markerURL.path)
-    }
-
     private func startProgressNotifications() -> Task<Void, Never> {
-        Task { [notificationService, agentClient] in
+        Task { [notificationService, runtimeClient] in
             var gate = AppleMusicDownloadNotificationGate(
-                lastNotificationVersion: agentClient.progress()?.notificationVersion
+                lastNotificationVersion: (try? await runtimeClient.progress())?.notificationVersion
             )
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
                 guard !Task.isCancelled else { return }
-                guard let message = gate.nextMessage(for: agentClient.progress()) else { continue }
+                let progress = try? await runtimeClient.progress()
+                guard let message = gate.nextMessage(for: progress) else { continue }
                 await notificationService.notifyAppleMusicDownloadInProgress(progress: message)
             }
         }
@@ -168,9 +160,6 @@ final class AppleMusicShareDownloadCoordinator {
         DiagnosticLog.append(lines.joined(separator: "\n"), level: .info)
     }
 
-    private func markShareExtensionHeadlessLaunch() {
-        LaunchMarkerStore(container: container).mark(.shareExtension)
-    }
 }
 
 private extension JobRequest {

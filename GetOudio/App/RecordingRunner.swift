@@ -5,7 +5,7 @@ import UserNotifications
 import WidgetKit
 
 final class RecordingRunner: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
-    private let container: SharedContainer
+    private let container: AgentDataStore
     private let settings: SettingsStore
     private let controlStore: RecordingControlStore
     private let cacheAccess: RecordingCacheDirectoryAccess
@@ -21,7 +21,7 @@ final class RecordingRunner: NSObject, NSApplicationDelegate, UNUserNotification
     private var reportedNoInputCallbacks = false
     private var reportedSilentInput = false
 
-    init(container: SharedContainer) throws {
+    init(container: AgentDataStore) throws {
         self.container = container
         let settings = SettingsStore(container: container)
         self.settings = settings
@@ -36,7 +36,7 @@ final class RecordingRunner: NSObject, NSApplicationDelegate, UNUserNotification
         }
     }
 
-    static func main(container: SharedContainer) {
+    static func main(container: AgentDataStore) {
         do {
             let app = NSApplication.shared
             app.setActivationPolicy(.accessory)
@@ -72,7 +72,6 @@ final class RecordingRunner: NSObject, NSApplicationDelegate, UNUserNotification
         ) { [weak self] _ in
             self?.stop(reason: .systemSleep, message: "系统即将睡眠")
         }
-        LaunchMarkerStore(container: container).clear()
         Task {
             await notificationService.requestAuthorization()
             await startIfRequested()
@@ -244,7 +243,7 @@ final class RecordingRunner: NSObject, NSApplicationDelegate, UNUserNotification
             completed.errorMessage = finalMessage
             try? self.controlStore.save(completed)
             self.reloadWidget()
-            self.enqueueRecordingFinished(fileURL: finalURL, message: finalMessage)
+            await self.enqueueRecordingFinished(fileURL: finalURL, message: finalMessage)
             await MainActor.run { NSApp.terminate(nil) }
         }
     }
@@ -296,13 +295,14 @@ final class RecordingRunner: NSObject, NSApplicationDelegate, UNUserNotification
         failed.errorMessage = error.localizedDescription
         try? controlStore.save(failed)
         reloadWidget()
-        enqueueRecordingFinished(fileURL: nil, message: error.localizedDescription)
+        await enqueueRecordingFinished(fileURL: nil, message: error.localizedDescription)
         await MainActor.run { NSApp.terminate(nil) }
     }
 
-    private func enqueueRecordingFinished(fileURL: URL?, message: String?) {
+    private func enqueueRecordingFinished(fileURL: URL?, message: String?) async {
         do {
-            try notificationService.enqueueAndWakeRecordingFinished(fileURL: fileURL, message: message)
+            try notificationService.enqueueRecordingFinished(fileURL: fileURL, message: message)
+            await NotificationDispatchWaker.dispatchPendingEvents()
         } catch {
             DiagnosticLog.append("[Recording] notification event enqueue failed: \(error.localizedDescription)")
         }

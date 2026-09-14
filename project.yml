@@ -13,12 +13,15 @@ options:
     fi
 settings:
   base:
+    GET_OUDIO_ARCH: arm64
+    ARCHS: $(GET_OUDIO_ARCH)
+    ONLY_ACTIVE_ARCH: NO
     CLANG_ANALYZER_NONNULL: YES
     CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED: YES
     SWIFT_VERSION: 5.0
     MACOSX_DEPLOYMENT_TARGET: "14.0"
-    MARKETING_VERSION: "1.2.3"
-    CURRENT_PROJECT_VERSION: "7"
+    MARKETING_VERSION: "1.3.1"
+    CURRENT_PROJECT_VERSION: "8"
     DEVELOPMENT_TEAM: ZWNUJ64F36
     CODE_SIGN_STYLE: Automatic
 configs:
@@ -62,6 +65,9 @@ targets:
       - path: GetOudio/Resources/Documentation
         type: folder
         buildPhase: resources
+      - path: GetOudio/Resources/LaunchAgents
+        type: folder
+        buildPhase: resources
       - path: GetOudio/Resources/ThirdParty/ffmpeg
         type: folder
         buildPhase: resources
@@ -75,7 +81,10 @@ targets:
       - target: GetOudioCore
       - package: Sparkle
         product: Sparkle
-      - target: GetOudioAMRuntimeAgent
+      - target: GetOudioBootstrapInstaller
+        embed: false
+        link: false
+      - target: GetOudioAMRuntimeWorker
         embed: false
         link: false
       - target: GetOudioFinderExtension
@@ -144,6 +153,7 @@ targets:
         com.apple.security.temporary-exception.apple-events:
           - com.apple.finder
         com.apple.security.files.user-selected.read-write: true
+        com.apple.security.files.user-selected.executable: true
         com.apple.security.files.bookmarks.app-scope: true
         com.apple.security.files.desktop.read-write: true
         com.apple.security.files.documents.read-write: true
@@ -152,13 +162,12 @@ targets:
         com.apple.security.files.music.read-write: true
         com.apple.security.files.pictures.read-write: true
         com.apple.security.network.client: true
-        com.apple.security.network.server: true
         com.apple.security.temporary-exception.mach-lookup.global-name:
           - $(PRODUCT_BUNDLE_IDENTIFIER)-spks
           - $(PRODUCT_BUNDLE_IDENTIFIER)-spki
+          - com.shengjiacheng.GetOudio.agent
+          - com.shengjiacheng.GetOudio.runtime-worker
         com.apple.security.device.audio-input: true
-        com.apple.security.application-groups:
-          - group.com.shengjiacheng.GetOudio
     settings:
       base:
         ASSETCATALOG_COMPILER_STANDALONE_ICON_BEHAVIOR: default
@@ -167,24 +176,86 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.shengjiacheng.GetOudio
         PRODUCT_NAME: Get Oudio
     postBuildScripts:
-      - name: Copy Apple Music Runtime Agent
+      - name: Embed Background Helpers
         inputFiles:
-          - "$(BUILT_PRODUCTS_DIR)/GetOudioAMRuntimeAgent.app/Contents/MacOS/GetOudioAMRuntimeAgent"
+          - "$(BUILT_PRODUCTS_DIR)/GetOudioBootstrapInstaller.app/Contents/MacOS/GetOudioBootstrapInstaller"
+          - "$(BUILT_PRODUCTS_DIR)/GetOudioAMRuntimeWorker.app/Contents/MacOS/GetOudioAMRuntimeWorker"
         outputFiles:
-          - "$(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Library/LoginItems/GetOudioAMRuntimeAgent.app/Contents/MacOS/GetOudioAMRuntimeAgent"
+          - "$(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Helpers/GetOudioBootstrapInstaller.app/Contents/MacOS/GetOudioBootstrapInstaller"
+          - "$(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Helpers/GetOudioAMRuntimeWorker.app/Contents/MacOS/GetOudioAMRuntimeWorker"
         script: |
           set -euo pipefail
-          AGENT_APP="$BUILT_PRODUCTS_DIR/GetOudioAMRuntimeAgent.app"
-          DEST="$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Library/LoginItems"
-          LEGACY_DEST="$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers"
-          mkdir -p "$DEST"
-          if [ ! -d "$AGENT_APP" ]; then
-            echo "missing Apple Music Runtime Agent app at $AGENT_APP" >&2
+          BOOTSTRAP_APP="$BUILT_PRODUCTS_DIR/GetOudioBootstrapInstaller.app"
+          WORKER_APP="$BUILT_PRODUCTS_DIR/GetOudioAMRuntimeWorker.app"
+          HELPERS_DIR="$TARGET_BUILD_DIR/$CONTENTS_FOLDER_PATH/Helpers"
+          BOOTSTRAP_DEST="$HELPERS_DIR/GetOudioBootstrapInstaller.app"
+          WORKER_DEST="$HELPERS_DIR/GetOudioAMRuntimeWorker.app"
+          if [ ! -d "$BOOTSTRAP_APP" ]; then
+            echo "missing Bootstrap Installer at $BOOTSTRAP_APP" >&2
             exit 1
           fi
-          rm -rf "$LEGACY_DEST/GetOudioAMRuntimeAgent.app"
-          rm -rf "$DEST/GetOudioAMRuntimeAgent.app"
-          cp -R "$AGENT_APP" "$DEST/GetOudioAMRuntimeAgent.app"
+          if [ ! -d "$WORKER_APP" ]; then
+            echo "missing Apple Music Runtime Worker at $WORKER_APP" >&2
+            exit 1
+          fi
+          rm -rf "$BOOTSTRAP_DEST" "$WORKER_DEST"
+          mkdir -p "$HELPERS_DIR"
+          ditto "$BOOTSTRAP_APP" "$BOOTSTRAP_DEST"
+          ditto "$WORKER_APP" "$WORKER_DEST"
+      - name: Prepare Bundle Architecture
+        basedOnDependencyAnalysis: false
+        script: |
+          bash "$SRCROOT/script/prepare_bundle_architecture.sh" "$TARGET_BUILD_DIR/$WRAPPER_NAME" "$ARCHS"
+
+  GetOudioBootstrapInstaller:
+    type: application
+    platform: macOS
+    sources:
+      - path: GetOudioBootstrapInstaller/Sources
+    info:
+      path: GetOudioBootstrapInstaller/Info.plist
+      properties:
+        LSUIElement: true
+        CFBundleURLTypes:
+          - CFBundleURLName: com.shengjiacheng.GetOudio.BootstrapInstaller
+            CFBundleURLSchemes:
+              - getoudio-bootstrap
+    settings:
+      base:
+        ENABLE_APP_SANDBOX: NO
+        PRODUCT_BUNDLE_IDENTIFIER: com.shengjiacheng.GetOudio.BootstrapInstaller
+        PRODUCT_NAME: GetOudioBootstrapInstaller
+
+  GetOudioAMRuntimeWorker:
+    type: application
+    platform: macOS
+    sources:
+      - path: GetOudioAMRuntimeWorker/Sources
+    dependencies:
+      - target: GetOudioCore
+        embed: false
+    info:
+      path: GetOudioAMRuntimeWorker/Info.plist
+      properties:
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSUIElement: true
+        CFBundleDisplayName: Get Oudio Apple Music Runtime Worker
+    entitlements:
+      path: GetOudioAMRuntimeWorker/GetOudioAMRuntimeWorker.entitlements
+      properties:
+        com.apple.security.network.client: true
+        com.apple.security.network.server: true
+        com.apple.security.virtualization: true
+    settings:
+      base:
+        ENABLE_APP_SANDBOX: NO
+        PRODUCT_BUNDLE_IDENTIFIER: com.shengjiacheng.GetOudio.AMRuntimeWorker
+        PRODUCT_NAME: GetOudioAMRuntimeWorker
+        # The Worker runs inside the main App bundle and shares its Core framework.
+        LD_RUNPATH_SEARCH_PATHS:
+          - $(inherited)
+          - "@executable_path/../../../../Frameworks"
 
   GetOudioRecordingWidget:
     type: app-extension
@@ -205,41 +276,14 @@ targets:
       path: GetOudioRecordingWidget/GetOudioRecordingWidget.entitlements
       properties:
         com.apple.security.app-sandbox: true
-        com.apple.security.application-groups:
-          - group.com.shengjiacheng.GetOudio
+        com.apple.security.temporary-exception.mach-lookup.global-name:
+          - com.shengjiacheng.GetOudio.agent
     settings:
       base:
         APPLICATION_EXTENSION_API_ONLY: YES
         ENABLE_APP_SANDBOX: YES
         PRODUCT_BUNDLE_IDENTIFIER: com.shengjiacheng.GetOudio.RecordingWidget
         PRODUCT_NAME: GetOudioRecordingWidget
-
-  GetOudioAMRuntimeAgent:
-    type: application
-    platform: macOS
-    sources:
-      - path: GetOudioAMRuntimeAgent/Sources
-    dependencies:
-      - target: GetOudioCore
-    info:
-      path: GetOudioAMRuntimeAgent/Info.plist
-      properties:
-        CFBundleShortVersionString: $(MARKETING_VERSION)
-        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
-        LSUIElement: true
-        CFBundleDisplayName: Get Oudio Apple Music Runtime Agent
-    entitlements:
-      path: GetOudioAMRuntimeAgent/GetOudioAMRuntimeAgent.entitlements
-      properties:
-        com.apple.security.application-groups:
-          - group.com.shengjiacheng.GetOudio
-        com.apple.security.network.client: true
-        com.apple.security.network.server: true
-        com.apple.security.virtualization: true
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.shengjiacheng.GetOudio.AMRuntimeAgent
-        PRODUCT_NAME: GetOudioAMRuntimeAgent
 
   GetOudioFinderExtension:
     type: app-extension
@@ -264,8 +308,8 @@ targets:
         com.apple.security.app-sandbox: true
         com.apple.security.files.user-selected.read-write: true
         com.apple.security.files.bookmarks.app-scope: true
-        com.apple.security.application-groups:
-          - group.com.shengjiacheng.GetOudio
+        com.apple.security.temporary-exception.mach-lookup.global-name:
+          - com.shengjiacheng.GetOudio.agent
     settings:
       base:
         ENABLE_APP_SANDBOX: YES
@@ -304,8 +348,8 @@ targets:
       properties:
         com.apple.security.app-sandbox: true
         com.apple.security.files.bookmarks.app-scope: true
-        com.apple.security.application-groups:
-          - group.com.shengjiacheng.GetOudio
+        com.apple.security.temporary-exception.mach-lookup.global-name:
+          - com.shengjiacheng.GetOudio.agent
     settings:
       base:
         ENABLE_APP_SANDBOX: YES
@@ -341,7 +385,7 @@ schemes:
       targets:
         GetOudio: all
         GetOudioCore: all
-        GetOudioAMRuntimeAgent: all
+        GetOudioAMRuntimeWorker: all
         GetOudioFinderExtension: all
         GetOudioShareExtension: all
         GetOudioRecordingWidget: all

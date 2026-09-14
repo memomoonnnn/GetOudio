@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # bundle_deps.sh — 将仍需随 App 分发的轻量组件放入 ThirdParty。
-# Apple Music 的 Colima/Lima/Docker/GPAC 运行时由 AM Runtime Agent 启用后安装到用户 Application Support。
+# Apple Music 的 Colima/Lima/Docker/GPAC 运行时由 Runtime Worker 启用后安装到用户 Application Support。
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -87,4 +87,4 @@ echo "  ThirdParty/ffmpeg/"
 echo "  ThirdParty/ncmdump/"
 echo "  ThirdParty/apple-music-downloader/"
 echo ""
-echo "Apple Music 运行时请使用 script/package_gpac_runtime.sh 准备 GPAC 包，其余依赖由 AM Runtime Agent 启用后下载到用户 Application Support。"
+echo "Apple Music 运行时请使用 script/package_gpac_runtime.sh 准备 GPAC 包，其余依赖由 Runtime Worker 启用后下载到用户 Application Support。"

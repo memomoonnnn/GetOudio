@@ -10,7 +10,7 @@ public final class RecordingCacheStore {
         try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
     }
 
-    public convenience init(container: SharedContainer, fileManager: FileManager = .default) throws {
+    public convenience init(container: AgentDataStore, fileManager: FileManager = .default) throws {
         try self.init(directoryURL: container.url(for: .recordingCache), fileManager: fileManager)
     }
 
@@ -91,7 +91,7 @@ public final class RecordingCacheDirectoryAccess {
     private let securityScopedParentDirectory: URL?
 
     public init(
-        container: SharedContainer,
+        container: AgentDataStore,
         settings: SettingsStore,
         fileManager: FileManager = .default
     ) throws {

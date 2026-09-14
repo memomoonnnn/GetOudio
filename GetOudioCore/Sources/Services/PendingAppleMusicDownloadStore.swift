@@ -23,7 +23,7 @@ public final class PendingAppleMusicDownloadStore {
         try FileManager.default.createDirectory(at: self.fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
     }
 
-    public convenience init(container: SharedContainer) throws {
+    public convenience init(container: AgentDataStore) throws {
         try self.init(fileURL: container.url(for: .pendingAppleMusicDownloads))
     }
 
@@ -48,7 +48,9 @@ public final class PendingAppleMusicDownloadStore {
 
     public func drain() throws -> PendingAppleMusicDownloadBatch? {
         let batch = try read()
-        try? FileManager.default.removeItem(at: fileURL)
+        if FileManager.default.fileExists(atPath: fileURL.path) {
+            try FileManager.default.removeItem(at: fileURL)
+        }
         DiagnosticLog.append("pending Apple Music downloads drain count=\(batch?.jobs.count ?? 0)")
         return batch
     }

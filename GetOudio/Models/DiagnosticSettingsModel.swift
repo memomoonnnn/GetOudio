@@ -6,10 +6,10 @@ import GetOudioCore
 final class DiagnosticSettingsModel: ObservableObject {
     @Published var isDebugLoggingEnabled: Bool
 
-    private let container: SharedContainer
+    private let container: AgentDataStore
     private let store: SettingsStore
 
-    init(container: SharedContainer, store: SettingsStore) {
+    init(container: AgentDataStore, store: SettingsStore) {
         self.container = container
         self.store = store
         isDebugLoggingEnabled = store.isDebugLoggingEnabled

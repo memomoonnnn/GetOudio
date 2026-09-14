@@ -19,7 +19,7 @@ public final class RecordingControlStore {
         try fileManager.createDirectory(at: commandDirectoryURL, withIntermediateDirectories: true)
     }
 
-    public convenience init(container: SharedContainer, fileManager: FileManager = .default) throws {
+    public convenience init(container: AgentDataStore, fileManager: FileManager = .default) throws {
         try self.init(rootURL: container.url(for: .recordingControl), fileManager: fileManager)
     }
 

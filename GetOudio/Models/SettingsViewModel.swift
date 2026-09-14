@@ -13,10 +13,11 @@ final class SettingsViewModel: ObservableObject {
     let appleMusicSettings: AppleMusicSettingsModel
     let recordingSettings: RecordingSettingsModel
     let notificationAuthorization: NotificationAuthorizationModel
+    let backgroundAgentAuthorization: BackgroundAgentAuthorizationModel
     let diagnosticSettings: DiagnosticSettingsModel
     let attentionState: SettingsAttentionState
 
-    init(container: SharedContainer) {
+    init(container: AgentDataStore) {
         let store = SettingsStore(container: container)
         presetSettings = PresetSettingsModel(store: store)
         finderSettings = FinderDirectorySettingsModel(store: store)
@@ -26,11 +27,13 @@ final class SettingsViewModel: ObservableObject {
         appleMusicSettings = AppleMusicSettingsModel(container: container, store: store)
         recordingSettings = RecordingSettingsModel(container: container, store: store)
         notificationAuthorization = NotificationAuthorizationModel(container: container)
+        backgroundAgentAuthorization = BackgroundAgentAuthorizationModel()
         diagnosticSettings = DiagnosticSettingsModel(container: container, store: store)
         attentionState = SettingsAttentionState(
             store: store,
             recordingSettings: recordingSettings,
             notificationAuthorization: notificationAuthorization,
+            backgroundAgentAuthorization: backgroundAgentAuthorization,
             appleMusicSettings: appleMusicSettings
         )
     }

@@ -24,7 +24,7 @@
       "image": "ghcr.io/itouakirai/wrapper:x86",
       "platform": "linux/amd64",
       "upstream": "https://github.com/WorldObservationLog/wrapper",
-      "notes": "The wrapper is not embedded as a macOS executable. Get Oudio uses GetOudioAMRuntimeAgent to install Docker CLI, Colima, Lima, and GPAC under the App Group runtime root, then pulls and runs this amd64 image with an agent-managed wrapper-data directory."
+      "notes": "The wrapper is not embedded as a macOS executable. The persistent same-bundle Get Oudio background agent installs Docker CLI, Colima, Lima, and GPAC under the app sandbox's v2 Application Support runtime root, then pulls and runs this image with an agent-managed wrapper-data directory."
     }
   ]
 }

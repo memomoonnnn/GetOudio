@@ -442,10 +442,7 @@ struct AppleMusicSettingsPage: View {
             await viewModel.refreshAppleMusicRuntimeStatus()
         }
         .task {
-            await viewModel.monitorAppleMusicWrapperLoginStatus()
-        }
-        .task {
-            await viewModel.monitorAppleMusicRuntimeProgress()
+            await viewModel.monitorAppleMusicRuntimeEvents()
         }
     }
 

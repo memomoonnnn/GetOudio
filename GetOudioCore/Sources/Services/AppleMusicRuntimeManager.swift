@@ -109,17 +109,19 @@ public final class AppleMusicRuntimeManager {
     static let downloadAttemptCount = 9
 
     public static var defaultVMStateRootURL: URL {
-        SettingsStore.realUserHomeDirectory()
-            .appendingPathComponent("Library/Application Support/GetOudio/AM", isDirectory: true)
+        AgentDataStore.defaultRootURL
+            .appendingPathComponent("AM", isDirectory: true)
     }
 
     private let fileManager: FileManager
     private let runner: ProcessRunner
-    private let settingsStore: SettingsStore
+    private let settingsStore: SettingsStore?
+    private let enabledStateURL: URL?
     private let resourceRoot: URL?
     private let gpacPackageURLOverride: String?
     private let wrapperImageInstaller: WrapperImageInstaller?
     private let progressURL: URL?
+    private let progressHandler: @Sendable (AppleMusicRuntimeProgress) -> Void
     private let receiptStore: ManagedRuntimeComponentReceiptStore
 
     public let rootURL: URL
@@ -131,16 +133,19 @@ public final class AppleMusicRuntimeManager {
         colimaHomeDirectory: URL? = nil,
         limaHomeDirectory: URL? = nil,
         runner: ProcessRunner = ProcessRunner(),
-        settingsStore: SettingsStore,
+        settingsStore: SettingsStore?,
         resourceRoot: URL? = Bundle.main.resourceURL,
         gpacPackageURLOverride: String? = nil,
         wrapperImageInstaller: WrapperImageInstaller? = nil,
         progressURL: URL? = nil,
+        progressHandler: @escaping @Sendable (AppleMusicRuntimeProgress) -> Void = { _ in },
+        enabledStateURL: URL? = nil,
         fileManager: FileManager = .default
     ) {
         self.rootURL = rootURL
-        let usesManagedVMState = progressURL != nil
+        let usesManagedVMState = progressURL != nil || enabledStateURL != nil
         self.progressURL = progressURL
+        self.progressHandler = progressHandler
         self.colimaHomeDirectory = colimaHomeDirectory
             ?? (usesManagedVMState
                 ? Self.defaultVMStateRootURL.appendingPathComponent("Colima", isDirectory: true)
@@ -151,6 +156,7 @@ public final class AppleMusicRuntimeManager {
                 : rootURL.appendingPathComponent("lima-home", isDirectory: true))
         self.runner = runner
         self.settingsStore = settingsStore
+        self.enabledStateURL = enabledStateURL
         self.resourceRoot = resourceRoot
         self.gpacPackageURLOverride = gpacPackageURLOverride
         self.wrapperImageInstaller = wrapperImageInstaller
@@ -159,21 +165,24 @@ public final class AppleMusicRuntimeManager {
     }
 
     public convenience init(
-        container: SharedContainer,
+        container: AgentDataStore,
         runner: ProcessRunner = ProcessRunner(),
         resourceRoot: URL? = Bundle.main.resourceURL,
         gpacPackageURLOverride: String? = nil,
         wrapperImageInstaller: WrapperImageInstaller? = nil,
+        progressHandler: (@Sendable (AppleMusicRuntimeProgress) -> Void)? = nil,
         fileManager: FileManager = .default
     ) {
         self.init(
             rootURL: container.url(for: .appleMusicRuntime),
             runner: runner,
-            settingsStore: SettingsStore(container: container),
+            settingsStore: nil,
             resourceRoot: resourceRoot,
             gpacPackageURLOverride: gpacPackageURLOverride,
             wrapperImageInstaller: wrapperImageInstaller,
-            progressURL: container.url(for: .appleMusicRuntimeIPC).appendingPathComponent("progress.json"),
+            progressURL: nil,
+            progressHandler: progressHandler ?? { _ in },
+            enabledStateURL: container.url(for: .appleMusicRuntimeIPC).appendingPathComponent("runtime-enabled"),
             fileManager: fileManager
         )
     }
@@ -226,8 +235,22 @@ public final class AppleMusicRuntimeManager {
     }
 
     public var isEnabled: Bool {
-        get { settingsStore.isAppleMusicDownloadEnabled }
-        set { settingsStore.isAppleMusicDownloadEnabled = newValue }
+        get {
+            guard let enabledStateURL else { return settingsStore?.isAppleMusicDownloadEnabled ?? false }
+            return fileManager.fileExists(atPath: enabledStateURL.path)
+        }
+        set {
+            guard let enabledStateURL else {
+                settingsStore?.isAppleMusicDownloadEnabled = newValue
+                return
+            }
+            if newValue {
+                try? fileManager.createDirectory(at: enabledStateURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try? Data().write(to: enabledStateURL, options: .atomic)
+            } else {
+                try? fileManager.removeItem(at: enabledStateURL)
+            }
+        }
     }
 
     public func runtimeEnvironment() -> [String: String] {
@@ -288,6 +311,19 @@ public final class AppleMusicRuntimeManager {
                 detail: downloaderStatus.detail
             )
         ]
+    }
+
+    /// Fast settings-page status derived only from local files and receipts.
+    /// Runtime health is rechecked by operations that actually need Colima.
+    public func localComponentStatuses() -> [AppleMusicRuntimeComponentStatus] {
+        let hasWrapperReceipt = receiptStore.receipt(for: .wrapperImage) != nil
+        return componentStatuses(wrapperStatus: ManagedDockerImageStatus(
+            image: .appleMusicWrapper,
+            isAvailable: hasWrapperReceipt,
+            detail: hasWrapperReceipt
+                ? "已根据本地安装记录确认；运行时将在实际使用时复查"
+                : "缺少本地安装记录，请检查并更新"
+        ))
     }
 
     public func installManagedRuntime() async throws -> AppleMusicRuntimeInstallResult {
@@ -1152,10 +1188,6 @@ public final class AppleMusicRuntimeManager {
         isActive: Bool,
         wrapperStatus: ManagedDockerImageStatus? = nil
     ) {
-        guard let url = progressURL else {
-            return
-        }
-
         let progress = AppleMusicRuntimeProgress(
             message: message,
             completedUnitCount: completed,
@@ -1163,6 +1195,8 @@ public final class AppleMusicRuntimeManager {
             isActive: isActive,
             statuses: componentStatuses(wrapperStatus: wrapperStatus)
         )
+        progressHandler(progress)
+        guard let url = progressURL else { return }
         do {
             try fileManager.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             try JSONEncoder().encode(progress).write(to: url, options: .atomic)
@@ -1209,6 +1243,7 @@ public final class AppleMusicRuntimeManager {
         // set 755, but tar-extracted files may have come through with the
         // permissions stored in the archive).
         try makeExecutable(url)
+        removeQuarantine(from: url)
 
         // Ad-hoc signing — gives the binary a valid (identity-less) signature
         // so Gatekeeper / AMFI allow execution.
@@ -1243,6 +1278,7 @@ public final class AppleMusicRuntimeManager {
             )
         }
         DiagnosticLog.append("[Install] 签名完成：\(url.path)")
+        removeQuarantine(from: url)
     }
 
     private func replaceItem(at destination: URL, with source: URL) throws {
@@ -1253,6 +1289,7 @@ public final class AppleMusicRuntimeManager {
             try fileManager.removeItem(at: destination)
         }
         try fileManager.copyItem(at: source, to: destination)
+        removeQuarantine(from: destination)
         DiagnosticLog.append("[Install] replaceItem copied destination=\(describeFile(at: destination))")
     }
 
@@ -1264,14 +1301,21 @@ public final class AppleMusicRuntimeManager {
         try fileManager.copyItem(at: source, to: destination)
     }
 
-    /// Removes all extended attributes (including `com.apple.quarantine`) from a
-    /// file by reading its raw data and writing it back to a brand-new inode.
-    ///
-    /// The App Sandbox blocks `removexattr` / `/usr/bin/xattr -d` **everywhere**
-    /// (including the app's own container).  However, macOS only tags a file with
-    /// quarantine when it is *created* by a network-accessing process.  Files
-    /// created by a plain `Data.write` are local and get no quarantine.
+    /// Removes Gatekeeper quarantine from an externally managed executable.
+    /// The runtime worker is deliberately outside the App Sandbox, so it can use
+    /// the supported xattr removal path instead of relying on inode replacement.
     private func removeQuarantine(from url: URL) {
+        let attribute = "com.apple.quarantine"
+        if removexattr(url.path, attribute, 0) == 0 {
+            DiagnosticLog.append("[Install] 已移除 quarantine：\(url.path)")
+            return
+        }
+        if errno == ENOATTR {
+            return
+        }
+
+        let xattrError = errno
+        DiagnosticLog.append("[Install] removexattr 失败 errno=\(xattrError)，尝试重建：\(url.path)")
         guard let data = try? Data(contentsOf: url, options: .alwaysMapped) else {
             DiagnosticLog.append("[Install] 无法读取文件以重建：\(url.path)")
             return

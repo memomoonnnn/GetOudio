@@ -6,7 +6,7 @@ import SwiftUI
 import UserNotifications
 
 /// Handles direct settings-window launches and transient Open With interactions.
-/// Background conversion is delegated to HeadlessRunner through JobQueue.
+/// Background conversion is delegated to the Background Agent through XPC.
 final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     private enum SettingsWindowMetrics {
         static let contentMaxWidth: CGFloat = LayoutConstants.outerMargin
@@ -27,7 +27,7 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
     }
 
     private var mainWindow: NSWindow?
-    private let container: SharedContainer
+    private let container: AgentDataStore
     private let notificationService: NotificationService
     private let openWithDispatcher: OpenWithJobDispatcher
     private let recordingControl: RecordingControlCoordinator
@@ -38,10 +38,11 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
     private var isPresentingAudioMenu = false
     private var lastAudioOpenSignature: String?
     private var lastAudioOpenDate = Date.distantPast
+    private var activeOpenWithAgentSubmissions = 0
     private var isSupervisingRecording = false
     private var isRequestingRecordingMicrophonePermission = false
 
-    init(container: SharedContainer) {
+    init(container: AgentDataStore) {
         self.container = container
         notificationService = NotificationService(container: container)
         openWithDispatcher = OpenWithJobDispatcher(container: container)
@@ -56,7 +57,7 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
 
     // MARK: - Entry point
 
-    static func main(container: SharedContainer) {
+    static func main(container: AgentDataStore) {
         MainActor.assumeIsolated {
             let app = NSApplication.shared
             app.setActivationPolicy(.accessory)
@@ -85,7 +86,7 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
 
         Task {
             await notificationService.requestAuthorization()
-            await notificationService.dispatchPendingNotificationEvents()
+            await NotificationDispatchWaker.dispatchPendingEvents()
         }
 
         recordingControl.recoverStaleSessionIfNeeded()
@@ -133,9 +134,13 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
 
         markTransientOpenWithIfNoSettingsWindow()
         DiagnosticLog.append("app open files ncm enqueue count=\(urls.count)")
-        let didEnqueue = openWithDispatcher.enqueueNCMJobs(urls: urls)
-        sender.reply(toOpenOrPrint: didEnqueue ? .success : .failure)
-        finishTransientInteractionIfNeeded()
+        guard let jobs = openWithDispatcher.makeNCMJobs(urls: urls) else {
+            sender.reply(toOpenOrPrint: .failure)
+            finishTransientInteractionIfNeeded()
+            return
+        }
+        sender.reply(toOpenOrPrint: .success)
+        submitOpenWithJobs(jobs, launchSource: .openWithNCM)
     }
 
     private func showSettingsWindowIfNeeded() {
@@ -268,7 +273,6 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
         if mainWindow?.isVisible != true {
             launchIntent = .backgroundWake
         }
-        openWithDispatcher.launchHeadlessProcessor()
         finishTransientInteractionIfNeeded()
     }
 
@@ -329,7 +333,26 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
 
     private func enqueueOpenWithAudio(urls: [URL], preset: ConversionPreset) {
         DiagnosticLog.append("app open files audio enqueue preset=\(preset.rawValue) count=\(urls.count)")
-        _ = openWithDispatcher.enqueueAudioJobs(urls: urls, preset: preset)
+        guard let jobs = openWithDispatcher.makeAudioJobs(urls: urls, preset: preset) else {
+            finishTransientInteractionIfNeeded()
+            return
+        }
+        submitOpenWithJobs(jobs, launchSource: .openWithAudio)
+    }
+
+    private func submitOpenWithJobs(_ jobs: [JobRequest], launchSource: LaunchSource) {
+        activeOpenWithAgentSubmissions += 1
+        Task { [weak self] in
+            guard let self else { return }
+            let accepted = await openWithDispatcher.submit(jobs, launchSource: launchSource)
+            await MainActor.run {
+                self.activeOpenWithAgentSubmissions = max(0, self.activeOpenWithAgentSubmissions - 1)
+                if !accepted {
+                    DiagnosticLog.append("open with agent submission was not acknowledged source=\(launchSource.rawValue)")
+                }
+                self.finishTransientInteractionIfNeeded()
+            }
+        }
     }
 
     private func markTransientOpenWithIfNoSettingsWindow() {
@@ -341,12 +364,15 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
     private func finishTransientInteractionIfNeeded() {
         guard mainWindow?.isVisible != true,
               !isSupervisingRecording,
+              activeOpenWithAgentSubmissions == 0,
               activeNotificationResponses == 0,
               launchIntent == .transientOpenWith || launchIntent == .backgroundWake else { return }
 
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 150_000_000)
-            guard self.mainWindow?.isVisible != true, self.activeNotificationResponses == 0 else { return }
+            guard self.mainWindow?.isVisible != true,
+                  self.activeOpenWithAgentSubmissions == 0,
+                  self.activeNotificationResponses == 0 else { return }
             NSApp.terminate(nil)
         }
     }
@@ -376,6 +402,21 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
+        if let action = notificationService.jobSubmissionDecision(
+            actionIdentifier: response.actionIdentifier, content: response.notification.request.content
+        ) {
+            beginNotificationResponse()
+            Task {
+                do {
+                    try await BackgroundAgentClient().resolveJobSubmission(action.submissionID, decision: action.decision)
+                } catch {
+                    DiagnosticLog.append("normal job decision forwarding failed: \(error.localizedDescription)")
+                }
+                completionHandler()
+                await MainActor.run { self.endNotificationResponse() }
+            }
+            return
+        }
         if let copyInfo = notificationService.copyInfo(for: response) {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(copyInfo, forType: .string)
@@ -390,8 +431,19 @@ final class NormalLauncher: NSObject, NSApplicationDelegate, UNUserNotificationC
 
         beginNotificationResponse()
         Task {
-            let guidance = await AppleMusicShareDownloadCoordinator(container: container)
-                .handlePendingAppleMusicDownload(format: format)
+            let guidance: SettingsAttentionItem?
+            do {
+                guidance = try await BackgroundAgentClient()
+                    .handlePendingAppleMusicDownload(
+                        format: format, batchID: UUID(uuidString: response.notification.request.identifier)
+                    )
+            } catch {
+                guidance = nil
+                DiagnosticLog.append(
+                    "normal Apple Music format action forwarding failed " +
+                    "format=\(format.rawValue) error=\(error.localizedDescription)"
+                )
+            }
             completionHandler()
             await MainActor.run {
                 if let guidance {

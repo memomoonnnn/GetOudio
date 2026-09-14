@@ -123,6 +123,25 @@ public final class ColimaDockerRuntime {
         return dockerPath
     }
 
+    /// Stops only this managed Colima instance.  The persistent Agent calls it
+    /// after its idle window; ordinary status reads never start or stop a VM.
+    public func stopIfRunning() async {
+        let status = await check()
+        guard status.isRunning, let colimaPath = status.colimaPath else { return }
+        do {
+            let result = try await runner.run(
+                executablePath: colimaPath,
+                arguments: ["stop"],
+                environment: runtimeEnvironment
+            )
+            if !result.succeeded {
+                DiagnosticLog.append("Colima idle stop failed: \(result.standardError)", level: .notice)
+            }
+        } catch {
+            DiagnosticLog.append("Colima idle stop failed: \(error.localizedDescription)", level: .notice)
+        }
+    }
+
     public func dockerArguments(_ arguments: [String]) -> [String] {
         ["--context", dockerContext] + arguments
     }

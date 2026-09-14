@@ -2,12 +2,10 @@ import AppKit
 import GetOudioCore
 
 final class OpenWithJobDispatcher {
-    private let container: SharedContainer
     private let settingsStore: SettingsStore
     private let actionFactory: ConversionActionFactory
 
-    init(container: SharedContainer, actionFactory: ConversionActionFactory? = nil) {
-        self.container = container
+    init(container: AgentDataStore, actionFactory: ConversionActionFactory? = nil) {
         let settingsStore = SettingsStore(container: container)
         self.settingsStore = settingsStore
         self.actionFactory = actionFactory ?? ConversionActionFactory(settingsStore: settingsStore)
@@ -17,21 +15,20 @@ final class OpenWithJobDispatcher {
         actionFactory.enabledPresets()
     }
 
-    func enqueueAudioJobs(urls: [URL], preset: ConversionPreset) -> Bool {
-        guard ensureSourceDirectoryAccess(for: urls) else { return false }
+    func makeAudioJobs(urls: [URL], preset: ConversionPreset) -> [JobRequest]? {
+        guard ensureSourceDirectoryAccess(for: urls) else { return nil }
         let jobs = actionFactory.audioTranscodeJobs(for: urls, preset: preset, source: .openWith)
         guard jobs.count == urls.count, !jobs.isEmpty else {
             DiagnosticLog.append("open with enqueue audio rejected count=\(urls.count) jobs=\(jobs.count)")
-            return false
+            return nil
         }
-
-        return enqueue(jobs, launchSource: .openWithAudio)
+        return jobs
     }
 
-    func enqueueNCMJobs(urls: [URL]) -> Bool {
+    func makeNCMJobs(urls: [URL]) -> [JobRequest]? {
         if settingsStore.ncmOutputMode == .sourceDirectory,
            !ensureSourceDirectoryAccess(for: urls) {
-            return false
+            return nil
         }
         let jobs = urls
             .filter { FileCategory.classify($0) == .ncm }
@@ -50,10 +47,9 @@ final class OpenWithJobDispatcher {
 
         guard jobs.count == urls.count, !jobs.isEmpty else {
             DiagnosticLog.append("open with enqueue ncm rejected count=\(urls.count) jobs=\(jobs.count)")
-            return false
+            return nil
         }
-
-        return enqueue(jobs, launchSource: .openWithNCM)
+        return jobs
     }
 
     private func ensureSourceDirectoryAccess(for urls: [URL]) -> Bool {
@@ -63,34 +59,17 @@ final class OpenWithJobDispatcher {
         )
     }
 
-    func launchHeadlessProcessor() {
-        let configuration = NSWorkspace.OpenConfiguration()
-        configuration.activates = false
-        configuration.createsNewApplicationInstance = true
-        if let diagnosticRoot = ProcessInfo.processInfo.environment[SharedContainer.diagnosticRootEnvironmentKey] {
-            configuration.environment = [SharedContainer.diagnosticRootEnvironmentKey: diagnosticRoot]
-        }
-
-        let bundleURL = Bundle.main.bundleURL
-        DiagnosticLog.append("open with launch headless bundle=\(bundleURL.path)")
-        NSWorkspace.shared.openApplication(at: bundleURL, configuration: configuration) { _, error in
-            if let error {
-                DiagnosticLog.append("open with launch headless failed \(error.localizedDescription)")
-            } else {
-                DiagnosticLog.append("open with launch headless requested")
-            }
-        }
-    }
-
-    private func enqueue(_ jobs: [JobRequest], launchSource: LaunchSource) -> Bool {
+    /// Waits for the Agent's durable queue acknowledgement. Callers must keep
+    /// their transient process alive until this returns.
+    func submit(_ jobs: [JobRequest], launchSource: LaunchSource) async -> Bool {
+        guard !jobs.isEmpty else { return false }
+        DiagnosticLog.append("open with agent enqueue source=\(launchSource.rawValue) count=\(jobs.count)")
         do {
-            DiagnosticLog.append("open with enqueue start source=\(launchSource.rawValue) count=\(jobs.count)")
-            let intake = try JobIntake(container: container)
-            try intake.enqueue(jobs, launchSource: launchSource)
-            launchHeadlessProcessor()
+            try await BackgroundAgentClient().enqueue(jobs)
+            DiagnosticLog.append("open with agent enqueue acknowledged source=\(launchSource.rawValue) count=\(jobs.count)")
             return true
         } catch {
-            DiagnosticLog.append("open with enqueue failed \(error.localizedDescription)")
+            DiagnosticLog.append("open with agent enqueue failed \(error.localizedDescription)")
             return false
         }
     }

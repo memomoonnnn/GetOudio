@@ -35,18 +35,11 @@ final class ShareExtension: NSViewController {
                 return
             }
             hasStarted = true
-            do {
-                let sharedContainer = try SharedContainer.forCurrentProcess()
-                DiagnosticLog.configure(container: sharedContainer)
-                process(context, container: sharedContainer)
-            } catch {
-                NSLog("Get Oudio Share extension shared container unavailable: \(error.localizedDescription)")
-                context.cancelRequest(withError: error)
-            }
+            process(context)
         }
     }
 
-    private func process(_ context: NSExtensionContext, container: SharedContainer) {
+    private func process(_ context: NSExtensionContext) {
         let group = DispatchGroup()
         let lock = NSLock()
         var urls: [URL] = []
@@ -91,41 +84,30 @@ final class ShareExtension: NSViewController {
             DiagnosticLog.append(
                 "[ShareExtension] extracted URLs: \(urls.map(\.absoluteString).joined(separator: ", "))"
             )
-            do {
-                try self.enqueue(urls, container: container)
-                self.openContainingApp(container: container)
-                context.completeRequest(returningItems: [], completionHandler: nil)
-            } catch {
-                NSLog("Get Oudio Share extension failed to enqueue jobs: \(error.localizedDescription)")
-                context.cancelRequest(withError: error)
+            Task {
+                do {
+                    try await self.enqueue(urls)
+                    context.completeRequest(returningItems: [], completionHandler: nil)
+                } catch {
+                    NSLog("Get Oudio Share extension failed to enqueue jobs: \(error.localizedDescription)")
+                    context.cancelRequest(withError: error)
+                }
             }
         }
     }
 
-    private func enqueue(_ urls: [URL], container: SharedContainer) throws {
+    private func enqueue(_ urls: [URL]) async throws {
+        let agent = BackgroundAgentClient()
         let supportedURLs = AppleMusicShareURLParser.supportedURLs(from: urls)
         let jobs = supportedURLs
             .map { JobRequest(fileURL: $0, category: .appleMusic, operation: .appleMusicDownload(nil), source: .shareExtension) }
 
         if !jobs.isEmpty {
-            let intake = try JobIntake(container: container)
-            try intake.enqueue(jobs, launchSource: .shareExtension)
+            try await agent.enqueue(jobs)
         }
         if !urls.isEmpty, supportedURLs.isEmpty {
-            let eventQueue = try ShareEventQueue(container: container)
-            try eventQueue.enqueue([
-                ShareEvent(kind: .unsupportedDownloadSource, urls: urls)
-            ])
+            try await agent.reportUnsupportedShareURLs(urls)
         }
-    }
-
-    private func openContainingApp(container: SharedContainer) {
-        LaunchMarkerStore(container: container).mark(.shareExtension)
-
-        guard let runQueuedURL = URL(string: "\(AppConstants.appURLScheme)://run-queued") else {
-            return
-        }
-        NSWorkspace.shared.open(runQueuedURL)
     }
 
     private static func urls(from item: NSSecureCoding?) -> [URL] {

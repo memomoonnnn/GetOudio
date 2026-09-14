@@ -3,7 +3,7 @@ import GetOudioCore
 
 @MainActor
 enum SettingsAttentionLauncher {
-    static func open(_ item: SettingsAttentionItem, container: SharedContainer) {
+    static func open(_ item: SettingsAttentionItem, container: AgentDataStore) {
         SettingsAttentionRequestStore(container: container).request(item)
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = true
