@@ -330,6 +330,95 @@ final class GetOudioCoreTests: XCTestCase {
         XCTAssertEqual(arguments.suffix(1), ["/tmp/song [AAC 320Kbps].m4a"])
     }
 
+    func testEmbeddedCoverArgumentsMapOnlyAudioAndSelectedPicture() throws {
+        let input = URL(fileURLWithPath: "/tmp/song.mov")
+        for preset in [ConversionPreset.aac128, .mp3128, .flacSource, .alacSource] {
+            let arguments = preset.ffmpegArguments(inputURL: input, outputURL: preset.outputURL(for: input), coverStreamIndex: 3)
+            let maps = arguments.enumerated().compactMap { $0.element == "-map" ? arguments[$0.offset + 1] : nil }
+            XCTAssertEqual(maps, ["0:a:0", "0:3"])
+            XCTAssertTrue(arguments.contains("-c:v"))
+            XCTAssertTrue(arguments.contains("attached_pic"))
+            XCTAssertFalse(arguments.contains("-vn"))
+            if preset.outputExtension == "m4a" { XCTAssertFalse(arguments.contains("use_metadata_tags")) }
+        }
+        for preset in [ConversionPreset.pcmSource, .pcmAiffSource] {
+            XCTAssertFalse(preset.supportsEmbeddedCover)
+        }
+    }
+
+    func testOggCoverArgumentsUsePictureMetadataAndKeepAudioMap() throws {
+        let input = URL(fileURLWithPath: "/tmp/song.flac")
+        let metadata = URL(fileURLWithPath: "/tmp/cover.ffmeta")
+        for preset in [ConversionPreset.vorbisQ3, .opus64KbpsPerChannel] {
+            let arguments = preset.ffmpegArguments(inputURL: input, outputURL: preset.outputURL(for: input), pictureMetadataURL: metadata)
+            let maps = arguments.enumerated().compactMap { $0.element == "-map" ? arguments[$0.offset + 1] : nil }
+            XCTAssertEqual(maps, ["0:a:0"])
+            let metadataIndex = try XCTUnwrap(arguments.firstIndex(of: "-map_metadata"))
+            XCTAssertEqual(arguments[metadataIndex + 1], "1:g")
+            XCTAssertTrue(arguments.contains(metadata.path))
+        }
+    }
+
+    func testCoverProbeIgnoresOrdinaryVideoAndUnsupportedPictures() {
+        let probe = """
+          Stream #0:0: Video: h264, yuv420p
+          Stream #0:1: Video: bmp, bgr24 (attached pic)
+          Stream #0:2: Audio: flac, 44100 Hz, stereo, s16
+          Stream #0:3: Video: png, rgba (attached pic)
+          Stream #0:4: Video: mjpeg, yuvj420p (attached pic)
+        """
+        XCTAssertEqual(AudioConversionService.firstSupportedCover(from: probe), .init(streamIndex: 3, mimeType: "image/png"))
+        XCTAssertTrue(AudioConversionService.hasAttachedPicture(in: probe))
+        XCTAssertNil(AudioConversionService.firstSupportedCover(from: "Stream #0:0: Video: h264, yuv420p"))
+        XCTAssertNil(AudioConversionService.firstSupportedCover(from: "Stream #0:1: Video: bmp (attached pic)"))
+        XCTAssertFalse(AudioConversionService.hasAttachedPicture(in: "Stream #0:0: Audio: aac, stereo"))
+    }
+
+    func testCoverPictureBlockContainsFrontCoverAndImageBytes() {
+        let image = Data([0xFF, 0xD8, 0xFF, 0xD9])
+        let block = AudioConversionService.pictureBlock(image: image, mimeType: "image/jpeg")
+        XCTAssertEqual(Array(block.prefix(4)), [0, 0, 0, 3])
+        XCTAssertEqual(Array(block.suffix(image.count)), Array(image))
+        XCTAssertNotNil(block.range(of: Data("image/jpeg".utf8)))
+    }
+
+    func testCoverMuxFailureRetriesAudioWithoutAddingTaskMessage() async throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let binaryDirectory = root.appendingPathComponent("ffmpeg")
+        try FileManager.default.createDirectory(at: binaryDirectory, withIntermediateDirectories: true)
+        let binary = binaryDirectory.appendingPathComponent("ffmpeg")
+        let script = """
+        #!/bin/sh
+        for argument do
+          if [ "$argument" = "-hide_banner" ]; then
+            echo 'Stream #0:0: Audio: flac, 44100 Hz, stereo, s16' >&2
+            echo 'Stream #0:1: Video: mjpeg, yuvj420p (attached pic)' >&2
+            exit 1
+          fi
+          if [ "$argument" = "-c:v" ]; then
+            echo 'cover mux failed' >&2
+            exit 1
+          fi
+          output="$argument"
+        done
+        printf audio > "$output"
+        """
+        try script.write(to: binary, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: binary.path)
+        let input = root.appendingPathComponent("song.flac")
+        try Data("source".utf8).write(to: input)
+        let job = JobRequest(fileURL: input, operation: .transcode(.mp3128), source: .manual)
+        let service = AudioConversionService(dependencyManager: DependencyManager(resourceRoot: root))
+
+        let summary = await service.convert([job])
+
+        XCTAssertEqual(summary.successCount, 1)
+        XCTAssertEqual(summary.failureCount, 0)
+        XCTAssertTrue(summary.messages.isEmpty)
+        XCTAssertEqual(try String(contentsOf: ConversionPreset.mp3128.outputURL(for: input), encoding: .utf8), "audio")
+    }
+
     func testPresetOutputDoesNotCollideWithSameExtensionInput() {
         let input = URL(fileURLWithPath: "/tmp/song.m4a")
 

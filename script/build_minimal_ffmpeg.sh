@@ -38,6 +38,7 @@ echo "--- 配置编译选项 ---"
 
 # 外部音频编码库路径
 LAME_PREFIX="$(brew --prefix lame 2>/dev/null || echo '/opt/homebrew/opt/lame')"
+MPG123_PREFIX="$(brew --prefix mpg123 2>/dev/null || echo '/opt/homebrew/opt/mpg123')"
 OPUS_PREFIX="$(brew --prefix opus 2>/dev/null || echo '/opt/homebrew/opt/opus')"
 VORBIS_PREFIX="$(brew --prefix libvorbis 2>/dev/null || echo '/opt/homebrew/opt/libvorbis')"
 OGG_PREFIX="$(brew --prefix libogg 2>/dev/null || echo '/opt/homebrew/opt/libogg')"
@@ -46,6 +47,9 @@ PKGCONF_PREFIX="$(brew --prefix pkgconf 2>/dev/null || brew --prefix pkg-config 
 # 确保 configure 能找到外部编码库，并尽量把第三方编码库静态链接进 ffmpeg。
 EXTERNAL_CFLAGS="-I${LAME_PREFIX}/include -I${OPUS_PREFIX}/include -I${VORBIS_PREFIX}/include -I${OGG_PREFIX}/include"
 EXTERNAL_LDFLAGS="-L${LAME_PREFIX}/lib -Wl,-force_load,${LAME_PREFIX}/lib/libmp3lame.a -Wl,-dead_strip_dylibs"
+if [[ -f "${MPG123_PREFIX}/lib/libmpg123.a" ]]; then
+    EXTERNAL_LDFLAGS="${EXTERNAL_LDFLAGS} -L${MPG123_PREFIX}/lib -Wl,-force_load,${MPG123_PREFIX}/lib/libmpg123.a"
+fi
 STATIC_PKG_CONFIG_DIR="$BUILD_DIR/pkgconfig-static"
 mkdir -p "$STATIC_PKG_CONFIG_DIR"
 cat > "$STATIC_PKG_CONFIG_DIR/opus.pc" <<EOF
@@ -105,6 +109,7 @@ export PKG_CONFIG_PATH="$STATIC_PKG_CONFIG_DIR:${PKG_CONFIG_PATH:-}"
     --enable-decoder=pcm_f32le,pcm_f32be,pcm_f64le,pcm_f64be \
     --enable-decoder=vorbis \
     --enable-decoder=opus \
+    --enable-decoder=mjpeg,png \
     --enable-decoder=ac3,ac3_fixed,eac3 \
     --enable-decoder=wmav1,wmav2,wmapro,wmalossless \
     --enable-decoder=wavpack \
@@ -128,7 +133,7 @@ export PKG_CONFIG_PATH="$STATIC_PKG_CONFIG_DIR:${PKG_CONFIG_PATH:-}"
     --enable-libopus --enable-encoder=libopus \
     \
     `# === 解复用器（读取输入文件）===` \
-    --enable-demuxer=mov,m4v,mp3,wav,flac,ogg,aac,ac3,eac3 \
+    --enable-demuxer=mov,m4v,mp3,wav,flac,ogg,aac,ac3,eac3,ffmetadata \
     --enable-demuxer=matroska,webm_dash_manifest \
     --enable-demuxer=avi,asf,wmv \
     --enable-demuxer=pcm_s16le,pcm_s24le,pcm_s32le,pcm_f32le \
@@ -147,6 +152,7 @@ export PKG_CONFIG_PATH="$STATIC_PKG_CONFIG_DIR:${PKG_CONFIG_PATH:-}"
     --enable-muxer=wav \
     --enable-muxer=flac \
     --enable-muxer=ogg \
+    --enable-muxer=image2pipe,ffmetadata \
     --enable-muxer=adts \
     --enable-muxer=caf \
     --enable-muxer=aiff \
@@ -173,6 +179,7 @@ export PKG_CONFIG_PATH="$STATIC_PKG_CONFIG_DIR:${PKG_CONFIG_PATH:-}"
     \
     `# === 编译选项 ===` \
     --enable-static \
+    --enable-zlib \
     --disable-shared \
     --enable-gpl \
     --enable-small \
@@ -199,6 +206,13 @@ make -j"$MAKEFLAGS" 2>&1 | grep -E "^(CC|LD|AR|GEN|error|warning:.*error)" || tr
 echo ""
 echo "--- 安装 ---"
 make install 2>&1 | tail -5
+
+for decoder in mjpeg png; do
+    if ! "$BUILD_DIR/install/bin/ffmpeg" -hide_banner -decoders 2>/dev/null | awk -v name="$decoder" '$2 == name { found = 1 } END { exit !found }'; then
+        echo "缺少封面解码器: $decoder" >&2
+        exit 1
+    fi
+done
 
 # ---------- 复制到 ThirdParty ----------
 echo ""

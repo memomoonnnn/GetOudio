@@ -10,6 +10,8 @@
 
 `bash script/package_dmg.sh` 默认使用 `build/DistributionDerivedData` 做 Release clean build，并生成 `build/GetOudio.dmg`；包内代码采用 ad-hoc 签名，不含开发 provisioning profile，且未公证，不能与证书签名安装视为同一验证条件。修改嵌入布局或签名流程后，应分别检查开发签名产物和 DMG 内 App 的架构、动态库路径及 `codesign --verify --deep --strict`，并验证实际运行链路；磁盘签名有效不等于运行时身份检查或网络访问已通过。
 
+从 DMG 替换 `/Applications/Get Oudio.app` 后，必须确认当前后台任务结束，再重启已注册的 Background Agent 并执行安装版验收；常驻 Agent 不会因磁盘上的 App 被替换而自动加载新 Core 或内嵌工具。验证日志中的进程启动记录和工具路径后，再以真实 Finder、Open With 或 Share 入口判断新版本行为。
+
 诊断日志位于 Agent 沙盒控制根的 `conversion-log.txt`。新增诊断只能使用 `DiagnosticLog.configure(store:)` 和 `DiagnosticLog.append(_:level:)`；普通诊断为 `.debug`，仅汇总结果可为 `.info`。开关关闭时不得创建或追加文件；轮询、菜单刷新、进度/音频回调等高频路径不得逐次写日志，应记录状态转换、聚合结果或由非实时健康检查限频输出。系统日志可按进程使用 `log stream --predicate 'process == "Get Oudio"'`、`GetOudioBootstrapInstaller`、`GetOudioAMRuntimeWorker`、`GetOudioFinderExtension` 或 `GetOudioShareExtension`。
 
 Bootstrap Installer 改动除 Core tests 外，必须验证内嵌 Installer 无 App Sandbox/App Group entitlement，首次静默安装后两个 plist 与 launchd job 存在，设置页卸载后两者均消失，再安装后 Agent XPC 恢复；整个流程不得启动 Terminal。

@@ -173,8 +173,25 @@ public enum ConversionPreset: String, Codable, CaseIterable, Identifiable, Senda
         }
     }
 
-    public func ffmpegArguments(inputURL: URL, outputURL: URL, inputAudioChannelCount: Int? = nil) -> [String] {
+    public var supportsEmbeddedCover: Bool {
+        group != .pcmWav && group != .pcmAiff
+    }
+
+    public var storesCoverAsPictureMetadata: Bool {
+        group == .vorbis || group == .opus
+    }
+
+    public func ffmpegArguments(
+        inputURL: URL,
+        outputURL: URL,
+        inputAudioChannelCount: Int? = nil,
+        coverStreamIndex: Int? = nil,
+        pictureMetadataURL: URL? = nil
+    ) -> [String] {
         var arguments = ["-i", inputURL.path]
+        if let pictureMetadataURL {
+            arguments += ["-f", "ffmetadata", "-i", pictureMetadataURL.path]
+        }
 
         switch self {
         case .aac128:
@@ -227,11 +244,15 @@ public enum ConversionPreset: String, Codable, CaseIterable, Identifiable, Senda
             arguments += opusArguments(targetKbpsPerChannel: 128, inputAudioChannelCount: inputAudioChannelCount)
         }
 
-        arguments += ["-map", "0:a:0", "-map_metadata", "0:g", "-map_chapters", "0", "-y", "-vn"]
+        arguments += ["-map", "0:a:0"]
+        if let coverStreamIndex {
+            arguments += ["-map", "0:\(coverStreamIndex)", "-c:v", "copy", "-disposition:v:0", "attached_pic"]
+        }
+        arguments += ["-map_metadata", pictureMetadataURL == nil ? "0:g" : "1:g", "-map_chapters", "0", "-y"]
 
         switch self {
         case .aac128, .aac256, .aac320, .alac24Bit48k, .alac16Bit44_1k, .alacSource:
-            arguments += ["-movflags", "use_metadata_tags"]
+            if coverStreamIndex == nil { arguments += ["-movflags", "use_metadata_tags"] }
         case .mp3128, .mp3256, .mp3320:
             arguments += ["-write_id3v2", "1", "-id3v2_version", "3"]
         default:
