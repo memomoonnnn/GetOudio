@@ -1,13 +1,11 @@
 # Apple Music Wrapper and Login Guide
 
-适用于 wrapper 镜像、服务/登录容器、Apple Music 登录、验证码、代理、容器就绪与 40020。修改前检查 wrapper runtime 服务、Background Agent/Runtime Worker XPC、Core runtime 模型和凭据处理。
+适用于 wrapper-lite QEMU、登录、验证码、代理和服务就绪。修改前检查 `AppleMusicQEMUProcess`、`AppleMusicWrapperRuntime`、Runtime Worker、XPC 模型与 downloader 配置。
 
-wrapper 状态必须区分镜像、服务容器 `get-oudio-wrapper`、临时登录容器 `get-oudio-wrapper-login` 和 Colima VM。daemon 能查询已存在但停止的容器，不能只以 `.State.Running` 判断服务“消失”；服务停止时先 `docker start`，仅启动失败或确实不存在时删除重建。登录容器完成登录后可停止或移除，其不存在不代表服务不可用；Colima 停止导致 Docker 查询失败只说明 VM 未运行。
+新路径使用固定版本的本地 QEMU 包、独立可写 `wrapper-data/data.img` 和单一 `127.0.0.1:12340` HTTP API；不得恢复 Docker 容器、40020 端口或将账号数据放回版本化包。安装和更新保留旧 Colima 数据以供回退，且不将旧 `.login-completed` 标记误认作 QEMU 登录。服务只在 `/status` 返回 `code=0` 且 `regions` 非空时可供 downloader 使用；同端口的未登记进程不能作为受控服务使用。
 
-Apple Silicon 通过 Agent 管理的 Colima VZ + Rosetta 运行受控 `linux/amd64` wrapper；不得改用用户 QEMU、Homebrew 或可变上游镜像标签。更新先停止并删除旧服务和旧镜像，不提供跨修订回滚；必须保留 `rootfs/data:/app/rootfs/data`，更新成功后仅删除 `wrapper-data/.login-completed` 初始化标记，不能删除认证数据。服务容器显式映射 10020、20020、30020、40020；仅在容器仍运行且 `http://127.0.0.1:40020/` 空请求返回 HTTP 400 后，才允许 downloader 调用。账号失效或 key server 未就绪时清除初始化标记并要求重新初始化。
+来宾明确等待账号输入后，Worker 才按行写入用户名和密码；验证码只能在 `waitingForVerificationCode` 阶段另行写入同一标准输入，不创建 `2fa.txt`。输入中的换行必须拒绝。登录串口只在内存中识别阶段和成功标记，不记录原文、令牌前缀或凭据。Worker 空闲退出后，成功标记仅表示登录已完成；实际下载前仍需重新验证服务状态。系统代理默认关闭；用户启用时，将 host loopback 代理地址改写为 QEMU 来宾可访问的 `10.0.2.2`。
 
-账号、密码和验证码只允许存在于 App → Agent → Worker 的 XPC 请求内存中，不得写入队列、状态快照、UserDefaults 或日志。初始化保留 `rootfs/data:/app/rootfs/data` 挂载和 `args=-L username:password -F`，但日志必须隐藏含凭据命令行。验证码只能在 `waitingForVerificationCode` 阶段写入 host `rootfs/data/data/com.apple.android.music/files/2fa.txt`，写入前创建父目录；初始化前清除该文件和历史错误路径 `rootfs/data/2fa.txt`。登录成功须识别账号缓存完成并监听 40020；停止或移除登录容器的旧日志不能让状态永久停在“正在登录”。系统代理默认关闭，仅用户显式启用时转为 `-P`，loopback host 改写为 `host.lima.internal`。
+Worker 在内存中维护登录快照，Agent 通过版本化 XPC 事件向 GUI 发布；GUI 不轮询 Worker，也不读取状态文件。首次返回快照前从 wrapper 只读状态校准，已提交验证码不能退回“等待验证码”。
 
-Worker 在内存中维护登录快照，Agent 维护版本化可观察状态并通过长连接 XPC 事件主动发布；GUI 不得轮询 Worker 或读取 `progress.json`/`wrapper-login-status.json`。Worker 首次返回快照前必须以 wrapper 的只读登录状态校准进程内默认值，不能把新进程初始的 `notInitialized` 当作事实；校准仍须保留 `verificationCodeSubmitted` 不退回 `waitingForVerificationCode` 的保护。Agent 成功读取到空进度时必须发布 `nil`，清除已结束操作遗留的进度。
-
-验证：运行 Core tests；登录或服务就绪改动后签名安装，以授权测试账号完成初始化、40020 空请求 HTTP 400 与一首测试曲下载。
+验证：Core tests 后签名安装，以授权测试账号完成登录与 2FA，确认再次启动缓存后 `/status` 为非空 `regions`，并下载一首测试曲。

@@ -73,4 +73,11 @@ if [[ "$sparkle_needs_thinning" == true ]]; then
   done
 fi
 
+DOWNLOADER_DIR="$APP_BUNDLE/Contents/Resources/apple-music-downloader"
+if [[ -f "$DOWNLOADER_DIR/libtemari.dylib" ]]; then
+  [[ -f "$DOWNLOADER_DIR/apple-music-downloader" ]] || { echo "missing downloader executable" >&2; exit 1; }
+  /usr/bin/codesign --force --sign "${EXPANDED_CODE_SIGN_IDENTITY:--}" --timestamp=none \
+    "$DOWNLOADER_DIR/libtemari.dylib" "$DOWNLOADER_DIR/apple-music-downloader"
+fi
+
 echo "Verified $binary_count Mach-O binaries for $TARGET_ARCH: $APP_BUNDLE"

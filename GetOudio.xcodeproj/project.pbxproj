@@ -57,6 +57,7 @@
 		7E091D7050D2D90DC030B7FA /* ProcessRunner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D9341EFFB773C117429DF56 /* ProcessRunner.swift */; };
 		7E4140D91A905E5B8076794C /* AppConstants.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74D3AADF75639B9295A0B4BF /* AppConstants.swift */; };
 		80A877F95C99E226655664B6 /* GetOudioFinderExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = E71B1DAE2F34CAAE4261B2F0 /* GetOudioFinderExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		829012AF3ECE70192BB998F8 /* AppleMusicQEMUProcess.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18C232BC573E4138EBDCC3CD /* AppleMusicQEMUProcess.swift */; };
 		84E264F729CDCBA406A0C041 /* ColimaDockerRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C389A0C8BA4A129E65FAEA3 /* ColimaDockerRuntime.swift */; };
 		871AEE624B1C96CAEF41517C /* BackgroundTaskCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB83BE0B73035F401DA9D0DB /* BackgroundTaskCoordinator.swift */; };
 		893000D007353B9BF9F71CBC /* SystemExtensionSettingsModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 280B0F7AC8A13D4928A4F3EF /* SystemExtensionSettingsModel.swift */; };
@@ -243,6 +244,7 @@
 		11CE5B6DE261238024CBD28E /* RecordingWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingWidget.swift; sourceTree = "<group>"; };
 		13B4DFE9D95E437DC5C2FDBF /* ConversionActionFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversionActionFactory.swift; sourceTree = "<group>"; };
 		15D5E1EEA66101087B2B76A2 /* LaunchAgents */ = {isa = PBXFileReference; lastKnownFileType = folder; name = LaunchAgents; path = GetOudio/Resources/LaunchAgents; sourceTree = SOURCE_ROOT; };
+		18C232BC573E4138EBDCC3CD /* AppleMusicQEMUProcess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleMusicQEMUProcess.swift; sourceTree = "<group>"; };
 		1A77C371986D7FC6E0D024B5 /* OpenWithPresetMenuController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenWithPresetMenuController.swift; sourceTree = "<group>"; };
 		1C389A0C8BA4A129E65FAEA3 /* ColimaDockerRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColimaDockerRuntime.swift; sourceTree = "<group>"; };
 		218718BFCE1EB8C4B99AED9F /* Dependency.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Dependency.swift; sourceTree = "<group>"; };
@@ -534,6 +536,7 @@
 				931EDAB50D5DFF916FE75A07 /* AppleMusicDownloadMessageFormatter.swift */,
 				0A78E71AB3690C0540A80048 /* AppleMusicDownloadNotificationSupport.swift */,
 				0BB207379790847AB20869D3 /* AppleMusicDownloadService.swift */,
+				18C232BC573E4138EBDCC3CD /* AppleMusicQEMUProcess.swift */,
 				323FD01C817E384689C4EAA8 /* AppleMusicRuntimeAgentClient.swift */,
 				B9C68E3D12622013AF3CB161 /* AppleMusicRuntimeManager.swift */,
 				92154AF71E5FE1BDC65FF692 /* AppleMusicRuntimeOperationAvailability.swift */,
@@ -1020,6 +1023,7 @@
 				B8E544476B65B2595235803A /* AppleMusicDownloadNotificationSupport.swift in Sources */,
 				DE31BC37B7DA0B57A7594782 /* AppleMusicDownloadService.swift in Sources */,
 				1A5F3EF77607777EBD03007A /* AppleMusicDownloaderProgressParser.swift in Sources */,
+				829012AF3ECE70192BB998F8 /* AppleMusicQEMUProcess.swift in Sources */,
 				BA2B129FF3760A61CFEEF0E2 /* AppleMusicRuntimeAgentClient.swift in Sources */,
 				9592ABD5238190A0FECF2673 /* AppleMusicRuntimeManager.swift in Sources */,
 				B1F06B68F639D0BD76864DFA /* AppleMusicRuntimeOperationAvailability.swift in Sources */,

@@ -246,7 +246,6 @@ targets:
       properties:
         com.apple.security.network.client: true
         com.apple.security.network.server: true
-        com.apple.security.virtualization: true
     settings:
       base:
         ENABLE_APP_SANDBOX: NO

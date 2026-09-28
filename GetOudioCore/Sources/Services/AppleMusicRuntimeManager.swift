@@ -8,6 +8,7 @@ public enum AppleMusicRuntimeComponent: String, CaseIterable, Codable, Identifia
     case dockerBuildx
     case gpac
     case wrapperImage
+    case wrapperQEMU
     case appleMusicDownloader
 
     public var id: String { rawValue }
@@ -20,6 +21,7 @@ public enum AppleMusicRuntimeComponent: String, CaseIterable, Codable, Identifia
         case .dockerBuildx: return "Docker Buildx"
         case .gpac: return "GPAC / MP4Box"
         case .wrapperImage: return "Apple Music wrapper image"
+        case .wrapperQEMU: return "Apple Music wrapper-lite QEMU"
         case .appleMusicDownloader: return "Apple-Music-Downloader"
         }
     }
@@ -65,6 +67,11 @@ public struct AppleMusicRuntimeInstallResult: Codable, Equatable, Sendable {
 }
 
 public final class AppleMusicRuntimeManager {
+    public enum Backend: Equatable {
+        case legacyDocker
+        case qemu
+    }
+
     public typealias WrapperImageInstaller = (
         AppleMusicRuntimeManager
     ) async throws -> (status: ManagedDockerImageStatus, wasPulled: Bool)
@@ -102,6 +109,11 @@ public final class AppleMusicRuntimeManager {
         string: "https://github.com/WorldObservationLog/wrapper/releases/download/wrapper.x86_64.latest/Wrapper.x86_64.latest.zip"
     )!
     public static let wrapperArtifactSHA256 = "4bf5ec7869c57baeab13832d14b5c8d1c1167a6dd492a837f1d9b8fb42c2d67a"
+    public static let qemuVersion = "lite-qemu-66eb88e"
+    public static let qemuArtifactURL = URL(
+        string: "https://github.com/memomoonnnn/wrapper/releases/download/lite-qemu-66eb88e/wrapper-lite-qemu-macos-aarch64.zip"
+    )!
+    public static let qemuArtifactSHA256 = "06d184c0da8d8aa325ccf8b7a021f9baff8ba1fb203bbe4db537b9e9f6ae87b8"
     public static let gpacPackageEnvironmentKey = "GET_OUDIO_GPAC_PACKAGE_URL"
     public static let gpacDefaultPackageURL = URL(
         string: "https://download.tsi.telecom-paristech.fr/gpac/new_builds/gpac_latest_head_macos.pkg"
@@ -120,9 +132,12 @@ public final class AppleMusicRuntimeManager {
     private let resourceRoot: URL?
     private let gpacPackageURLOverride: String?
     private let wrapperImageInstaller: WrapperImageInstaller?
+    private let qemuArtifactURL: URL
+    private let qemuArtifactSHA256: String
     private let progressURL: URL?
     private let progressHandler: @Sendable (AppleMusicRuntimeProgress) -> Void
     private let receiptStore: ManagedRuntimeComponentReceiptStore
+    public let backend: Backend
 
     public let rootURL: URL
     public let colimaHomeDirectory: URL
@@ -137,9 +152,12 @@ public final class AppleMusicRuntimeManager {
         resourceRoot: URL? = Bundle.main.resourceURL,
         gpacPackageURLOverride: String? = nil,
         wrapperImageInstaller: WrapperImageInstaller? = nil,
+        qemuArtifactURL: URL = AppleMusicRuntimeManager.qemuArtifactURL,
+        qemuArtifactSHA256: String = AppleMusicRuntimeManager.qemuArtifactSHA256,
         progressURL: URL? = nil,
         progressHandler: @escaping @Sendable (AppleMusicRuntimeProgress) -> Void = { _ in },
         enabledStateURL: URL? = nil,
+        backend: Backend = .legacyDocker,
         fileManager: FileManager = .default
     ) {
         self.rootURL = rootURL
@@ -160,8 +178,11 @@ public final class AppleMusicRuntimeManager {
         self.resourceRoot = resourceRoot
         self.gpacPackageURLOverride = gpacPackageURLOverride
         self.wrapperImageInstaller = wrapperImageInstaller
+        self.qemuArtifactURL = qemuArtifactURL
+        self.qemuArtifactSHA256 = qemuArtifactSHA256
         self.fileManager = fileManager
         self.receiptStore = ManagedRuntimeComponentReceiptStore(rootURL: rootURL, fileManager: fileManager)
+        self.backend = backend
     }
 
     public convenience init(
@@ -183,6 +204,7 @@ public final class AppleMusicRuntimeManager {
             progressURL: nil,
             progressHandler: progressHandler ?? { _ in },
             enabledStateURL: container.url(for: .appleMusicRuntimeIPC).appendingPathComponent("runtime-enabled"),
+            backend: .qemu,
             fileManager: fileManager
         )
     }
@@ -198,6 +220,10 @@ public final class AppleMusicRuntimeManager {
     }
     public var gpacDirectory: URL { rootURL.appendingPathComponent("gpac", isDirectory: true) }
     public var wrapperDataDirectory: URL { rootURL.appendingPathComponent("wrapper-data", isDirectory: true) }
+    public var qemuPackageDirectory: URL { rootURL.appendingPathComponent(Self.qemuVersion, isDirectory: true) }
+    public var qemuDirectory: URL { qemuPackageDirectory.appendingPathComponent("qemu", isDirectory: true) }
+    public var qemuURL: URL { qemuDirectory.appendingPathComponent("bin/qemu-system-x86_64") }
+    public var qemuDataImageURL: URL { wrapperDataDirectory.appendingPathComponent("data.img") }
     public var downloaderWorkDirectory: URL { rootURL.appendingPathComponent("downloader-work", isDirectory: true) }
 
     public var dockerURL: URL { binDirectory.appendingPathComponent("docker") }
@@ -217,6 +243,12 @@ public final class AppleMusicRuntimeManager {
             targetVersion: wrapperVersion,
             artifactURL: wrapperArtifactURL,
             artifactSHA256: wrapperArtifactSHA256
+        ),
+        ManagedRuntimeComponentSpec(
+            component: .wrapperQEMU,
+            targetVersion: qemuVersion,
+            artifactURL: qemuArtifactURL,
+            artifactSHA256: qemuArtifactSHA256
         )
     ]
 
@@ -279,6 +311,31 @@ public final class AppleMusicRuntimeManager {
     }
 
     public func componentStatuses(wrapperStatus: ManagedDockerImageStatus? = nil) -> [AppleMusicRuntimeComponentStatus] {
+        if backend == .qemu {
+            let installed = isRegularExecutable(qemuURL)
+                && fileManager.fileExists(atPath: qemuDirectory.appendingPathComponent("vmlinuz-lite-qemu").path)
+                && fileManager.fileExists(atPath: qemuDirectory.appendingPathComponent("lite-initramfs.cpio.gz").path)
+                && fileManager.fileExists(atPath: qemuDataImageURL.path)
+            let state = managedComponentUpdateState(.wrapperQEMU, isInstalled: installed)
+            let downloader = BundledComponentManager(resourceRoot: resourceRoot).check(.appleMusicDownloader)
+            return [
+                AppleMusicRuntimeComponentStatus(
+                    component: .wrapperQEMU,
+                    isReady: state == .current,
+                    resolvedPath: qemuURL.path,
+                    detail: state == .current ? "已安装；服务就绪状态在使用时检查" : "缺少或需要更新 wrapper-lite QEMU",
+                    installedVersion: receiptStore.receipt(for: .wrapperQEMU)?.version,
+                    targetVersion: Self.qemuVersion,
+                    updateState: state
+                ),
+                AppleMusicRuntimeComponentStatus(
+                    component: .appleMusicDownloader,
+                    isReady: downloader.isEmbedded,
+                    resolvedPath: downloader.resolvedURL?.path,
+                    detail: downloader.detail
+                )
+            ]
+        }
         let downloaderStatus = BundledComponentManager(resourceRoot: resourceRoot).check(.appleMusicDownloader)
         let wrapperRuntimeDirectory = Self.defaultVMStateRootURL.path
         let wrapper = wrapperStatus.map {
@@ -316,6 +373,7 @@ public final class AppleMusicRuntimeManager {
     /// Fast settings-page status derived only from local files and receipts.
     /// Runtime health is rechecked by operations that actually need Colima.
     public func localComponentStatuses() -> [AppleMusicRuntimeComponentStatus] {
+        if backend == .qemu { return componentStatuses() }
         let hasWrapperReceipt = receiptStore.receipt(for: .wrapperImage) != nil
         return componentStatuses(wrapperStatus: ManagedDockerImageStatus(
             image: .appleMusicWrapper,
@@ -327,6 +385,7 @@ public final class AppleMusicRuntimeManager {
     }
 
     public func installManagedRuntime() async throws -> AppleMusicRuntimeInstallResult {
+        if backend == .qemu { return try await installQEMURuntime() }
         DiagnosticLog.append("[Install] 开始安装 Downloader Runtime → \(rootURL.path)")
         writeProgress("准备安装 Downloader Runtime...", completed: 0, total: 6, isActive: true)
         try createManagedDirectories()
@@ -469,6 +528,12 @@ public final class AppleMusicRuntimeManager {
     }
 
     public func uninstallManagedRuntime() async throws {
+        if backend == .qemu {
+            try AppleMusicQEMUProcess(runtimeManager: self).stop()
+            if fileManager.fileExists(atPath: rootURL.path) { try fileManager.removeItem(at: rootURL) }
+            isEnabled = false
+            return
+        }
         writeProgress("正在卸载 Downloader Runtime...", completed: 0, total: 2, isActive: true)
         let env = runtimeEnvironment()
         if isRegularExecutable(dockerURL) {
@@ -489,9 +554,27 @@ public final class AppleMusicRuntimeManager {
         writeProgress("Downloader Runtime 已卸载", completed: 2, total: 2, isActive: false)
     }
 
+    public func stopManagedRuntime() async throws {
+        if backend == .qemu {
+            try AppleMusicQEMUProcess(runtimeManager: self).stop()
+        } else {
+            await ColimaDockerRuntime(runtimeManager: self).stopIfRunning()
+        }
+    }
+
     public func ensureEnabledAndInstalled() throws {
         guard isEnabled else {
             throw ProcessRunnerError.processFailed("Apple Music 下载功能尚未启用。请先在 Downloader 设置中启用并安装 Runtime。")
+        }
+        if backend == .qemu {
+            let state = managedComponentUpdateState(.wrapperQEMU, isInstalled: isRegularExecutable(qemuURL)
+                && fileManager.fileExists(atPath: qemuDirectory.appendingPathComponent("vmlinuz-lite-qemu").path)
+                && fileManager.fileExists(atPath: qemuDirectory.appendingPathComponent("lite-initramfs.cpio.gz").path)
+                && fileManager.fileExists(atPath: qemuDataImageURL.path))
+            guard state == .current else {
+                throw ProcessRunnerError.processFailed("wrapper-lite QEMU 尚未安装或需要更新。")
+            }
+            return
         }
         for url in [dockerURL, dockerBuildxURL, colimaURL, limaURL, limactlURL, mp4BoxURL] where !isRegularExecutable(url) {
             throw ProcessRunnerError.executableNotFound(url.path)
@@ -502,6 +585,96 @@ public final class AppleMusicRuntimeManager {
             else {
                 throw ProcessRunnerError.processFailed("Downloader Runtime 有待更新组件。请在 Apple Music 设置中点击“检查并更新”。")
             }
+        }
+    }
+
+    private func installQEMURuntime() async throws -> AppleMusicRuntimeInstallResult {
+        let previousEnabled = isEnabled
+        writeProgress("正在准备 wrapper-lite QEMU...", completed: 0, total: 1, isActive: true)
+        do {
+            guard Self.hostArchitecture() == "arm64" else {
+                throw InstallError.unsupportedArchitecture(Self.hostArchitecture())
+            }
+            try fileManager.createDirectory(at: downloadsDirectory, withIntermediateDirectories: true)
+            try fileManager.createDirectory(at: wrapperDataDirectory, withIntermediateDirectories: true)
+            let installed = isRegularExecutable(qemuURL)
+                && fileManager.fileExists(atPath: qemuDirectory.appendingPathComponent("vmlinuz-lite-qemu").path)
+                && fileManager.fileExists(atPath: qemuDirectory.appendingPathComponent("lite-initramfs.cpio.gz").path)
+                && fileManager.fileExists(atPath: qemuDataImageURL.path)
+            if managedComponentUpdateState(.wrapperQEMU, isInstalled: installed) == .current {
+                isEnabled = true
+                writeProgress("wrapper-lite QEMU 已就绪", completed: 1, total: 1, isActive: false)
+                return AppleMusicRuntimeInstallResult(installedComponents: [], messages: ["wrapper-lite QEMU 已就绪，跳过下载"])
+            }
+
+            let archive = try await download(qemuArtifactURL, named: "\(Self.qemuVersion).zip")
+            let actualHash = try ManagedRuntimeArtifactVerifier.sha256(of: archive)
+            guard actualHash.caseInsensitiveCompare(qemuArtifactSHA256) == .orderedSame else {
+                try? fileManager.removeItem(at: archive)
+                throw InstallError.invalidPackage("wrapper-lite QEMU 下载包校验失败。")
+            }
+
+            let staging = downloadsDirectory.appendingPathComponent("qemu-stage-\(UUID().uuidString)", isDirectory: true)
+            try fileManager.createDirectory(at: staging, withIntermediateDirectories: true)
+            defer { try? fileManager.removeItem(at: staging) }
+            let extraction = try await runner.run(
+                executablePath: "/usr/bin/ditto",
+                arguments: ["-x", "-k", archive.path, staging.path]
+            )
+            guard extraction.succeeded else {
+                throw InstallError.invalidPackage("无法解包 wrapper-lite QEMU。")
+            }
+            let sourceQEMU = staging.appendingPathComponent("qemu", isDirectory: true)
+            let required = [
+                sourceQEMU.appendingPathComponent("bin/qemu-system-x86_64"),
+                sourceQEMU.appendingPathComponent("vmlinuz-lite-qemu"),
+                sourceQEMU.appendingPathComponent("lite-initramfs.cpio.gz"),
+                sourceQEMU.appendingPathComponent("data.img")
+            ]
+            guard required.allSatisfy({ fileManager.fileExists(atPath: $0.path) }),
+                  fileManager.isExecutableFile(atPath: required[0].path),
+                  (try required[3].resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0) >= 64 * 1024 * 1024
+            else {
+                throw InstallError.invalidPackage("wrapper-lite QEMU 发布包缺少必要文件。")
+            }
+
+            // The account disk is mutable and deliberately lives outside the versioned package.
+            if !fileManager.fileExists(atPath: qemuDataImageURL.path) {
+                let temporaryDisk = wrapperDataDirectory.appendingPathComponent(".data-\(UUID().uuidString).img")
+                defer { try? fileManager.removeItem(at: temporaryDisk) }
+                try fileManager.copyItem(at: required[3], to: temporaryDisk)
+                try fileManager.moveItem(at: temporaryDisk, to: qemuDataImageURL)
+            }
+            guard (try qemuDataImageURL.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0) >= 64 * 1024 * 1024 else {
+                throw InstallError.invalidPackage("现有 Apple Music 数据镜像不完整，已保留原文件。")
+            }
+            let previousPackage = rootURL.appendingPathComponent(".qemu-previous-\(UUID().uuidString)", isDirectory: true)
+            if fileManager.fileExists(atPath: qemuPackageDirectory.path) {
+                try AppleMusicQEMUProcess(runtimeManager: self).stop()
+                try fileManager.moveItem(at: qemuPackageDirectory, to: previousPackage)
+            }
+            do {
+                try fileManager.moveItem(at: staging, to: qemuPackageDirectory)
+            } catch {
+                if fileManager.fileExists(atPath: previousPackage.path) {
+                    try? fileManager.moveItem(at: previousPackage, to: qemuPackageDirectory)
+                }
+                throw error
+            }
+            try recordReceipt(for: .wrapperQEMU)
+            if fileManager.fileExists(atPath: previousPackage.path) {
+                try? fileManager.removeItem(at: previousPackage)
+            }
+            isEnabled = true
+            writeProgress("wrapper-lite QEMU 安装完成", completed: 1, total: 1, isActive: false)
+            return AppleMusicRuntimeInstallResult(
+                installedComponents: [.wrapperQEMU],
+                messages: ["wrapper-lite QEMU 已安装；旧 Colima 数据已保留"]
+            )
+        } catch {
+            isEnabled = previousEnabled
+            writeProgress("wrapper-lite QEMU 安装失败：\(error.localizedDescription)", completed: 0, total: 1, isActive: false)
+            throw error
         }
     }
 

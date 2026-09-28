@@ -153,7 +153,7 @@ public final class AppleMusicDownloadService {
             for job in downloadJobs {
                 let format = resolvedFormat(for: job)
                 let arguments = Self.downloaderArguments(for: job, format: format)
-                let isSingleTrack = arguments.contains("--song")
+                let isSingleTrack = Self.shouldDownloadAsSingleSong(job.fileURL)
                 var lastFailureMessage = ""
                 var completed = false
                 var completion: AppleMusicDownloaderRunCompletion?
@@ -265,7 +265,7 @@ public final class AppleMusicDownloadService {
                 return ConversionSummary(
                     successCount: 1,
                     failureCount: 0,
-                    messages: ["登录容器已启动；收到双重认证验证码后请立即提交。"]
+                    messages: ["Apple Music 登录已启动；收到双重认证验证码后请立即提交。"]
                 )
             }
 
@@ -288,7 +288,7 @@ public final class AppleMusicDownloadService {
             Task {
                 await wrapperRuntime.logLoginDiagnostics(stage: "2fa-submitted")
             }
-            return ConversionSummary(successCount: 1, failureCount: 0, messages: ["验证码已写入 2fa.txt"])
+            return ConversionSummary(successCount: 1, failureCount: 0, messages: ["验证码已提交"])
         } catch {
             return ConversionSummary(successCount: 0, failureCount: 1, messages: [error.localizedDescription])
         }
@@ -310,14 +310,14 @@ public final class AppleMusicDownloadService {
     static func downloaderArguments(for job: JobRequest, format: AppleMusicDownloadFormat) -> [String] {
         var arguments = format.downloaderArguments
         arguments.append("--events=jsonl")
-        if shouldDownloadAsSingleSong(job.fileURL) {
-            arguments.append("--song")
-        }
         arguments.append(job.fileURL.absoluteString)
         return arguments
     }
 
     static func shouldDownloadAsSingleSong(_ url: URL) -> Bool {
+        if url.pathComponents.contains("song") {
+            return true
+        }
         guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
             return false
         }

@@ -14,17 +14,17 @@
       "upstream": "https://github.com/memomoonnnn/apple-music-downloader",
       "license": "Check upstream repository before redistribution.",
       "expectedPath": "apple-music-downloader/apple-music-downloader",
-      "notes": "Project-private macOS executable embedded in the app bundle Resources root. Built from the Get Oudio fork of zhaarey/apple-music-downloader with script/build_apple_music_downloader.sh. Runtime config is generated from apple-music-downloader/config.yaml.template under the app-managed runtime directory."
+      "notes": "Project-private macOS executable and libtemari.dylib embedded in the app bundle Resources root. Built from the Get Oudio fork of zhaarey/apple-music-downloader with script/build_apple_music_downloader.sh. Runtime config is generated from apple-music-downloader/config.yaml.template under the app-managed runtime directory."
     }
   ],
-  "managedDockerImages": [
+  "managedRuntimes": [
     {
-      "id": "appleMusicWrapper",
-      "name": "Apple Music wrapper",
-      "image": "ghcr.io/itouakirai/wrapper:x86",
-      "platform": "linux/amd64",
-      "upstream": "https://github.com/WorldObservationLog/wrapper",
-      "notes": "The wrapper is not embedded as a macOS executable. The persistent same-bundle Get Oudio background agent installs Docker CLI, Colima, Lima, and GPAC under the app sandbox's v2 Application Support runtime root, then pulls and runs this image with an agent-managed wrapper-data directory."
+      "id": "appleMusicWrapperLiteQEMU",
+      "name": "Apple Music wrapper-lite QEMU",
+      "version": "lite-qemu-66eb88e",
+      "platform": "macos-arm64",
+      "upstream": "https://github.com/memomoonnnn/wrapper",
+      "notes": "The non-sandbox Runtime Worker downloads a SHA-256-pinned QEMU package into the external managed runtime. The mutable account data.img is kept outside the versioned package. Existing Colima data is not touched during installation or update."
     }
   ]
 }

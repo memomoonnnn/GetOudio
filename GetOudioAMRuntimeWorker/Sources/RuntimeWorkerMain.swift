@@ -64,9 +64,11 @@ enum GetOudioAMRuntimeWorker {
                 )
             case .install:
                 _ = try await manager.installManagedRuntime()
-                try await wrapperRuntime(manager: manager)
-                    .finalizeManagedImageUpdate(resetAuthentication: true)
-                loginState.publish(.init(phase: .notInitialized, message: "Apple Music 下载功能尚未初始化"))
+                if manager.backend == .legacyDocker {
+                    try await wrapperRuntime(manager: manager)
+                        .finalizeManagedImageUpdate(resetAuthentication: true)
+                }
+                loginState.publish(await wrapperRuntime(manager: manager).loginStatus())
                 return AppleMusicRuntimeAgentResponseEnvelope(
                     id: request.id,
                     statusReport: await statusReport(manager: manager)
@@ -94,7 +96,7 @@ enum GetOudioAMRuntimeWorker {
                 guard let initializeRequest = request.initializeRequest else {
                     throw ProcessRunnerError.processFailed("initialize 请求缺少凭据。")
                 }
-                loginState.publish(.init(phase: .starting, message: "正在启动登录容器"))
+                loginState.publish(.init(phase: .starting, message: "正在启动 Apple Music 登录"))
                 let wrapper = wrapperRuntime(
                     manager: manager,
                     useSystemProxy: initializeRequest.useSystemProxy
@@ -119,7 +121,7 @@ enum GetOudioAMRuntimeWorker {
                         activityTracker: activityTracker
                     )
                 } else {
-                    loginState.publish(.init(phase: .failed, message: "登录容器启动失败，可以重新初始化"))
+                    loginState.publish(.init(phase: .failed, message: "登录启动失败，可以重新初始化"))
                 }
                 return AppleMusicRuntimeAgentResponseEnvelope(id: request.id, summary: summary)
             case .submitCode:
@@ -134,14 +136,14 @@ enum GetOudioAMRuntimeWorker {
                 )
                     .submitWrapperVerificationCode(verificationRequest.code)
                 if summary.failureCount == 0 {
-                    loginState.publish(.init(phase: .verificationCodeSubmitted, message: "验证码已写入，等待 wrapper 读取"))
+                    loginState.publish(.init(phase: .verificationCodeSubmitted, message: "验证码已提交，正在验证"))
                 }
                 return AppleMusicRuntimeAgentResponseEnvelope(id: request.id, summary: summary)
             case .wrapperStatus:
                 let status = await loginState.reconcile(runtime: wrapperRuntime(manager: manager))
                 return AppleMusicRuntimeAgentResponseEnvelope(id: request.id, wrapperLoginStatus: status)
             case .stopRuntime:
-                await ColimaDockerRuntime(runtimeManager: manager).stopIfRunning()
+                try await manager.stopManagedRuntime()
                 return AppleMusicRuntimeAgentResponseEnvelope(id: request.id)
             case .cancel:
                 state.requestCancellation()

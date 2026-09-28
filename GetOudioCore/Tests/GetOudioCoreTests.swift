@@ -1438,7 +1438,7 @@ final class GetOudioCoreTests: XCTestCase {
         XCTAssertEqual(AppleMusicDownloadFormat.atmos.downloaderArguments, ["--atmos"])
     }
 
-    func testAppleMusicDownloaderArgumentsUseSongFlagForAlbumURLWithSongID() {
+    func testAppleMusicDownloaderArgumentsUseUpstreamSongSelection() {
         let job = JobRequest(
             fileURL: URL(string: "https://music.apple.com/jp/album/tell-me/1756723979?i=1756724104")!,
             category: .appleMusic,
@@ -1448,10 +1448,11 @@ final class GetOudioCoreTests: XCTestCase {
 
         let arguments = AppleMusicDownloadService.downloaderArguments(for: job, format: .aac)
 
-        XCTAssertEqual(arguments, ["--aac", "--aac-type", "aac", "--events=jsonl", "--song", job.fileURL.absoluteString])
+        XCTAssertEqual(arguments, ["--aac", "--aac-type", "aac", "--events=jsonl", job.fileURL.absoluteString])
+        XCTAssertTrue(AppleMusicDownloadService.shouldDownloadAsSingleSong(job.fileURL))
     }
 
-    func testAppleMusicDownloaderArgumentsDoNotUseSongFlagForAlbumURL() {
+    func testAppleMusicDownloaderArgumentsForWholeAlbum() {
         let job = JobRequest(
             fileURL: URL(string: "https://music.apple.com/jp/album/tell-me/1756723979")!,
             category: .appleMusic,
@@ -1462,6 +1463,12 @@ final class GetOudioCoreTests: XCTestCase {
         let arguments = AppleMusicDownloadService.downloaderArguments(for: job, format: .alac)
 
         XCTAssertEqual(arguments, ["--events=jsonl", job.fileURL.absoluteString])
+        XCTAssertFalse(AppleMusicDownloadService.shouldDownloadAsSingleSong(job.fileURL))
+    }
+
+    func testAppleMusicSongURLIsSingleTrack() {
+        let url = URL(string: "https://music.apple.com/jp/song/example/1756724104")!
+        XCTAssertTrue(AppleMusicDownloadService.shouldDownloadAsSingleSong(url))
     }
 
     func testAppleMusicShareURLParserAcceptsBroadAppleMusicLinks() {
@@ -1734,6 +1741,97 @@ final class GetOudioCoreTests: XCTestCase {
             "-H", "0.0.0.0"
         ])
         XCTAssertFalse(arguments.contains("--rm"))
+    }
+
+    func testQEMUStatusRequiresAuthenticatedRegions() {
+        XCTAssertTrue(AppleMusicQEMUProcess.statusIsReady(Data(#"{"code":0,"data":{"regions":["jp"]}}"#.utf8)))
+        XCTAssertFalse(AppleMusicQEMUProcess.statusIsReady(Data(#"{"code":0,"data":{"regions":[]}}"#.utf8)))
+        XCTAssertFalse(AppleMusicQEMUProcess.statusIsReady(Data(#"{"code":1,"data":{"regions":["jp"]}}"#.utf8)))
+        XCTAssertFalse(AppleMusicQEMUProcess.statusIsReady(Data("not json".utf8)))
+    }
+
+    func testQEMUArgumentsKeepMutableDiskOutsideVersionedPackage() {
+        let root = URL(fileURLWithPath: "/managed/AppleMusicRuntime", isDirectory: true)
+        let qemu = root.appendingPathComponent("lite-qemu-test/qemu", isDirectory: true)
+        let disk = root.appendingPathComponent("wrapper-data/data.img")
+        let argsFile = root.appendingPathComponent("qemu-guest-args.txt")
+        let arguments = AppleMusicQEMUProcess.arguments(qemu: qemu, dataImage: disk, guestArgs: argsFile)
+
+        XCTAssertTrue(arguments.contains("file=\(disk.path),format=raw,if=virtio"))
+        XCTAssertTrue(arguments.contains("name=opt/lite_args,file=\(argsFile.path)"))
+        XCTAssertTrue(arguments.contains("user,model=e1000,hostfwd=tcp:127.0.0.1:12340-:12340"))
+        XCTAssertFalse(arguments.joined().contains("password"))
+    }
+
+    func testQEMUComponentStatusUsesOnlyPackageAndReceipt() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let manager = AppleMusicRuntimeManager(rootURL: root, settingsStore: nil, resourceRoot: nil, backend: .qemu)
+        let required = [
+            manager.qemuURL,
+            manager.qemuDirectory.appendingPathComponent("vmlinuz-lite-qemu"),
+            manager.qemuDirectory.appendingPathComponent("lite-initramfs.cpio.gz"),
+            manager.qemuDataImageURL
+        ]
+        for url in required {
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data("test".utf8).write(to: url)
+        }
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: manager.qemuURL.path)
+        let statusesBeforeReceipt = manager.localComponentStatuses()
+        XCTAssertEqual(statusesBeforeReceipt.map(\.component), [.wrapperQEMU, .appleMusicDownloader])
+        XCTAssertEqual(statusesBeforeReceipt[0].updateState, .legacy)
+        try ManagedRuntimeComponentReceiptStore(rootURL: root).save(
+            ManagedRuntimeComponentReceipt(component: .wrapperQEMU, version: AppleMusicRuntimeManager.qemuVersion)
+        )
+        XCTAssertTrue(manager.localComponentStatuses()[0].isReady)
+    }
+
+    func testQEMUInstallPreservesMutableDiskOnSecondInstall() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let fixture = root.appendingPathComponent("fixture", isDirectory: true)
+        let qemu = fixture.appendingPathComponent("qemu", isDirectory: true)
+        let archive = root.appendingPathComponent("package.zip")
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: qemu.appendingPathComponent("bin", isDirectory: true), withIntermediateDirectories: true)
+        let executable = qemu.appendingPathComponent("bin/qemu-system-x86_64")
+        try Data("#!/bin/sh\nexit 0\n".utf8).write(to: executable)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
+        try Data("kernel".utf8).write(to: qemu.appendingPathComponent("vmlinuz-lite-qemu"))
+        try Data("initrd".utf8).write(to: qemu.appendingPathComponent("lite-initramfs.cpio.gz"))
+        let fixtureDisk = qemu.appendingPathComponent("data.img")
+        FileManager.default.createFile(atPath: fixtureDisk.path, contents: nil)
+        let diskHandle = try FileHandle(forWritingTo: fixtureDisk)
+        try diskHandle.truncate(atOffset: 64 * 1024 * 1024)
+        try diskHandle.close()
+        let zip = try await ProcessRunner().run(
+            executablePath: "/usr/bin/ditto",
+            arguments: ["-c", "-k", fixture.path, archive.path]
+        )
+        XCTAssertTrue(zip.succeeded)
+
+        let suiteName = "GetOudioCoreTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let manager = AppleMusicRuntimeManager(
+            rootURL: root.appendingPathComponent("managed", isDirectory: true),
+            settingsStore: SettingsStore(defaults: defaults),
+            resourceRoot: nil,
+            qemuArtifactURL: archive,
+            qemuArtifactSHA256: try ManagedRuntimeArtifactVerifier.sha256(of: archive),
+            backend: .qemu
+        )
+        let first = try await manager.installManagedRuntime()
+        XCTAssertEqual(first.installedComponents, [.wrapperQEMU])
+        XCTAssertTrue(manager.isEnabled)
+        XCTAssertTrue(manager.localComponentStatuses()[0].isReady)
+
+        let handle = try FileHandle(forWritingTo: manager.qemuDataImageURL)
+        try handle.write(contentsOf: Data("keep".utf8))
+        try handle.close()
+        let second = try await manager.installManagedRuntime()
+        XCTAssertTrue(second.installedComponents.isEmpty)
+        XCTAssertEqual(try Data(contentsOf: manager.qemuDataImageURL).prefix(4), Data("keep".utf8))
     }
 
     func testAppleMusicWrapperRewritesLoopbackSystemProxyForColima() {

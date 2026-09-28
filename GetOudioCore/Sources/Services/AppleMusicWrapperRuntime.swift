@@ -49,6 +49,10 @@ public final class AppleMusicWrapperRuntime {
     }
 
     public func writeVerificationCode(_ code: String) throws {
+        if runtimeManager.backend == .qemu {
+            try AppleMusicQEMUProcess(runtimeManager: runtimeManager).writeVerificationCode(code)
+            return
+        }
         let trimmed = code.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             return
@@ -75,6 +79,10 @@ public final class AppleMusicWrapperRuntime {
     }
 
     public func ensureImageAvailable() async throws {
+        if runtimeManager.backend == .qemu {
+            try runtimeManager.ensureEnabledAndInstalled()
+            return
+        }
         let status = await dockerImageManager.check(image)
         guard status.isAvailable,
               runtimeManager.managedComponentUpdateState(.wrapperImage, isInstalled: true) == .current
@@ -86,6 +94,10 @@ public final class AppleMusicWrapperRuntime {
     }
 
     public func finalizeManagedImageUpdate(resetAuthentication: Bool = false) async throws {
+        if runtimeManager.backend == .qemu {
+            try runtimeManager.ensureEnabledAndInstalled()
+            return
+        }
         try await ensureImageAvailable()
         let dockerPath = try await runtime.ensureRunning()
         let login = await loginStatus()
@@ -129,6 +141,14 @@ public final class AppleMusicWrapperRuntime {
         verificationCode: String?,
         useSystemProxy: Bool
     ) async throws -> ProcessResult {
+        if runtimeManager.backend == .qemu {
+            return try await AppleMusicQEMUProcess(runtimeManager: runtimeManager).initialize(
+                username: username,
+                password: password,
+                verificationCode: verificationCode,
+                useSystemProxy: useSystemProxy
+            )
+        }
         let currentStatus = await loginStatus()
         if currentStatus.isAuthenticated {
             throw ProcessRunnerError.processFailed("Apple Music 初始化已完成，无需重复初始化。")
@@ -250,6 +270,10 @@ public final class AppleMusicWrapperRuntime {
     }
 
     public func logLoginDiagnostics(stage: String) async {
+        if runtimeManager.backend == .qemu {
+            DiagnosticLog.append("[WrapperLogin][\(stage)] phase=\(AppleMusicQEMUProcess(runtimeManager: runtimeManager).loginStatus().phase.rawValue)")
+            return
+        }
         do {
             let dockerPath = try await runtime.ensureRunning()
             let state = try await runner.run(
@@ -292,6 +316,9 @@ public final class AppleMusicWrapperRuntime {
     }
 
     public func loginStatus() async -> AppleMusicWrapperLoginStatus {
+        if runtimeManager.backend == .qemu {
+            return AppleMusicQEMUProcess(runtimeManager: runtimeManager).loginStatus()
+        }
         if FileManager.default.fileExists(atPath: loginCompletedMarkerURL.path) {
             return AppleMusicWrapperLoginStatus(phase: .authenticated, message: "初始化已完成")
         }
@@ -344,6 +371,10 @@ public final class AppleMusicWrapperRuntime {
     }
 
     public func stopLoginAttempt() async {
+        if runtimeManager.backend == .qemu {
+            AppleMusicQEMUProcess(runtimeManager: runtimeManager).stopLoginAttempt()
+            return
+        }
         do {
             let dockerPath = try await runtime.ensureRunning()
             _ = try await runner.run(
@@ -389,6 +420,12 @@ public final class AppleMusicWrapperRuntime {
     }
 
     public func ensureServerRunning() async throws {
+        if runtimeManager.backend == .qemu {
+            try await AppleMusicQEMUProcess(runtimeManager: runtimeManager).ensureServerRunning(
+                useSystemProxy: systemProxyEnabled ?? settingsStore?.appleMusicUseSystemProxy ?? false
+            )
+            return
+        }
         try await ensureImageAvailable()
         guard (await loginStatus()).isAuthenticated else {
             throw ProcessRunnerError.processFailed("Apple Music 尚未完成初始化。")
@@ -621,6 +658,10 @@ public final class AppleMusicWrapperRuntime {
     }
 
     public func clearAuthenticationState() throws {
+        if runtimeManager.backend == .qemu {
+            try AppleMusicQEMUProcess(runtimeManager: runtimeManager).clearAuthenticationState()
+            return
+        }
         if FileManager.default.fileExists(atPath: loginCompletedMarkerURL.path) {
             try FileManager.default.removeItem(at: loginCompletedMarkerURL)
         }

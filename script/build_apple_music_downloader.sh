@@ -13,6 +13,7 @@ GO_MOD_CACHE="$BUILD_DIR/go-mod-cache"
 DEST_DIR="$ROOT_DIR/GetOudio/Resources/ThirdParty/apple-music-downloader"
 DEST_BINARY="$DEST_DIR/apple-music-downloader"
 OUTPUT_BINARY="$BUILD_DIR/apple-music-downloader"
+OUTPUT_LIBRARY="$BUILD_DIR/libtemari.dylib"
 
 if [[ ! -d "$SOURCE_DIR/.git" ]]; then
     cat >&2 <<EOF
@@ -56,14 +57,28 @@ echo ""
         go build -trimpath -ldflags="-s -w" -o "$OUTPUT_BINARY" main.go
 )
 
+temari_module_dir="$(cd "$SOURCE_DIR" && env GOMODCACHE="$GO_MOD_CACHE" go list -m -f '{{.Dir}}' github.com/WorldObservationLog/Temari/bindings/go)"
+temari_library="$temari_module_dir/lib/macos-arm64/libtemari.dylib"
+if [[ ! -f "$temari_library" ]]; then
+    echo "Temari macOS arm64 动态库缺失: $temari_library" >&2
+    exit 1
+fi
+cp -f "$temari_library" "$OUTPUT_LIBRARY"
+if [[ "$(/usr/bin/file -b "$OUTPUT_LIBRARY")" != *"Mach-O 64-bit dynamically linked shared library arm64"* ]]; then
+    echo "Temari 动态库不是 macOS arm64: $OUTPUT_LIBRARY" >&2
+    exit 1
+fi
 cp "$OUTPUT_BINARY" "$DEST_BINARY"
 chmod +x "$DEST_BINARY"
+cp -f "$OUTPUT_LIBRARY" "$DEST_DIR/libtemari.dylib"
 
 echo ""
 echo "=== 构建结果 ==="
 ls -lh "$DEST_BINARY"
 file "$DEST_BINARY"
+file "$DEST_DIR/libtemari.dylib"
 echo ""
 go version -m "$DEST_BINARY" | sed -n '1,40p'
 echo ""
 otool -L "$DEST_BINARY" || true
+otool -L "$DEST_DIR/libtemari.dylib"

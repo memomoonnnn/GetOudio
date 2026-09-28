@@ -197,8 +197,16 @@ verify_runtime_worker() {
     rm -f "$entitlements_file"
     exit 1
   fi
-  if ! /usr/bin/grep -q 'com.apple.security.virtualization' "$entitlements_file"; then
-    echo "runtime worker is missing virtualization entitlement" >&2
+  for entitlement in com.apple.security.network.client com.apple.security.network.server; do
+    if ! /usr/bin/grep -q "$entitlement" "$entitlements_file"; then
+      echo "runtime worker is missing $entitlement" >&2
+      /bin/cat "$entitlements_file" >&2
+      rm -f "$entitlements_file"
+      exit 1
+    fi
+  done
+  if /usr/bin/grep -q 'com.apple.security.virtualization' "$entitlements_file"; then
+    echo "QEMU runtime worker must not carry the unused virtualization entitlement" >&2
     /bin/cat "$entitlements_file" >&2
     rm -f "$entitlements_file"
     exit 1
