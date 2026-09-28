@@ -1,5 +1,7 @@
 # Apple Music Download and Notification Dispatch Guide
 
+所有本地通知标题固定为 `Get Oudio`，差异写入正文。
+
 适用于 Apple Music 下载、JSONL 事件、Background Agent、Runtime Worker、通知派发、通知授权和通知队列。修改前检查 `BackgroundAgent.swift`、`BackgroundTaskCoordinator.swift`、`GetOudioAMRuntimeWorker/Sources/`、XPC 协议、`AppleMusicDownloadService`、进度解析、`NotificationEventQueue`、`NotificationService`、`NotificationDispatchWaker`、`NotificationAuthorizationModel` 和 Share 下载协调逻辑。
 
 Background Agent 与 Runtime Worker 由用户 LaunchAgent 注册，不使用 `SMAppService`。Background Agent 常驻，Runtime Worker 按 Mach XPC 请求启动并在空闲后退出。主 App 启动后必须校验 Agent 与 Worker 的协议版本、App 版本和构建号；已注册进程与当前 App 不一致时，通过 Bootstrap Installer 重新注册两个 LaunchAgent，但不得恢复用户主动卸载的后台活动。通过 `script/build_and_run.sh` 启动或安装会终止旧主 App 与 Agent，并校验 Build/Products 和 App 内嵌 Worker 与 LaunchAgent 资源一致；Xcode 手工运行前先终止旧 Agent。用 `[Agent] started`、PID、bundle 路径、可执行路径和诊断版本确认实际处理请求的构建。

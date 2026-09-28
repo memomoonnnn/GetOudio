@@ -1,6 +1,6 @@
 # AGENTS.md
 
-本文件是修改本仓库前必须阅读的根级指南。它只定义项目结构、跨域护栏、复用规则、任务路由和验证入口；具体行为约束在 `docs/agent-guides/`。始终以当前 `project.yml`、源码和脚本为真源，不得以本文或历史记录替代现场检查。
+本文件只定义项目结构、跨域边界和任务路由；具体约束按改动面查阅 `docs/agent-guides/`。以当前 `project.yml`、源码和脚本为真源，按任务需要检查关联实现与测试。
 
 ## 项目结构与复用
 
@@ -9,27 +9,27 @@
 | `GetOudioCore/` | 跨进程模型、XPC 协议、设置、队列、路径和进程执行的唯一归属。 |
 | `GetOudio/` | 普通 App UI、`BackgroundAgent`、后台任务协调和 `RecordingRunner`。 |
 | `GetOudioBootstrapInstaller/` | 唯一的非沙盒短生命周期安装器，只安装或卸载用户 LaunchAgent，不访问业务数据。 |
-| `GetOudioAMRuntimeWorker/` | 唯一的非沙盒 Runtime Worker，只执行 Apple Music runtime 指令。 |
+| `GetOudioAMRuntimeWorker/` | 唯一的非沙盒 Runtime Worker，执行 Apple Music 组件管理、登录和下载。 |
 | `GetOudioFinderExtension/`、`GetOudioShareExtension/`、`GetOudioRecordingWidget/` | 仅解析系统输入并调用 Background Agent XPC，不读写共享容器、不执行转换、下载或实时音频。 |
 | `script/` 与 `project.yml` | 构建、安装和 target 定义；`project.yml` 是 XcodeGen 真源。 |
 
-Core 的 `Models` 定义领域值和协议，`Services` 承担流程与副作用，`Support` 放共享基础设施；App 的 `App` 放生命周期和 runner，`Models` 放页面协调，`Views` 放展示与局部交互。跨页面 UI 原语放在既有 `SettingsUI.swift` 等共享视图文件，不能把服务、队列或权限调用塞进 View。
+Core 的 `Models` 定义领域值和协议，`Services` 承担流程与副作用，`Support` 放共享基础设施；App 的 `App` 放生命周期和 runner，`Models` 放页面协调，`Views` 放展示与局部交互。View 不承担服务、队列或权限调用。
 
-新增内容前先搜索上述目录和关联测试，优先扩展现有模型、服务、共享机制、组件、交互和术语。跨 target 的状态、路径、协议、权限、队列和进程执行必须进入 Core；仅属于单一入口的适配留在该入口。不得创建平行的 `UserDefaults`、文件路径、任务队列、runner、状态副本或只转发属性/方法的包装层。
+新增机制前先查找现有实现及关联测试，优先复用已有模型、服务和术语。跨 target 的状态、路径、协议、权限、队列和进程执行归 Core；单一入口的适配留在该入口。不得创建平行的设置、路径、队列、runner 或状态副本。
 
-新增 UI 或交互前先检查同类设置页、`SettingsUI.swift`、`SettingsDocumentationView.swift` 和 `MainView.swift`。重复使用卡片、间距、说明、侧栏、注意力高亮和交互状态的既有模式；只有行为会被多个页面或入口复用时，才抽到共享 View/Modifier/模型。不得为局部页面重新定义已有视觉语言、完成状态或导航机制。
+新增 UI 或交互时复用同类页面及 `SettingsUI.swift` 的现有模式；具体规则见设置指南。
 
 ## 全局边界
 
 可修改源码主要位于上述目录及 `project.yml`。修改 target、sources、resources、Info.plist 注入、entitlements、签名或构建设置时，修改 `project.yml` 并运行 `xcodegen generate`；`GetOudio.xcodeproj/project.pbxproj` 和 `build/` 是生成或本地输出，不能反向作为真源。
 
-不得修改 `.git/`、无关未提交改动、历史 App Group 数据、Apple Music 输出、Keychain 凭据或任务范围外的第三方二进制。项目不使用 App Group：App、Agent 和扩展的跨进程通信只经 Mach XPC；控制数据位于 App 沙盒容器，只经 `AgentDataStore.production()` 访问；非沙盒 `Runtime Worker` 才可经 `AgentDataStore.runtimeWorker()` 访问外部 managed runtime。凭据和请求只存在于 XPC 内存载荷，不得落盘。新增网络、虚拟化、文件访问或 Hardened Runtime 能力时，必须同步检查对应 target 的 entitlements，不能以关闭沙盒绕过权限。
+不得修改 `.git/`、无关未提交改动、历史 App Group 数据、Apple Music 输出、Keychain 凭据或任务范围外的第三方二进制。项目不使用 App Group：App、Agent 和扩展的跨进程通信只经 Mach XPC；控制数据只经 `AgentDataStore.production()` 访问，非沙盒 Runtime Worker 才可经 `AgentDataStore.runtimeWorker()` 访问外部 managed runtime。账号、密码和验证码仅经 XPC 内存载荷及受控 QEMU 标准输入传递，不得落盘或进入命令参数。新增网络、虚拟化、文件访问或 Hardened Runtime 能力时，检查对应 target 的 entitlements，不得以关闭沙盒绕过权限。
 
-凭据不得写入 UserDefaults、日志、配置文件或命令诊断输出。完成或失败类通知必须写入 `NotificationEventQueue`，由 `NotificationService.dispatchPendingNotificationEvents()` 的唯一派发器在系统接受请求后确认删除；被拒绝或耗尽重试的事件进入抑制记录。所有本地通知标题固定为 `Get Oudio`，差异写入正文。
+凭据不得写入 UserDefaults、日志、配置文件或诊断输出。完成或失败类通知经 `NotificationEventQueue` 和唯一派发器处理，具体规则见下载与通知指南。
 
 ## 专项指南路由
 
-开始任务前按改动面阅读下列指南；跨多个改动面时全部阅读。
+按实际改动面查阅相应指南；跨域修改读取所涉及的指南。
 
 | 改动面 | 必读指南 |
 | --- | --- |
@@ -38,8 +38,8 @@ Core 的 `Models` 定义领域值和协议，`Services` 承担流程与副作用
 | Audio Bridge、录音 Widget、WAV、缓存或录后处理 | `docs/agent-guides/recording.md` |
 | Finder Sync、文件授权、格式分类或默认打开方式 | `docs/agent-guides/finder-and-open-with.md` |
 | Share Extension 的激活、输入解析或宿主可见性 | `docs/agent-guides/share-extension.md` |
-| Apple Music 组件安装、更新、卸载或 Colima/Lima | `docs/agent-guides/apple-music-runtime-components.md` |
-| wrapper、登录、验证码、代理、容器或 40020 就绪状态 | `docs/agent-guides/apple-music-wrapper-and-login.md` |
+| Apple Music 组件安装、更新、卸载或 QEMU 运行时 | `docs/agent-guides/apple-music-runtime-components.md` |
+| wrapper、登录、验证码、代理或 12340 就绪状态 | `docs/agent-guides/apple-music-wrapper-and-login.md` |
 | Apple Music 下载、JSONL、Agent、通知派发或通知授权 | `docs/agent-guides/apple-music-download-and-notifications.md` |
 | 转码预设、ffmpeg 或音频格式能力 | `docs/agent-guides/conversion-tools.md` |
 | 内嵌 `apple-music-downloader` 构建或替换 | `docs/agent-guides/apple-music-downloader-build.md` |
@@ -48,7 +48,7 @@ Core 的 `Models` 定义领域值和协议，`Services` 承担流程与副作用
 
 ## 验证与提交
 
-验证必须匹配改动面：Core 服务、模型、队列、预设、通知协议或 Apple Music 参数运行 `xcodebuild -project GetOudio.xcodeproj -scheme GetOudioCoreTests -configuration Debug -derivedDataPath build/DerivedData test`；Finder Sync 改动构建该 target；安装、签名、Info.plist、entitlements、图标、URL scheme 或扩展嵌入使用 `bash script/build_and_run.sh --install` 并检查相关 `pluginkit` 注册。录音和 Apple Music runtime 的额外验收要求见对应专项指南。不得将 `swift test`、`swift build` 或 `Package.swift` 当作默认入口。
+按改动风险选择验证：Core 行为改动运行 `xcodebuild -project GetOudio.xcodeproj -scheme GetOudioCoreTests -configuration Debug -derivedDataPath build/DerivedData test`；Finder Sync 改动构建该 target；安装、签名、Info.plist、entitlements、图标、URL scheme 或扩展嵌入使用 `bash script/build_and_run.sh --install` 并检查相关 `pluginkit` 注册。录音和 Apple Music runtime 的实际运行验收见对应专项指南。纯文档改动运行 `git diff --check`；不得将 `swift test`、`swift build` 或 `Package.swift` 当作默认入口。
 
 提交前运行 `git status --short`，排除用户已有改动、`build/`、`.DS_Store` 和无关生成差异。除非用户明确要求，不要提交或暂存。
 
